@@ -16,3 +16,5 @@ Use ADR-style records when future sessions need the reasoning for a durable deci
 - [0008 — Authorization query boundary](0008-authorization-query-boundary.md): default-deny evaluation, action/operation binding, database scopes, and fail-closed object terminal restrictions.
 
 - [0009 — HTTP runtime and scope ownership](0009-http-runtime-and-scope-ownership.md): Fetch boundary, typed request inputs, InferDI lifecycle, and bounded cleanup/draining.
+
+- [0010 — Public API transport and mutation boundary](0010-public-api-transport-and-mutations.md): one enabled route plan, wire/native values, preserved item predicates, and bodyless scoped writes.

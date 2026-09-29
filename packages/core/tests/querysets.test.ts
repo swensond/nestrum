@@ -115,10 +115,21 @@ describe('Immutable typed QuerySets', () => {
     it('validates returned records and preserves backend errors', async () => {
         const { query, backend } = fixture();
         backend.all.mockResolvedValueOnce([{ id: 'bad' } as unknown as Project]);
-        await expect(query.all()).rejects.toThrow();
+        await expect(query.all()).rejects.toMatchObject({ code: 'QUERY_RESULT_INVALID', status: 500, cause: expect.any(z.ZodError) });
         const cause = new Error('Database failure');
         backend.all.mockRejectedValueOnce(cause);
         await expect(query.all()).rejects.toBe(cause);
+    });
+
+    it('keeps primary key predicates intact through composed Where transforms and immutable branches', async () => {
+        const { backend } = fixture();
+        const query = new QuerySet({ ...CONTEXT, schemas: { ...CONTEXT.schemas, where: z.record(z.string(), z.unknown()).transform(() => ({})) } }, backend).authorizedFor({}, 'test');
+        await query.filterPrimaryKey(1).update({ name: 'Changed' });
+        expect(backend.update.mock.lastCall?.[0].filters).toEqual([{ id: 1 }]);
+        await query.all();
+        expect(backend.all.mock.lastCall?.[0].filters).toEqual([]);
+        expect(() => query.filterPrimaryKey(null)).toThrow(QuerySetError);
+        expect(() => query.filterPrimaryKey('bad')).toThrow(z.ZodError);
     });
 
     it('raw returns the exact original delegate regardless of filters or ordering', () => {

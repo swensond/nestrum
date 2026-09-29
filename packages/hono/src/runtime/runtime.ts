@@ -1,4 +1,5 @@
-import { Hono } from 'hono';
+import { OpenAPIHono } from '@hono/zod-openapi';
+import type { Hono } from 'hono';
 import type { Context } from 'hono';
 import { inferdiHono } from '@inferdi/hono';
 import type { InferdiRoot, InferdiScope } from '@inferdi/hono';
@@ -8,6 +9,8 @@ import { createRuntimeContainer, openRequestScope } from './container.js';
 import type { RequestScope } from './container.js';
 import { mapHttpError } from './runtime.errors.js';
 import type { RequestContext, RuntimeEnv, RuntimeErrorEvent, RuntimeOptions, RuntimeState } from './runtime.types.js';
+import { registerPublicApi } from '#hono/api/public-api';
+import type { PublicOpenApiDocument } from '#hono/api/public-api';
 
 function attributes<Value extends Subject | AuthorizationEnvironment>(value: Value): Value {
     if (!value || typeof value !== 'object' || Array.isArray(value) || ![Object.prototype, null].includes(Object.getPrototypeOf(value) as object | null)) {
@@ -18,19 +21,22 @@ function attributes<Value extends Subject | AuthorizationEnvironment>(value: Val
 }
 
 export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
-    readonly hono: Hono<RuntimeEnv<Scope>>;
+    readonly hono: OpenAPIHono<RuntimeEnv<Scope>>;
+    private publicDocument: PublicOpenApiDocument | undefined;
     private currentState: RuntimeState = 'created';
     private activeRequests = 0;
     private drain: (() => void) | undefined;
     private readonly disposeRoot: (() => Promise<void>) | undefined;
 
     constructor(private readonly options: RuntimeOptions<Scope>) {
-        options = Object.freeze({ ...options, ...(options.di === undefined ? {} : { di: Object.freeze({ ...options.di }) }) });
+        options = Object.freeze({ ...options, ...(options.di === undefined ? {} : { di: Object.freeze({ ...options.di }) }),
+            ...(options.publicApi === undefined ? {} : { publicApi: Object.freeze({ ...options.publicApi,
+                ...(options.publicApi.temporal === undefined ? {} : { temporal: Object.freeze({ ...options.publicApi.temporal }) }) }) }) });
         this.options = options;
         const root = createRuntimeContainer(options.application);
         const configured = options.di;
         this.disposeRoot = configured === undefined ? () => root.dispose() : undefined;
-        this.hono = new Hono<RuntimeEnv<Scope>>();
+        this.hono = new OpenAPIHono<RuntimeEnv<Scope>>();
         this.hono.notFound((context) => context.json({ error: { code: 'NOT_FOUND', message: 'Route not found.' } }, 404));
         this.hono.onError((error, context) => this.respondToError(error, context));
         this.hono.use('*', async (context, next) => {
@@ -70,17 +76,28 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
 
     get state(): RuntimeState { return this.currentState; }
 
+    getOpenApiDocument(): PublicOpenApiDocument {
+        if (!this.publicDocument) { throw new AppError('HTTP_RUNTIME_NOT_READY', 'Public API metadata is available after successful startup.'); }
+
+        return snapshotQueryValue(this.publicDocument);
+    }
+
     async start(): Promise<void> {
         if (this.currentState === 'ready') { return; }
         if (this.currentState !== 'created') { throw this.invalidState('start'); }
         this.currentState = 'starting';
         try {
             await this.options.application.start();
+            this.publicDocument = registerPublicApi(this.hono, this.options.application.resources.all(), this.options.publicApi);
             this.currentState = 'ready';
         } catch (error) {
             this.currentState = 'failed';
-            try { await this.disposeRoot?.(); }
-            catch (cleanupError) { throw new AppError('HTTP_RUNTIME_START_FAILED', 'Runtime startup and cleanup failed.', 500, { cause: new AggregateError([error, cleanupError]) }); }
+            const errors: unknown[] = [error];
+            if (this.options.application.state === 'ready') {
+                try { await this.options.application.shutdown(); } catch (cleanupError) { errors.push(cleanupError); }
+            }
+            try { await this.disposeRoot?.(); } catch (cleanupError) { errors.push(cleanupError); }
+            if (errors.length > 1) { throw new AppError('HTTP_RUNTIME_START_FAILED', 'Runtime startup and cleanup failed.', 500, { cause: new AggregateError(errors) }); }
             throw error;
         }
     }

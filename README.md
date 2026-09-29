@@ -1,6 +1,6 @@
 # Nestrum
 
-A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–8 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, default-deny ABAC, and a Hono/InferDI runtime.
+A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–9 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, default-deny ABAC, a Hono/InferDI runtime, and opt-in public CRUD with OpenAPI.
 
 ## Development
 
@@ -79,7 +79,7 @@ This offline step emits contract.json and contract.d.ts for each contributed dat
 
 ## Metadata and Zod
 
-compileModelMetadata({ database, provider, contract }) from @nestrum/prisma compiles emitted contract JSON. generateModelSchemas(metadata) from @nestrum/zod returns model/create/update/read/where/orderBy schemas and stable names. Object schemas support Zod .extend() composition. Runtime values follow Prisma codecs, including bigint, Date, and Temporal; JSON transport arrives in later phases. See [Phase 4](docs/phases/phase-04-zod-generation.md) for usage and supported shapes.
+compileModelMetadata({ database, provider, contract }) from @nestrum/prisma compiles emitted contract JSON. generateModelSchemas(metadata) from @nestrum/zod returns model/create/update/read/where/orderBy schemas and stable names. Object schemas support Zod .extend() composition. Runtime values follow Prisma codecs, including bigint, Date, and Temporal. Public APIs encode native values as JSON strings; see [Phase 9](docs/phases/phase-09-public-api.md) for transport and Temporal adapters, and [Phase 4](docs/phases/phase-04-zod-generation.md) for runtime shapes.
 
 ## Resources
 
@@ -96,7 +96,7 @@ const ProjectResource = defineResource({
 });
 ```
 
-Register definitions through app.resources or application.resources and supply generated families through application resourceModels (an array or loader). Startup validates every model and composes schemas before app hooks. Lookup uses application.resources.get('default.Project'). Public flags default to false and do not yet create routes. See [Phase 5](docs/phases/phase-05-resources.md) for a complete bootstrap example.
+Register definitions through app.resources or application.resources and supply generated families through application resourceModels (an array or loader). Startup validates every model and composes schemas before app hooks. Lookup uses application.resources.get('default.Project'). Public flags default to false; the Hono runtime generates only enabled operations at startup. See [Phase 5](docs/phases/phase-05-resources.md) for resource bootstrap and [Phase 9](docs/phases/phase-09-public-api.md) for HTTP behavior.
 
 ## QuerySets
 
@@ -146,4 +146,12 @@ await runtime.shutdown();
 
 Requests are gated until startup completes. Each request has an InferDI scope on context.var.di and a frozen framework context on context.var.nestrum. Default subjects are anonymous; headers do not authenticate requests. Scopes dispose after the awaited route pipeline, including error paths. Shutdown rejects new requests and drains active pipelines before app shutdown and disposal of the owned root.
 
-Use createRuntimeContainer(application) to register typed services and provide a di.container/createScope pair; a supplied root remains application-owned. This phase exposes a Fetch handler rather than opening a TCP listener. Generated CRUD/OpenAPI remains Phase 9. See [Phase 8](docs/phases/phase-08-hono-runtime.md) for service registration, error contracts, and scope ownership.
+Use createRuntimeContainer(application) to register typed services and provide a di.container/createScope pair; a supplied root remains application-owned. The runtime exposes a Fetch handler; the application owns its TCP listener. See [Phase 8](docs/phases/phase-08-hono-runtime.md) for service registration, error contracts, and scope ownership.
+
+## Public API
+
+The example Project resource above exposes GET /api/projects. Enable retrieve/create/update/delete individually to add GET /api/projects/:id, POST /api/projects, PATCH /api/projects/:id, and DELETE /api/projects/:id. Named databases use /api/<database>/<plural-model>. Resources with api: false contribute no routes or OpenAPI entries.
+
+List requests accept limit (default 20, maximum 100) and comma-separated orderBy, such as -createdAt,name. They return arrays. Retrieve returns a Read-validated record; create returns that record with status 201. Item update/delete return 204 without a body. Unknown query/body fields and nested writes are rejected. Each operation uses the trusted request subject/environment and its read/create/update/delete policy through QuerySets. Missing grants deny; object-policy update/delete remain denied until atomic object mutation support exists.
+
+When at least one public operation exists, GET /api/openapi.json serves its generated OpenAPI 3.1 document. runtime.getOpenApiDocument() returns a copy after startup. Native Date and Temporal values use ISO strings; bigint uses decimal strings. Temporal input uses the runtime's Temporal implementation or explicit publicApi.temporal adapters compatible with schema generation. See [Phase 9](docs/phases/phase-09-public-api.md) for examples and limitations.

@@ -139,7 +139,7 @@ Disposal/draining covers the bounded awaited route pipeline, not streamed respon
 
 ## Follow-Ups
 
-Phase 9 integrates generated public CRUD/OpenAPI with these typed contexts and errors. It must wrap response-schema failures as internal AppErrors; the generic ZodError mapper cannot distinguish validation origin. Phase 10 owns session subject resolution. Phase 15 owns CLI/server listener/signal wiring, full bootstrap ordering, cancellation/drain hardening, and connected-database cleanup. Atomic object-policy mutations from Phase 7 remain an MVP follow-up. No post-MVP subsystem was implemented.
+Phase 9 now integrates generated public CRUD/OpenAPI with these contexts and errors; QuerySet Read failures are internal QUERY_RESULT_INVALID AppErrors. Runtime options and startup rollback are extended as documented in [Phase 9](phase-09-public-api.md). Phase 10 owns session subject resolution. Phase 15 owns CLI/server listener/signal wiring, full bootstrap ordering, cancellation/drain hardening, and connected-database cleanup. Atomic object-policy mutations from Phase 7 remain an MVP follow-up. No post-MVP subsystem was implemented.
 
 ## Completion Notes
 

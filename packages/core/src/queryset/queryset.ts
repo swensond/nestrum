@@ -9,7 +9,7 @@ import type { QueryBackend, QueryOrder, QuerySpec, QueryState, QueryWhere } from
 type QueryContext = Pick<RegisteredResource, 'identity' | 'metadata' | 'schemas'> & { readonly authorization?: AuthorizationEngine };
 
 export class QuerySetError extends AppError {
-    constructor(code: 'QUERY_BACKEND_MISSING' | 'QUERY_ARGUMENT_INVALID' | 'QUERY_NOT_FOUND' | 'QUERY_MULTIPLE_RESULTS' | 'QUERY_OPERATION_UNSUPPORTED' | 'QUERY_MANAGER_INVALID', message: string, options?: ErrorOptions) {
+    constructor(code: 'QUERY_BACKEND_MISSING' | 'QUERY_ARGUMENT_INVALID' | 'QUERY_NOT_FOUND' | 'QUERY_MULTIPLE_RESULTS' | 'QUERY_OPERATION_UNSUPPORTED' | 'QUERY_MANAGER_INVALID' | 'QUERY_RESULT_INVALID', message: string, options?: ErrorOptions) {
         super(code, message, code === 'QUERY_NOT_FOUND' ? 404 : code === 'QUERY_ARGUMENT_INVALID' || code === 'QUERY_OPERATION_UNSUPPORTED' ? 400 : 500, options);
         this.name = 'QuerySetError';
     }
@@ -65,6 +65,21 @@ export class QuerySet<Row extends object = Record<string, unknown>, Create exten
         return this.chain({ ...this.#state, filters: [...this.#state.filters, parsed] });
     }
 
+    /** Preserve unique identity predicates even when a composed Where schema transforms inputs. */
+    filterPrimaryKey(value: unknown): this {
+        const keys = this.#context.metadata.fields.filter((field) => field.primaryKey);
+        const key = keys[0];
+        if (keys.length !== 1 || !key || key.array || value === null || value === undefined) {
+            throw new QuerySetError('QUERY_ARGUMENT_INVALID', 'A single scalar primary key is required.');
+        }
+        const schema = this.#context.schemas.model.shape[key.name];
+        if (!schema) { throw new QuerySetError('QUERY_ARGUMENT_INVALID', 'Primary key schema is missing.'); }
+        const where = { [key.name]: schema.parse(snapshotQueryValue(value)) };
+        this.#context.schemas.where.parse(snapshotQueryValue(where));
+
+        return this.chain({ ...this.#state, filters: [...this.#state.filters, where] });
+    }
+
     orderBy(...fields: (Extract<keyof Row, string> | `-${Extract<keyof Row, string>}`)[]): this {
         const orderBy: QueryOrder[] = fields.map((input) => {
             const direction = input.startsWith('-') ? 'desc' : 'asc';
@@ -94,7 +109,7 @@ export class QuerySet<Row extends object = Record<string, unknown>, Create exten
             return [];
         }
         const rows = await this.backend().all(query);
-        const result = rows.map((row) => this.#context.schemas.read.parse(row) as Row);
+        const result = rows.map((row) => this.readResult(row));
         for (const row of result) {
             await permission.checkObject(snapshotQueryValue(row));
         }
@@ -137,7 +152,7 @@ export class QuerySet<Row extends object = Record<string, unknown>, Create exten
         await permission.checkObject(snapshotQueryValue(parsed));
         const row = await this.backend().create(parsed);
 
-        return this.#context.schemas.read.parse(row) as Row;
+        return this.readResult(row);
     }
 
     async update(data: Update): Promise<number> {
@@ -194,6 +209,14 @@ export class QuerySet<Row extends object = Record<string, unknown>, Create exten
     private rejectWindow(operation: string): void {
         if (this.#state.limit !== undefined) {
             throw new QuerySetError('QUERY_ARGUMENT_INVALID', `${operation}() does not accept a limited QuerySet.`);
+        }
+    }
+
+    private readResult(row: Row): Row {
+        try {
+            return this.#context.schemas.read.parse(row) as Row;
+        } catch (cause) {
+            throw new QuerySetError('QUERY_RESULT_INVALID', `Invalid result for ${this.#context.identity}.`, { cause });
         }
     }
 

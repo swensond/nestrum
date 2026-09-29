@@ -3,6 +3,13 @@
     "version": "0.0.0",
     "private": true,
     "type": "module",
+    "imports": {
+        "#hono/*": {
+            "nestrum-source": "./src/*.ts",
+            "types": "./dist/*.d.ts",
+            "default": "./dist/*.js"
+        }
+    },
     "exports": {
         ".": {
             "nestrum-source": "./src/index.ts",
@@ -15,10 +22,14 @@
         "build": "tsc -p tsconfig.json"
     },
     "dependencies": {
+        "@hono/zod-openapi": "1.6.3",
         "@nestrum/core": "workspace:*",
         "@inferdi/inferdi": "6.1.0",
         "@inferdi/hono": "6.1.0",
         "hono": "4.13.11",
         "zod": "4.6.5"
+    },
+    "devDependencies": {
+        "@nestrum/zod": "workspace:*"
     }
 }

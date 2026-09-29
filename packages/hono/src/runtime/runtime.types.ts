@@ -1,6 +1,7 @@
 import type { Application, AuthorizationEnvironment, Subject } from '@nestrum/core';
 import type { InferdiRoot, InferdiScope } from '@inferdi/hono';
 import type { RequestInputs, RequestScope } from './container.js';
+import type { PublicApiOptions } from '#hono/api/api.types';
 
 export type RequestContext = Readonly<RequestInputs & {
     application: Application;
@@ -21,6 +22,7 @@ export type RuntimeErrorEvent = {
 };
 export type RuntimeOptions<Scope extends InferdiScope = RequestScope> = {
     readonly application: Application;
+    readonly publicApi?: PublicApiOptions;
     readonly di?: {
         readonly container: InferdiRoot;
         readonly createScope: (inputs: RequestInputs) => Scope | Promise<Scope>;

@@ -2,7 +2,7 @@
 
 ## Status
 
-Not complete. Phases 0–8 are complete; Phases 9–16 are not started. Workspace, app lifecycle, named databases, offline SQL/Mongo contract assembly/emission, immutable metadata, and runtime Zod families are implemented. Resource registration/composition and pre-hook model validation are implemented. Immutable QuerySets, managers, and supplied-client Prisma adapters are implemented. Default-deny ABAC, scoped QuerySets, object decisions, and custom actions are implemented. Count/bulk writes require collection policies without per-object checks; safe object mutation orchestration remains an MVP follow-up. A Fetch-based Hono runtime with InferDI request scopes, error mapping, and pipeline draining is implemented. Generated routes/auth/admin and automatic database client integration remain later work. The frozen scope below remains the full MVP target.
+Not complete. Phases 0–9 are complete; Phases 10–16 are not started. Workspace, app lifecycle, named databases, offline SQL/Mongo contract assembly/emission, immutable metadata, and runtime Zod families are implemented. Resource registration/composition and pre-hook model validation are implemented. Immutable QuerySets, managers, and supplied-client Prisma adapters are implemented. Default-deny ABAC, scoped QuerySets, object decisions, and custom actions are implemented. Count/bulk writes require collection policies without per-object checks; safe object mutation orchestration remains an MVP follow-up. The Fetch-based Hono/InferDI runtime now generates opt-in public CRUD, JSON scalar transport, and OpenAPI. Item mutations return 204 and retain object-policy denial. Auth/admin and automatic database client integration remain later work. The frozen scope below remains the full MVP target.
 
 ## Included
 
@@ -38,7 +38,7 @@ model Project {
 
 The example above remains frozen MVP intent. Phase 4 supports emission via authoring: { default: 'prisma7' } using the official PostgreSQL compatibility adapter and a separate datasource fragment. It maps cuid() to cuid2 and DateTime to Temporal.PlainDateTime. Native mode still rejects legacy @updatedAt; see [Phase 4](phases/phase-04-zod-generation.md) for actual representations and limitations.
 
-Then defines a resource (implemented in Phase 5; runtime managers/routes arrive later):
+Then defines a resource (registration, managers, and public routes are implemented through Phase 9):
 
 ```ts
 const ProjectResource = defineResource({

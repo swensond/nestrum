@@ -33,4 +33,6 @@ These features are outside the frozen MVP unless a small supporting abstraction 
 
 ## Implementation follow-ups
 
-Phase 4 leaves Decimal, JSON/BSON, binary, composite/embedded fields, arbitrary codec extensions, and complete storage-constraint inference beyond the initial scalar MVP scope. Static generated per-model schema source files are also deferred; runtime families provide the MVP baseline. See [Phase 4](phases/phase-04-zod-generation.md). HTTP serialization and typed QuerySet integration remain required later MVP phases.
+Phase 4 leaves Decimal, JSON/BSON, binary, composite/embedded fields, arbitrary codec extensions, and complete storage-constraint inference beyond the initial scalar MVP scope. Static generated per-model schema source files are also deferred; runtime families provide the MVP baseline. See [Phase 4](phases/phase-04-zod-generation.md). Typed QuerySet integration shipped in Phase 6; JSON scalar transport shipped in Phase 9.
+
+Phase 9 leaves composite-key HTTP item routes, configurable route aliases/English irregular inflection, advanced pagination/filtering, interactive documentation UI, and complete OpenAPI expression of custom/native validators deferred. Atomic object-policy mutation support, automatic client ownership, and live database proof remain required MVP follow-ups, not post-MVP deferrals. Scope-based public writes work now; per-object write policies continue to deny.

@@ -4,3 +4,5 @@ export { mapHttpError } from './runtime/runtime.errors.js';
 export type { RequestInputs, RequestScope, RuntimeContainer, RuntimeGraph } from './runtime/container.js';
 export type { RequestContext, RuntimeEnv, RuntimeOptions, RuntimeState, RuntimeErrorEvent } from './runtime/runtime.types.js';
 export type { ErrorBody, MappedError } from './runtime/runtime.errors.js';
+export type { PublicApiOptions, TemporalType } from './api/api.types.js';
+export type { PublicOpenApiDocument } from './api/public-api.js';
