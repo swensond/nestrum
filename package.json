@@ -12,9 +12,12 @@
         "test": "vitest run",
         "test:watch": "vitest --watch",
         "typecheck": "tsc --noEmit -p tsconfig.json",
+        "lint": "biome check .",
+        "lint:fix": "biome check --write .",
         "check": "pnpm test && pnpm typecheck && pnpm build"
     },
     "devDependencies": {
+        "@biomejs/biome": "2.5.14",
         "@types/node": "26.6.3",
         "typescript": "7.0.2",
         "vitest": "5.0.2"

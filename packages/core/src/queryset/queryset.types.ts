@@ -23,9 +23,18 @@ export type QueryWhere<Row extends object> = { readonly [Key in keyof Row]?: Row
     readonly NOT?: QueryWhere<Row> | readonly QueryWhere<Row>[];
 };
 export type QueryOrder = { readonly field: string; readonly direction: 'asc' | 'desc' };
-export type QuerySpec = { readonly filters: readonly object[]; readonly orderBy: readonly QueryOrder[]; readonly limit?: number };
+export type QuerySpec = {
+    readonly filters: readonly object[];
+    readonly orderBy: readonly QueryOrder[];
+    readonly limit?: number;
+};
 export type QueryState = QuerySpec & { readonly authorization?: AuthorizationBinding };
-export interface QueryBackend<Row extends object = object, Create extends object = object, Update extends object = object, Raw = unknown> {
+export interface QueryBackend<
+    Row extends object = object,
+    Create extends object = object,
+    Update extends object = object,
+    Raw = unknown,
+> {
     readonly raw: Raw;
     all(query: QuerySpec): Promise<readonly Row[]>;
     count(query: QuerySpec): Promise<number>;

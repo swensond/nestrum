@@ -4,7 +4,11 @@ export type Subject = Readonly<Record<string, unknown>>;
 export type AuthorizationEnvironment = Readonly<Record<string, unknown>>;
 export type AuthorizationDecision = { readonly allowed: true } | { readonly allowed: false; readonly reason: string };
 export type QueryOperation = 'read' | 'count' | 'create' | 'update' | 'delete';
-export type AuthorizationBinding = { readonly subject: Subject; readonly action: string; readonly environment: AuthorizationEnvironment };
+export type AuthorizationBinding = {
+    readonly subject: Subject;
+    readonly action: string;
+    readonly environment: AuthorizationEnvironment;
+};
 export type PolicyContext = AuthorizationBinding & {
     readonly identity: string;
     readonly operation?: QueryOperation;

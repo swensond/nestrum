@@ -1,8 +1,8 @@
-import { and, or, not } from '@prisma/orm-postgres/orm-client';
-import { MongoAndExpr, MongoOrExpr, MongoNotExpr, MongoFieldFilter } from '@prisma/orm-mongo/query-ast/execution';
-import { MongoParamRef } from '@prisma/orm-mongo/value';
-import { QuerySetError } from '@nestrum/core';
 import type { PrismaProvider, QueryBackend, QuerySpec } from '@nestrum/core';
+import { QuerySetError } from '@nestrum/core';
+import { MongoAndExpr, MongoFieldFilter, MongoNotExpr, MongoOrExpr } from '@prisma/orm-mongo/query-ast/execution';
+import { MongoParamRef } from '@prisma/orm-mongo/value';
+import { and, not, or } from '@prisma/orm-postgres/orm-client';
 
 type SqlPredicate = Parameters<typeof and>[number];
 type MongoPredicate = Parameters<typeof MongoAndExpr.of>[0][number];
@@ -12,14 +12,23 @@ type CollectionShape = {
     updateAndCount(data: never): PromiseLike<number>;
     deleteAndCount(): PromiseLike<number>;
 };
-type ResultRow<Result> = Result extends readonly (infer Row extends object)[] ? Row : Result extends AsyncIterable<infer Row extends object> ? Row : never;
+type ResultRow<Result> = Result extends readonly (infer Row extends object)[]
+    ? Row
+    : Result extends AsyncIterable<infer Row extends object>
+      ? Row
+      : never;
 type Rows<Raw extends CollectionShape> = ResultRow<Awaited<ReturnType<Raw['all']>>>;
 type Create<Raw extends CollectionShape> = Extract<Parameters<Raw['create']>[0], object>;
-type Update<Raw extends CollectionShape> = Exclude<Extract<Parameters<Raw['updateAndCount']>[0], object>, (...args: never[]) => unknown>;
-export type PrismaQueryBackendOptions = { readonly provider: 'postgresql' } | {
-    readonly provider: 'mongodb';
-    readonly count: (filter: MongoPredicate) => Promise<number>;
-};
+type Update<Raw extends CollectionShape> = Exclude<
+    Extract<Parameters<Raw['updateAndCount']>[0], object>,
+    (...args: never[]) => unknown
+>;
+export type PrismaQueryBackendOptions =
+    | { readonly provider: 'postgresql' }
+    | {
+          readonly provider: 'mongodb';
+          readonly count: (filter: MongoPredicate) => Promise<number>;
+      };
 
 function invoke(target: unknown, method: string, ...args: unknown[]): unknown {
     if (!target || (typeof target !== 'object' && typeof target !== 'function')) {
@@ -27,7 +36,10 @@ function invoke(target: unknown, method: string, ...args: unknown[]): unknown {
     }
     const callable = (target as Record<string, unknown>)[method];
     if (typeof callable !== 'function') {
-        throw new QuerySetError('QUERY_OPERATION_UNSUPPORTED', `Installed Prisma collection does not support ${method}.`);
+        throw new QuerySetError(
+            'QUERY_OPERATION_UNSUPPORTED',
+            `Installed Prisma collection does not support ${method}.`,
+        );
     }
 
     return Reflect.apply(callable, target, args);
@@ -53,7 +65,13 @@ function sqlFilter(where: object, fields: Record<string, unknown>): SqlPredicate
         }
         if (name === 'AND' || name === 'OR' || name === 'NOT') {
             const nested = (Array.isArray(value) ? value : [value]).map((entry) => sqlFilter(record(entry), fields));
-            predicates.push(name === 'OR' ? or(...nested) : name === 'NOT' ? and(...nested.map((entry) => not(entry))) : and(...nested));
+            predicates.push(
+                name === 'OR'
+                    ? or(...nested)
+                    : name === 'NOT'
+                      ? and(...nested.map((entry) => not(entry)))
+                      : and(...nested),
+            );
             continue;
         }
         const field = fields[name];
@@ -63,14 +81,21 @@ function sqlFilter(where: object, fields: Record<string, unknown>): SqlPredicate
                 continue;
             }
             if (operator === 'equals' || operator === 'not') {
-                const expression = invoke(field, operand === null ? 'isNull' : 'eq', ...(operand === null ? [] : [operand])) as SqlPredicate;
+                const expression = invoke(
+                    field,
+                    operand === null ? 'isNull' : 'eq',
+                    ...(operand === null ? [] : [operand]),
+                ) as SqlPredicate;
                 predicates.push(operator === 'not' ? not(expression) : expression);
             } else if (operator === 'notIn') {
                 predicates.push(not(invoke(field, 'in', operand) as SqlPredicate));
             } else if (['in', 'lt', 'lte', 'gt', 'gte'].includes(operator)) {
                 predicates.push(invoke(field, operator, operand) as SqlPredicate);
             } else {
-                throw new QuerySetError('QUERY_OPERATION_UNSUPPORTED', `Prisma 8 QuerySets do not yet compile ${operator} filters; use raw() for provider operations.`);
+                throw new QuerySetError(
+                    'QUERY_OPERATION_UNSUPPORTED',
+                    `Prisma 8 QuerySets do not yet compile ${operator} filters; use raw() for provider operations.`,
+                );
             }
         }
     }
@@ -86,7 +111,13 @@ function mongoFilter(where: object): MongoPredicate {
         }
         if (name === 'AND' || name === 'OR' || name === 'NOT') {
             const nested = (Array.isArray(value) ? value : [value]).map((entry) => mongoFilter(record(entry)));
-            predicates.push(name === 'OR' ? MongoOrExpr.of(nested) : name === 'NOT' ? MongoAndExpr.of(nested.map((entry) => new MongoNotExpr(entry))) : MongoAndExpr.of(nested));
+            predicates.push(
+                name === 'OR'
+                    ? MongoOrExpr.of(nested)
+                    : name === 'NOT'
+                      ? MongoAndExpr.of(nested.map((entry) => new MongoNotExpr(entry)))
+                      : MongoAndExpr.of(nested),
+            );
             continue;
         }
         const operations = isFilter(value) ? value : { equals: value };
@@ -96,11 +127,23 @@ function mongoFilter(where: object): MongoPredicate {
             }
             if (operator === 'in' || operator === 'notIn') {
                 const values = (operand as unknown[]).map((entry) => new MongoParamRef(entry));
-                predicates.push(operator === 'in' ? MongoFieldFilter.in(name, values) : MongoFieldFilter.nin(name, values));
+                predicates.push(
+                    operator === 'in' ? MongoFieldFilter.in(name, values) : MongoFieldFilter.nin(name, values),
+                );
             } else if (['equals', 'not', 'lt', 'lte', 'gt', 'gte'].includes(operator)) {
-                predicates.push(invoke(MongoFieldFilter, operator === 'equals' ? 'eq' : operator === 'not' ? 'neq' : operator, name, new MongoParamRef(operand)) as MongoPredicate);
+                predicates.push(
+                    invoke(
+                        MongoFieldFilter,
+                        operator === 'equals' ? 'eq' : operator === 'not' ? 'neq' : operator,
+                        name,
+                        new MongoParamRef(operand),
+                    ) as MongoPredicate,
+                );
             } else {
-                throw new QuerySetError('QUERY_OPERATION_UNSUPPORTED', `Prisma 8 QuerySets do not yet compile ${operator} filters; use raw() for provider operations.`);
+                throw new QuerySetError(
+                    'QUERY_OPERATION_UNSUPPORTED',
+                    `Prisma 8 QuerySets do not yet compile ${operator} filters; use raw() for provider operations.`,
+                );
             }
         }
     }
@@ -108,19 +151,44 @@ function mongoFilter(where: object): MongoPredicate {
     return MongoAndExpr.of(predicates);
 }
 
-export function createPrismaQueryBackend<Raw extends CollectionShape>(collection: Raw, options: PrismaQueryBackendOptions): QueryBackend<Rows<Raw>, Create<Raw>, Update<Raw>, Raw> {
-    if (!options || !['postgresql', 'mongodb'].includes(options.provider) || (options.provider === 'mongodb' && typeof options.count !== 'function')) {
-        throw new QuerySetError('QUERY_ARGUMENT_INVALID', 'Prisma QuerySets require a supported provider; MongoDB also requires a database-count callback.');
+export function createPrismaQueryBackend<Raw extends CollectionShape>(
+    collection: Raw,
+    options: PrismaQueryBackendOptions,
+): QueryBackend<Rows<Raw>, Create<Raw>, Update<Raw>, Raw> {
+    if (
+        !options ||
+        !['postgresql', 'mongodb'].includes(options.provider) ||
+        (options.provider === 'mongodb' && typeof options.count !== 'function')
+    ) {
+        throw new QuerySetError(
+            'QUERY_ARGUMENT_INVALID',
+            'Prisma QuerySets require a supported provider; MongoDB also requires a database-count callback.',
+        );
     }
     const provider: PrismaProvider = options.provider;
     function select(query: QuerySpec, window = true): unknown {
         let selected: unknown = collection;
         for (const filter of query.filters) {
-            selected = invoke(selected, 'where', provider === 'postgresql' ? (fields: Record<string, unknown>) => sqlFilter(filter, fields) : mongoFilter(filter));
+            selected = invoke(
+                selected,
+                'where',
+                provider === 'postgresql'
+                    ? (fields: Record<string, unknown>) => sqlFilter(filter, fields)
+                    : mongoFilter(filter),
+            );
         }
         if (window && query.orderBy.length) {
-            selected = invoke(selected, 'orderBy', provider === 'postgresql' ? query.orderBy.map((order) => (fields: Record<string, unknown>) => invoke(fields[order.field], order.direction)) :
-                Object.fromEntries(query.orderBy.map((order) => [order.field, order.direction === 'asc' ? 1 : -1])));
+            selected = invoke(
+                selected,
+                'orderBy',
+                provider === 'postgresql'
+                    ? query.orderBy.map(
+                          (order) => (fields: Record<string, unknown>) => invoke(fields[order.field], order.direction),
+                      )
+                    : Object.fromEntries(
+                          query.orderBy.map((order) => [order.field, order.direction === 'asc' ? 1 : -1]),
+                      ),
+            );
         }
         if (window && query.limit !== undefined) {
             selected = invoke(selected, 'limit', query.limit);
@@ -142,7 +210,10 @@ export function createPrismaQueryBackend<Raw extends CollectionShape>(collection
                 return rows;
             }
             if (!Array.isArray(result)) {
-                throw new QuerySetError('QUERY_OPERATION_UNSUPPORTED', 'Prisma all() returned neither an array nor an async iterable.');
+                throw new QuerySetError(
+                    'QUERY_OPERATION_UNSUPPORTED',
+                    'Prisma all() returned neither an array nor an async iterable.',
+                );
             }
 
             return result as readonly Rows<Raw>[];
@@ -151,12 +222,27 @@ export function createPrismaQueryBackend<Raw extends CollectionShape>(collection
             if (options.provider === 'mongodb') {
                 return options.count(MongoAndExpr.of(query.filters.map((filter) => mongoFilter(filter))));
             }
-            const result = await invoke(select(query, false), 'aggregate', (aggregate: { count(): unknown }) => ({ total: aggregate.count() })) as { total: number };
+            const result = (await invoke(select(query, false), 'aggregate', (aggregate: { count(): unknown }) => ({
+                total: aggregate.count(),
+            }))) as { total: number };
 
             return result.total;
         },
-        async create(data: Create<Raw>) { return await invoke(collection, 'create', data) as Rows<Raw>; },
-        async update(query: QuerySpec, data: Update<Raw>) { return await invoke(query.filters.length ? select(query, false) : invoke(collection, 'where', {}), 'updateAndCount', data) as number; },
-        async delete(query: QuerySpec) { return await invoke(query.filters.length ? select(query, false) : invoke(collection, 'where', {}), 'deleteAndCount') as number; }
+        async create(data: Create<Raw>) {
+            return (await invoke(collection, 'create', data)) as Rows<Raw>;
+        },
+        async update(query: QuerySpec, data: Update<Raw>) {
+            return (await invoke(
+                query.filters.length ? select(query, false) : invoke(collection, 'where', {}),
+                'updateAndCount',
+                data,
+            )) as number;
+        },
+        async delete(query: QuerySpec) {
+            return (await invoke(
+                query.filters.length ? select(query, false) : invoke(collection, 'where', {}),
+                'deleteAndCount',
+            )) as number;
+        },
     });
 }

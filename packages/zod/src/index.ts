@@ -1,6 +1,6 @@
-import { z } from 'zod';
-import { PrismaMetadataError } from '@nestrum/prisma';
 import type { FieldMetadata, ModelMetadata } from '@nestrum/prisma';
+import { PrismaMetadataError } from '@nestrum/prisma';
+import { z } from 'zod';
 
 export type ModelSchemas = {
     readonly metadata: ModelMetadata;
@@ -14,20 +14,26 @@ export type ModelSchemas = {
 };
 
 export type SchemaGenerationOptions = {
-    readonly temporal?: Readonly<Partial<Record<'Instant' | 'PlainDateTime' | 'PlainDate' | 'PlainTime', { readonly prototype: object }>>>;
+    readonly temporal?: Readonly<
+        Partial<Record<'Instant' | 'PlainDateTime' | 'PlainDate' | 'PlainTime', { readonly prototype: object }>>
+    >;
 };
 
-function temporalSchema(name: 'Instant' | 'PlainDateTime' | 'PlainDate' | 'PlainTime', options: SchemaGenerationOptions): z.ZodType {
+function temporalSchema(
+    name: 'Instant' | 'PlainDateTime' | 'PlainDate' | 'PlainTime',
+    options: SchemaGenerationOptions,
+): z.ZodType {
     return z.custom((value) => {
-        const temporal = options.temporal ?? (globalThis as unknown as { Temporal?: SchemaGenerationOptions['temporal'] }).Temporal;
-        const constructor = temporal?.[name];
-        if (!constructor || typeof value !== 'object' || value === null) {
+        const temporal =
+            options.temporal ?? (globalThis as unknown as { Temporal?: SchemaGenerationOptions['temporal'] }).Temporal;
+        const temporalClass = temporal?.[name];
+        if (!temporalClass || typeof value !== 'object' || value === null) {
             return false;
         }
 
         try {
-            constructor.prototype.toString.call(value);
-            return constructor.prototype.isPrototypeOf(value);
+            temporalClass.prototype.toString.call(value);
+            return Object.prototype.isPrototypeOf.call(temporalClass.prototype, value);
         } catch {
             return false;
         }
@@ -40,21 +46,39 @@ function scalarSchema(field: FieldMetadata, options: SchemaGenerationOptions): z
     }
 
     switch (field.kind) {
-        case 'string': return field.codec === 'mongo/objectId@1' ? z.string().regex(/^[0-9a-fA-F]{24}$/) : z.string();
+        case 'string':
+            return field.codec === 'mongo/objectId@1' ? z.string().regex(/^[0-9a-fA-F]{24}$/) : z.string();
         case 'integer': {
             const bits = field.codec === 'pg/int2@1' ? 16 : 32;
-            return z.number().int().min(-(2 ** (bits - 1))).max(2 ** (bits - 1) - 1);
+            return z
+                .number()
+                .int()
+                .min(-(2 ** (bits - 1)))
+                .max(2 ** (bits - 1) - 1);
         }
-        case 'number': return z.number();
-        case 'bigint': return z.bigint().min(-(2n ** 63n)).max(2n ** 63n - 1n);
-        case 'boolean': return z.boolean();
-        case 'date': return z.date();
-        case 'date-string': return z.iso.date();
-        case 'datetime-string': return z.iso.datetime({ offset: true });
-        case 'temporal-instant': return temporalSchema('Instant', options);
-        case 'temporal-datetime': return temporalSchema('PlainDateTime', options);
-        case 'temporal-date': return temporalSchema('PlainDate', options);
-        case 'temporal-time': return temporalSchema('PlainTime', options);
+        case 'number':
+            return z.number();
+        case 'bigint':
+            return z
+                .bigint()
+                .min(-(2n ** 63n))
+                .max(2n ** 63n - 1n);
+        case 'boolean':
+            return z.boolean();
+        case 'date':
+            return z.date();
+        case 'date-string':
+            return z.iso.date();
+        case 'datetime-string':
+            return z.iso.datetime({ offset: true });
+        case 'temporal-instant':
+            return temporalSchema('Instant', options);
+        case 'temporal-datetime':
+            return temporalSchema('PlainDateTime', options);
+        case 'temporal-date':
+            return temporalSchema('PlainDate', options);
+        case 'temporal-time':
+            return temporalSchema('PlainTime', options);
     }
 }
 
@@ -67,7 +91,10 @@ export function generateModelSchemas(metadata: ModelMetadata, options: SchemaGen
 
     for (const field of metadata.fields) {
         if (['AND', 'OR', 'NOT'].includes(field.name)) {
-            throw new PrismaMetadataError('PRISMA_METADATA_INVALID', `Field ${metadata.identity}.${field.name} conflicts with a reserved Where operator.`);
+            throw new PrismaMetadataError(
+                'PRISMA_METADATA_INVALID',
+                `Field ${metadata.identity}.${field.name} conflicts with a reserved Where operator.`,
+            );
         }
         const scalar = scalarSchema(field, options);
         let value = field.array ? z.array(scalar) : scalar;
@@ -105,18 +132,31 @@ export function generateModelSchemas(metadata: ModelMetadata, options: SchemaGen
         orderShape[field.name] = z.enum(['asc', 'desc']).optional();
     }
 
-    const where: z.ZodType = z.lazy(() => z.strictObject({
-        ...whereShape,
-        AND: z.array(where).optional(),
-        OR: z.array(where).optional(),
-        NOT: z.union([where, z.array(where)]).optional()
-    }));
+    const where: z.ZodType = z.lazy(() =>
+        z.strictObject({
+            ...whereShape,
+            AND: z.array(where).optional(),
+            OR: z.array(where).optional(),
+            NOT: z.union([where, z.array(where)]).optional(),
+        }),
+    );
     const model = z.strictObject(modelShape);
 
     return Object.freeze({
         metadata,
-        names: Object.freeze({ model: `${metadata.name}ModelSchema`, create: `${metadata.name}CreateSchema`, update: `${metadata.name}UpdateSchema`,
-            read: `${metadata.name}ReadSchema`, where: `${metadata.name}WhereSchema`, orderBy: `${metadata.name}OrderBySchema` }),
-        model, create: z.strictObject(createShape), update: z.strictObject(updateShape), read: model, where, orderBy: z.strictObject(orderShape)
+        names: Object.freeze({
+            model: `${metadata.name}ModelSchema`,
+            create: `${metadata.name}CreateSchema`,
+            update: `${metadata.name}UpdateSchema`,
+            read: `${metadata.name}ReadSchema`,
+            where: `${metadata.name}WhereSchema`,
+            orderBy: `${metadata.name}OrderBySchema`,
+        }),
+        model,
+        create: z.strictObject(createShape),
+        update: z.strictObject(updateShape),
+        read: model,
+        where,
+        orderBy: z.strictObject(orderShape),
     });
 }

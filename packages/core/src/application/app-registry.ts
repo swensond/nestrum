@@ -20,7 +20,10 @@ export class AppRegistry {
         for (const app of this.definitions.values()) {
             for (const dependency of app.dependsOn ?? []) {
                 if (!this.definitions.has(dependency)) {
-                    throw new AppRegistryError('MISSING_APP_DEPENDENCY', `App "${app.name}" depends on unregistered app "${dependency}".`);
+                    throw new AppRegistryError(
+                        'MISSING_APP_DEPENDENCY',
+                        `App "${app.name}" depends on unregistered app "${dependency}".`,
+                    );
                 }
             }
         }

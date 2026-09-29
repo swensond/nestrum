@@ -1,0 +1,32 @@
+{
+    "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+    "vcs": {
+        "enabled": true,
+        "clientKind": "git",
+        "useIgnoreFile": true
+    },
+    "files": {
+        "includes": ["**", "!!**/dist"]
+    },
+    "formatter": {
+        // Indentation, line endings and the final newline come from .editorconfig.
+        "useEditorconfig": true,
+        // .editorconfig sets no max_line_length, so the width is a Biome choice.
+        "lineWidth": 120
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "single"
+        }
+    },
+    "overrides": [
+        {
+            // Tests are formatted like everything else, but lint rules such as
+            // noNonNullAssertion fight the idioms that keep fixtures readable.
+            "includes": ["**/tests/**"],
+            "linter": {
+                "enabled": false
+            }
+        }
+    ]
+}

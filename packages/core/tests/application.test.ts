@@ -1,14 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { AppError, AppLifecycleError, AppRegistry, AppRegistryError, defineApp, defineApplication } from '../src/index.js';
 import type { AppContext, AppDefinition, DatabaseConfig } from '../src/index.js';
+import {
+    AppError,
+    AppLifecycleError,
+    AppRegistry,
+    AppRegistryError,
+    defineApp,
+    defineApplication,
+} from '../src/index.js';
 
 const DATABASES = {
-    default: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://localhost/nestrum_test' }
+    default: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://localhost/nestrum_test' },
 } as const satisfies DatabaseConfig;
 
 function gate(): { promise: Promise<void>; release: () => void } {
     let release!: () => void;
-    const promise = new Promise<void>((resolve) => { release = resolve; });
+    const promise = new Promise<void>((resolve) => {
+        release = resolve;
+    });
 
     return { promise, release };
 }
@@ -17,9 +26,15 @@ function recordingApp(name: string, events: string[], dependsOn: readonly string
     return defineApp({
         name,
         dependsOn,
-        configure() { events.push(`configure:${name}`); },
-        ready() { events.push(`ready:${name}`); },
-        shutdown() { events.push(`shutdown:${name}`); }
+        configure() {
+            events.push(`configure:${name}`);
+        },
+        ready() {
+            events.push(`ready:${name}`);
+        },
+        shutdown() {
+            events.push(`shutdown:${name}`);
+        },
     });
 }
 
@@ -55,10 +70,12 @@ describe('AppRegistry', () => {
     });
 
     it('reports the app and its missing dependency', () => {
-        expect(() => new AppRegistry([{ name: 'projects', dependsOn: ['users'] }])).toThrow(expect.objectContaining({
-            code: 'MISSING_APP_DEPENDENCY',
-            message: 'App "projects" depends on unregistered app "users".'
-        }));
+        expect(() => new AppRegistry([{ name: 'projects', dependsOn: ['users'] }])).toThrow(
+            expect.objectContaining({
+                code: 'MISSING_APP_DEPENDENCY',
+                message: 'App "projects" depends on unregistered app "users".',
+            }),
+        );
     });
 
     it('rejects self-dependencies with a cycle path', () => {
@@ -66,14 +83,19 @@ describe('AppRegistry', () => {
     });
 
     it('rejects indirect cycles with a cycle path', () => {
-        expect(() => new AppRegistry([
-            { name: 'projects', dependsOn: ['users'] },
-            { name: 'users', dependsOn: ['organizations'] },
-            { name: 'organizations', dependsOn: ['projects'] }
-        ])).toThrow(expect.objectContaining({
-            code: 'APP_DEPENDENCY_CYCLE',
-            message: 'App dependency cycle: projects -> users -> organizations -> projects.'
-        }));
+        expect(
+            () =>
+                new AppRegistry([
+                    { name: 'projects', dependsOn: ['users'] },
+                    { name: 'users', dependsOn: ['organizations'] },
+                    { name: 'organizations', dependsOn: ['projects'] },
+                ]),
+        ).toThrow(
+            expect.objectContaining({
+                code: 'APP_DEPENDENCY_CYCLE',
+                message: 'App dependency cycle: projects -> users -> organizations -> projects.',
+            }),
+        );
     });
 
     it('orders shared dependencies once and traverses registration/dependency order deterministically', () => {
@@ -82,16 +104,25 @@ describe('AppRegistry', () => {
             { name: 'analytics' },
             { name: 'organizations', dependsOn: ['identity'] },
             { name: 'users', dependsOn: ['identity'] },
-            { name: 'identity' }
+            { name: 'identity' },
         ];
 
         for (let run = 0; run < 3; run++) {
-            expect(new AppRegistry(definitions).all().map((app) => app.name)).toEqual(['identity', 'users', 'organizations', 'projects', 'analytics']);
+            expect(new AppRegistry(definitions).all().map((app) => app.name)).toEqual([
+                'identity',
+                'users',
+                'organizations',
+                'projects',
+                'analytics',
+            ]);
         }
     });
 
     it('preserves registration order for independent apps', () => {
-        expect(new AppRegistry([{ name: 'zebra' }, { name: 'alpha' }]).all().map((app) => app.name)).toEqual(['zebra', 'alpha']);
+        expect(new AppRegistry([{ name: 'zebra' }, { name: 'alpha' }]).all().map((app) => app.name)).toEqual([
+            'zebra',
+            'alpha',
+        ]);
     });
 
     it('snapshots definitions and dependency arrays so caller mutations cannot change the graph', () => {
@@ -136,13 +167,18 @@ describe('Application lifecycle', () => {
     it('validates the whole app graph before invoking any hook', () => {
         const events: string[] = [];
 
-        expect(() => defineApplication({ databases: DATABASES, apps: [recordingApp('projects', events, ['users'])] })).toThrow(AppRegistryError);
+        expect(() =>
+            defineApplication({ databases: DATABASES, apps: [recordingApp('projects', events, ['users'])] }),
+        ).toThrow(AppRegistryError);
         expect(events).toEqual([]);
     });
 
     it('configures all apps before ready and shuts down in reverse topological order', async () => {
         const events: string[] = [];
-        const application = defineApplication({ databases: DATABASES, apps: [recordingApp('projects', events, ['users']), recordingApp('users', events)] });
+        const application = defineApplication({
+            databases: DATABASES,
+            apps: [recordingApp('projects', events, ['users']), recordingApp('users', events)],
+        });
 
         expect(application.state).toBe('created');
         expect(events).toEqual([]);
@@ -152,17 +188,35 @@ describe('Application lifecycle', () => {
 
         await application.shutdown();
         expect(application.state).toBe('stopped');
-        expect(events).toEqual(['configure:users', 'configure:projects', 'ready:users', 'ready:projects', 'shutdown:projects', 'shutdown:users']);
+        expect(events).toEqual([
+            'configure:users',
+            'configure:projects',
+            'ready:users',
+            'ready:projects',
+            'shutdown:projects',
+            'shutdown:users',
+        ]);
     });
 
     it('passes the application and registry through a frozen hook context', async () => {
         const contexts: AppContext[] = [];
-        const application = defineApplication({ databases: DATABASES, apps: [defineApp({
-            name: 'users',
-            configure(context) { contexts.push(context); },
-            ready(context) { contexts.push(context); },
-            shutdown(context) { contexts.push(context); }
-        })] });
+        const application = defineApplication({
+            databases: DATABASES,
+            apps: [
+                defineApp({
+                    name: 'users',
+                    configure(context) {
+                        contexts.push(context);
+                    },
+                    ready(context) {
+                        contexts.push(context);
+                    },
+                    shutdown(context) {
+                        contexts.push(context);
+                    },
+                }),
+            ],
+        });
 
         await application.start();
         await application.shutdown();
@@ -179,10 +233,20 @@ describe('Application lifecycle', () => {
     it('awaits async configure hooks before proceeding', async () => {
         const blocked = gate();
         const events: string[] = [];
-        const application = defineApplication({ databases: DATABASES, apps: [
-            defineApp({ name: 'users', async configure() { events.push('begin'); await blocked.promise; events.push('end'); } }),
-            recordingApp('projects', events, ['users'])
-        ] });
+        const application = defineApplication({
+            databases: DATABASES,
+            apps: [
+                defineApp({
+                    name: 'users',
+                    async configure() {
+                        events.push('begin');
+                        await blocked.promise;
+                        events.push('end');
+                    },
+                }),
+                recordingApp('projects', events, ['users']),
+            ],
+        });
         const starting = application.start();
 
         expect(application.state).toBe('starting');
@@ -197,10 +261,18 @@ describe('Application lifecycle', () => {
     it('awaits async ready hooks before reporting readiness', async () => {
         const entered = gate();
         const blocked = gate();
-        const application = defineApplication({ databases: DATABASES, apps: [defineApp({
-            name: 'users',
-            async ready() { entered.release(); await blocked.promise; }
-        })] });
+        const application = defineApplication({
+            databases: DATABASES,
+            apps: [
+                defineApp({
+                    name: 'users',
+                    async ready() {
+                        entered.release();
+                        await blocked.promise;
+                    },
+                }),
+            ],
+        });
         const starting = application.start();
         await entered.promise;
 
@@ -214,11 +286,21 @@ describe('Application lifecycle', () => {
     it('awaits each shutdown hook before shutting down its dependency', async () => {
         const blocked = gate();
         const events: string[] = [];
-        const application = defineApplication({ databases: DATABASES, apps: [recordingApp('users', events), defineApp({
-            name: 'projects',
-            dependsOn: ['users'],
-            async shutdown() { events.push('begin:projects'); await blocked.promise; events.push('end:projects'); }
-        })] });
+        const application = defineApplication({
+            databases: DATABASES,
+            apps: [
+                recordingApp('users', events),
+                defineApp({
+                    name: 'projects',
+                    dependsOn: ['users'],
+                    async shutdown() {
+                        events.push('begin:projects');
+                        await blocked.promise;
+                        events.push('end:projects');
+                    },
+                }),
+            ],
+        });
         await application.start();
         events.length = 0;
         const stopping = application.shutdown();
@@ -265,7 +347,10 @@ describe('Application lifecycle', () => {
 
     it('rejects overlapping lifecycle calls during startup', async () => {
         const blocked = gate();
-        const application = defineApplication({ databases: DATABASES, apps: [defineApp({ name: 'users', configure: () => blocked.promise })] });
+        const application = defineApplication({
+            databases: DATABASES,
+            apps: [defineApp({ name: 'users', configure: () => blocked.promise })],
+        });
         const starting = application.start();
 
         await expect(application.start()).rejects.toMatchObject({ code: 'APPLICATION_STATE_INVALID' });
@@ -277,7 +362,10 @@ describe('Application lifecycle', () => {
 
     it('rejects overlapping lifecycle calls during shutdown', async () => {
         const blocked = gate();
-        const application = defineApplication({ databases: DATABASES, apps: [defineApp({ name: 'users', shutdown: () => blocked.promise })] });
+        const application = defineApplication({
+            databases: DATABASES,
+            apps: [defineApp({ name: 'users', shutdown: () => blocked.promise })],
+        });
         await application.start();
         const stopping = application.shutdown();
 
@@ -290,15 +378,32 @@ describe('Application lifecycle', () => {
     it('rolls back only entered apps after configure failure, including the failing app', async () => {
         const events: string[] = [];
         const original = new Error('configure failure');
-        const application = defineApplication({ databases: DATABASES, apps: [
-            recordingApp('users', events),
-            defineApp({ name: 'projects', dependsOn: ['users'], configure() { throw original; }, shutdown() { events.push('shutdown:projects'); } }),
-            recordingApp('analytics', events)
-        ] });
+        const application = defineApplication({
+            databases: DATABASES,
+            apps: [
+                recordingApp('users', events),
+                defineApp({
+                    name: 'projects',
+                    dependsOn: ['users'],
+                    configure() {
+                        throw original;
+                    },
+                    shutdown() {
+                        events.push('shutdown:projects');
+                    },
+                }),
+                recordingApp('analytics', events),
+            ],
+        });
 
         const error = await failure(application.start());
         expect(error).toBeInstanceOf(AppLifecycleError);
-        expect(error).toMatchObject({ code: 'APP_HOOK_FAILED', appName: 'projects', hook: 'configure', cause: original });
+        expect(error).toMatchObject({
+            code: 'APP_HOOK_FAILED',
+            appName: 'projects',
+            hook: 'configure',
+            cause: original,
+        });
         expect(events).toEqual(['configure:users', 'shutdown:projects', 'shutdown:users']);
         expect(application.state).toBe('failed');
         await expect(application.start()).rejects.toMatchObject({ code: 'APPLICATION_STATE_INVALID' });
@@ -309,10 +414,24 @@ describe('Application lifecycle', () => {
     it('rolls back every configured app after an async ready failure', async () => {
         const events: string[] = [];
         const original = new Error('ready failure');
-        const application = defineApplication({ databases: DATABASES, apps: [
-            defineApp({ name: 'users', configure() { events.push('configure:users'); }, async ready() { throw original; }, shutdown() { events.push('shutdown:users'); } }),
-            recordingApp('projects', events, ['users'])
-        ] });
+        const application = defineApplication({
+            databases: DATABASES,
+            apps: [
+                defineApp({
+                    name: 'users',
+                    configure() {
+                        events.push('configure:users');
+                    },
+                    async ready() {
+                        throw original;
+                    },
+                    shutdown() {
+                        events.push('shutdown:users');
+                    },
+                }),
+                recordingApp('projects', events, ['users']),
+            ],
+        });
 
         await expect(application.start()).rejects.toMatchObject({ appName: 'users', hook: 'ready', cause: original });
         expect(events).toEqual(['configure:users', 'configure:projects', 'shutdown:projects', 'shutdown:users']);
@@ -323,16 +442,31 @@ describe('Application lifecycle', () => {
         const events: string[] = [];
         const original = new Error('configure failure');
         const cleanup = new Error('cleanup failure');
-        const application = defineApplication({ databases: DATABASES, apps: [
-            recordingApp('users', events),
-            defineApp({ name: 'projects', dependsOn: ['users'], configure() { throw original; }, shutdown() { throw cleanup; } })
-        ] });
+        const application = defineApplication({
+            databases: DATABASES,
+            apps: [
+                recordingApp('users', events),
+                defineApp({
+                    name: 'projects',
+                    dependsOn: ['users'],
+                    configure() {
+                        throw original;
+                    },
+                    shutdown() {
+                        throw cleanup;
+                    },
+                }),
+            ],
+        });
 
         const error = await failure(application.start());
         expect(error.code).toBe('APPLICATION_START_FAILED');
         expect(error.cause).toBeInstanceOf(AggregateError);
         if (error.cause instanceof AggregateError) {
-            expect(error.cause.errors).toMatchObject([{ appName: 'projects', hook: 'configure', cause: original }, { appName: 'projects', hook: 'shutdown', cause: cleanup }]);
+            expect(error.cause.errors).toMatchObject([
+                { appName: 'projects', hook: 'configure', cause: original },
+                { appName: 'projects', hook: 'shutdown', cause: cleanup },
+            ]);
         }
 
         expect(events).toEqual(['configure:users', 'shutdown:users']);
@@ -343,17 +477,36 @@ describe('Application lifecycle', () => {
 
     it('attempts remaining shutdown hooks after failures and reports all errors', async () => {
         const events: string[] = [];
-        const application = defineApplication({ databases: DATABASES, apps: [
-            defineApp({ name: 'users', shutdown() { events.push('users'); throw new Error('users failure'); } }),
-            defineApp({ name: 'projects', dependsOn: ['users'], async shutdown() { events.push('projects'); throw new Error('projects failure'); } })
-        ] });
+        const application = defineApplication({
+            databases: DATABASES,
+            apps: [
+                defineApp({
+                    name: 'users',
+                    shutdown() {
+                        events.push('users');
+                        throw new Error('users failure');
+                    },
+                }),
+                defineApp({
+                    name: 'projects',
+                    dependsOn: ['users'],
+                    async shutdown() {
+                        events.push('projects');
+                        throw new Error('projects failure');
+                    },
+                }),
+            ],
+        });
         await application.start();
 
         const error = await failure(application.shutdown());
         expect(error.code).toBe('APPLICATION_SHUTDOWN_FAILED');
         expect(error.cause).toBeInstanceOf(AggregateError);
         if (error.cause instanceof AggregateError) {
-            expect(error.cause.errors).toMatchObject([{ appName: 'projects', hook: 'shutdown' }, { appName: 'users', hook: 'shutdown' }]);
+            expect(error.cause.errors).toMatchObject([
+                { appName: 'projects', hook: 'shutdown' },
+                { appName: 'users', hook: 'shutdown' },
+            ]);
         }
 
         expect(events).toEqual(['projects', 'users']);

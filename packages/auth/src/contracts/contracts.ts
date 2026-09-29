@@ -2,14 +2,22 @@ import type { PrismaProvider } from '@nestrum/core';
 import type { AuthFieldDescriptor } from './fields.js';
 
 export const AUTH_MODELS = ['User', 'Session', 'Account', 'Verification'] as const;
-export type AuthModel = typeof AUTH_MODELS[number];
+export type AuthModel = (typeof AUTH_MODELS)[number];
 
-export function authContract(provider: PrismaProvider, extensions: Readonly<Record<string, AuthFieldDescriptor>>): string {
+export function authContract(
+    provider: PrismaProvider,
+    extensions: Readonly<Record<string, AuthFieldDescriptor>>,
+): string {
     const mongo = provider === 'mongodb';
     const date = mongo ? 'Date' : 'TimestamptzString';
     const boolean = mongo ? 'Bool' : 'Boolean';
     const key = `String @id${mongo ? ' @map("_id")' : ''}`;
-    const extensionSource = Object.entries(extensions).map(([name, field]) => `    ${name} ${field.type === 'string' ? 'String' : field.type === 'boolean' ? boolean : mongo ? 'Double' : 'Float'}${field.required ? '' : '?'}`).join('\n');
+    const extensionSource = Object.entries(extensions)
+        .map(
+            ([name, field]) =>
+                `    ${name} ${field.type === 'string' ? 'String' : field.type === 'boolean' ? boolean : mongo ? 'Double' : 'Float'}${field.required ? '' : '?'}`,
+        )
+        .join('\n');
     const reference = mongo ? '' : '\n    user User @relation(fields: [userId], references: [id], onDelete: Cascade)';
 
     return `model User {

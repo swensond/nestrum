@@ -1,13 +1,12 @@
-import type { Application } from './application.js';
-import type { AppRegistry } from './app-registry.js';
-import type { DatabaseRegistry } from '#core/database/database-registry';
-import type { DatabaseConfig } from '#core/database/database.types';
+import type { AuthenticationDefinition } from '#core/auth/auth.types';
 import type { AuthorizationEngine } from '#core/authorization/authorization';
 import type { PolicyDefinition } from '#core/authorization/authorization.types';
-
+import type { DatabaseConfig } from '#core/database/database.types';
+import type { DatabaseRegistry } from '#core/database/database-registry';
 import type { ResourceDefinition, ResourceModel } from '#core/resource/resource.types';
 import type { ResourceRegistry } from '#core/resource/resource-registry';
-import type { AuthenticationDefinition } from '#core/auth/auth.types';
+import type { AppRegistry } from './app-registry.js';
+import type { Application } from './application.js';
 
 export type AppContext = {
     readonly application: Application;
@@ -38,7 +37,9 @@ export type ApplicationConfig = {
     readonly auth?: AuthenticationDefinition;
     readonly resources?: readonly ResourceDefinition[];
     readonly policies?: readonly PolicyDefinition[];
-    readonly resourceModels?: readonly ResourceModel[] | ((application: Application) => readonly ResourceModel[] | Promise<readonly ResourceModel[]>);
+    readonly resourceModels?:
+        | readonly ResourceModel[]
+        | ((application: Application) => readonly ResourceModel[] | Promise<readonly ResourceModel[]>);
 };
 
 export type ApplicationState = 'created' | 'starting' | 'ready' | 'stopping' | 'stopped' | 'failed';

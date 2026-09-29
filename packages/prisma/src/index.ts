@@ -1,5 +1,5 @@
-import { validateDatabaseDefinition } from '@nestrum/core';
 import type { DatabaseDefinition, PrismaProvider } from '@nestrum/core';
+import { validateDatabaseDefinition } from '@nestrum/core';
 
 export type PrismaDatabaseConfig = {
     readonly provider: PrismaProvider;
@@ -14,4 +14,10 @@ export function prismaDatabase(config: PrismaDatabaseConfig): DatabaseDefinition
 }
 
 export { compileModelMetadata, PrismaMetadataError } from '#prisma/metadata/metadata.compiler';
-export type { CompileMetadataOptions, FieldMetadata, ModelMetadata, RelationMetadata, ScalarKind } from '#prisma/metadata/metadata.types';
+export type {
+    CompileMetadataOptions,
+    FieldMetadata,
+    ModelMetadata,
+    RelationMetadata,
+    ScalarKind,
+} from '#prisma/metadata/metadata.types';

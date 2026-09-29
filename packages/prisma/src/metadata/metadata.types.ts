@@ -1,4 +1,5 @@
 import type { PrismaProvider } from '@nestrum/core';
+
 export type { FieldMetadata, ModelMetadata, RelationMetadata, ScalarKind } from '@nestrum/core';
 
 export type CompileMetadataOptions = {

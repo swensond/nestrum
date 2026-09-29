@@ -1,6 +1,18 @@
 import type { ModelIdentity, PrismaProvider } from '#core/database/database.types';
 
-export type ScalarKind = 'string' | 'integer' | 'number' | 'bigint' | 'boolean' | 'date' | 'date-string' | 'datetime-string' | 'temporal-instant' | 'temporal-datetime' | 'temporal-date' | 'temporal-time';
+export type ScalarKind =
+    | 'string'
+    | 'integer'
+    | 'number'
+    | 'bigint'
+    | 'boolean'
+    | 'date'
+    | 'date-string'
+    | 'datetime-string'
+    | 'temporal-instant'
+    | 'temporal-datetime'
+    | 'temporal-date'
+    | 'temporal-time';
 
 export type FieldMetadata = {
     readonly name: string;
@@ -33,4 +45,3 @@ export type ModelMetadata = {
     readonly fields: readonly FieldMetadata[];
     readonly relations: readonly RelationMetadata[];
 };
-

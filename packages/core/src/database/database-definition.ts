@@ -13,10 +13,20 @@ export function validateDatabaseDefinition(value: unknown): asserts value is Dat
     }
 
     if (definition.provider !== 'postgresql' && definition.provider !== 'mongodb') {
-        throw new DatabaseRegistryError('INVALID_DATABASE_CONFIG', 'Database provider must be "postgresql" or "mongodb".');
+        throw new DatabaseRegistryError(
+            'INVALID_DATABASE_CONFIG',
+            'Database provider must be "postgresql" or "mongodb".',
+        );
     }
 
-    if (typeof definition.connection !== 'string' || !definition.connection.trim() || definition.connection.trim() !== definition.connection) {
-        throw new DatabaseRegistryError('INVALID_DATABASE_CONFIG', 'Database connection must be a nonempty string without surrounding whitespace.');
+    if (
+        typeof definition.connection !== 'string' ||
+        !definition.connection.trim() ||
+        definition.connection.trim() !== definition.connection
+    ) {
+        throw new DatabaseRegistryError(
+            'INVALID_DATABASE_CONFIG',
+            'Database connection must be a nonempty string without surrounding whitespace.',
+        );
     }
 }

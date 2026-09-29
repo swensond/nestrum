@@ -4,10 +4,10 @@ import projects from './vitest.workspace.js';
 export default defineConfig({
     ssr: {
         resolve: {
-            conditions: ['nestrum-source', 'node', 'import', 'default']
-        }
+            conditions: ['nestrum-source', 'node', 'import', 'default'],
+        },
     },
     test: {
-        projects
-    }
+        projects,
+    },
 });

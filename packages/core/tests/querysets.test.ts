@@ -1,28 +1,77 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { allow, AuthorizationEngine, bindResourceQuerySets, defineApplication, defineResource, QuerySet, QuerySetError } from '../src/index.js';
 import type { ModelMetadata, QueryBackend, QuerySpec, QueryWhere, ResourceModel } from '../src/index.js';
+import {
+    AuthorizationEngine,
+    allow,
+    bindResourceQuerySets,
+    defineApplication,
+    defineResource,
+    QuerySet,
+    QuerySetError,
+} from '../src/index.js';
 
 type Project = { id: number; name: string; status: string; createdAt: Date };
 type Create = Omit<Project, 'id'>;
 type Update = Partial<Omit<Project, 'id'>>;
 const READ = z.strictObject({ id: z.number().int(), name: z.string(), status: z.string(), createdAt: z.date() });
-const WHERE = z.strictObject({ id: z.number().optional(), name: z.string().optional(), status: z.string().optional(), createdAt: z.date().optional() });
-const POLICY = { resource: 'default.Project', actions: { test: { authorize: () => allow(), operations: ['read', 'count', 'create', 'update', 'delete'] as const } } };
+const WHERE = z.strictObject({
+    id: z.number().optional(),
+    name: z.string().optional(),
+    status: z.string().optional(),
+    createdAt: z.date().optional(),
+});
+const POLICY = {
+    resource: 'default.Project',
+    actions: {
+        test: { authorize: () => allow(), operations: ['read', 'count', 'create', 'update', 'delete'] as const },
+    },
+};
 const CONTEXT = {
     authorization: new AuthorizationEngine([POLICY]),
     identity: 'default.Project' as const,
-    metadata: { database: 'default', name: 'Project', identity: 'default.Project', provider: 'postgresql', namespace: 'public', relations: [],
-        fields: ['id', 'name', 'status', 'createdAt'].map((name) => ({ name, codec: 'pg/text@1', kind: 'string', array: false, nullable: false, optional: false, primaryKey: name === 'id', hasCreateDefault: name === 'id', hasUpdateDefault: false })) } as ModelMetadata,
-    schemas: { model: READ, read: READ, create: READ.omit({ id: true }), update: READ.omit({ id: true }).partial(), where: WHERE,
-        orderBy: z.strictObject({ id: z.enum(['asc', 'desc']).optional(), name: z.enum(['asc', 'desc']).optional(), status: z.enum(['asc', 'desc']).optional(), createdAt: z.enum(['asc', 'desc']).optional() }) }
+    metadata: {
+        database: 'default',
+        name: 'Project',
+        identity: 'default.Project',
+        provider: 'postgresql',
+        namespace: 'public',
+        relations: [],
+        fields: ['id', 'name', 'status', 'createdAt'].map((name) => ({
+            name,
+            codec: 'pg/text@1',
+            kind: 'string',
+            array: false,
+            nullable: false,
+            optional: false,
+            primaryKey: name === 'id',
+            hasCreateDefault: name === 'id',
+            hasUpdateDefault: false,
+        })),
+    } as ModelMetadata,
+    schemas: {
+        model: READ,
+        read: READ,
+        create: READ.omit({ id: true }),
+        update: READ.omit({ id: true }).partial(),
+        where: WHERE,
+        orderBy: z.strictObject({
+            id: z.enum(['asc', 'desc']).optional(),
+            name: z.enum(['asc', 'desc']).optional(),
+            status: z.enum(['asc', 'desc']).optional(),
+            createdAt: z.enum(['asc', 'desc']).optional(),
+        }),
+    },
 };
 const ROW: Project = { id: 1, name: 'Example', status: 'active', createdAt: new Date('2026-01-01') };
 function fixture() {
     const backend = {
-        raw: { native: true } as { native: boolean }, all: vi.fn(async (_query: QuerySpec): Promise<Project[]> => [ROW]),
-        count: vi.fn(async (_query: QuerySpec) => 3), create: vi.fn(async (_data: Create) => ROW),
-        update: vi.fn(async (_query: QuerySpec, _data: Update) => 2), delete: vi.fn(async (_query: QuerySpec) => 2)
+        raw: { native: true } as { native: boolean },
+        all: vi.fn(async (_query: QuerySpec): Promise<Project[]> => [ROW]),
+        count: vi.fn(async (_query: QuerySpec) => 3),
+        create: vi.fn(async (_data: Create) => ROW),
+        update: vi.fn(async (_query: QuerySpec, _data: Update) => 2),
+        delete: vi.fn(async (_query: QuerySpec) => 2),
     } satisfies QueryBackend<Project, Create, Update, { native: boolean }>;
 
     return { backend, query: new QuerySet(CONTEXT, backend).authorizedFor({}, 'test') };
@@ -37,7 +86,11 @@ describe('Immutable typed QuerySets', () => {
         expect(backend.all).not.toHaveBeenCalled();
         expect(Object.isFrozen(query)).toBe(true);
         await recent.all();
-        expect(backend.all).toHaveBeenLastCalledWith({ filters: [{ status: 'active' }, { name: 'Example' }], orderBy: [{ field: 'createdAt', direction: 'desc' }], limit: 20 });
+        expect(backend.all).toHaveBeenLastCalledWith({
+            filters: [{ status: 'active' }, { name: 'Example' }],
+            orderBy: [{ field: 'createdAt', direction: 'desc' }],
+            limit: 20,
+        });
         await archived.all();
         expect(backend.all).toHaveBeenLastCalledWith({ filters: [{ status: 'archived' }], orderBy: [] });
         await query.all();
@@ -91,7 +144,10 @@ describe('Immutable typed QuerySets', () => {
         expect(await query.filter({ status: 'archived' }).create(create)).toEqual(ROW);
         expect(backend.create).toHaveBeenCalledWith(create);
         expect(await query.filter({ status: 'active' }).update({ name: 'Changed' })).toBe(2);
-        expect(backend.update).toHaveBeenCalledWith({ filters: [{ status: 'active' }], orderBy: [] }, { name: 'Changed' });
+        expect(backend.update).toHaveBeenCalledWith(
+            { filters: [{ status: 'active' }], orderBy: [] },
+            { name: 'Changed' },
+        );
         expect(await query.filter({ id: 1 }).delete()).toBe(2);
         expect(backend.delete).toHaveBeenCalledWith({ filters: [{ id: 1 }], orderBy: [] });
         await expect(query.update({ id: 2 } as Update)).rejects.toThrow();
@@ -115,7 +171,11 @@ describe('Immutable typed QuerySets', () => {
     it('validates returned records and preserves backend errors', async () => {
         const { query, backend } = fixture();
         backend.all.mockResolvedValueOnce([{ id: 'bad' } as unknown as Project]);
-        await expect(query.all()).rejects.toMatchObject({ code: 'QUERY_RESULT_INVALID', status: 500, cause: expect.any(z.ZodError) });
+        await expect(query.all()).rejects.toMatchObject({
+            code: 'QUERY_RESULT_INVALID',
+            status: 500,
+            cause: expect.any(z.ZodError),
+        });
         const cause = new Error('Database failure');
         backend.all.mockRejectedValueOnce(cause);
         await expect(query.all()).rejects.toBe(cause);
@@ -123,7 +183,13 @@ describe('Immutable typed QuerySets', () => {
 
     it('keeps primary key predicates intact through composed Where transforms and immutable branches', async () => {
         const { backend } = fixture();
-        const query = new QuerySet({ ...CONTEXT, schemas: { ...CONTEXT.schemas, where: z.record(z.string(), z.unknown()).transform(() => ({})) } }, backend).authorizedFor({}, 'test');
+        const query = new QuerySet(
+            {
+                ...CONTEXT,
+                schemas: { ...CONTEXT.schemas, where: z.record(z.string(), z.unknown()).transform(() => ({})) },
+            },
+            backend,
+        ).authorizedFor({}, 'test');
         await query.filterPrimaryKey(1).update({ name: 'Changed' });
         expect(backend.update.mock.lastCall?.[0].filters).toEqual([{ id: 1 }]);
         await query.all();
@@ -139,7 +205,9 @@ describe('Immutable typed QuerySets', () => {
 
     it('extends QuerySets while preserving subclass methods through chaining', async () => {
         class ProjectQueries extends QuerySet<Project, Create, Update, { native: boolean }> {
-            active() { return this.filter({ status: 'active' }); }
+            active() {
+                return this.filter({ status: 'active' });
+            }
         }
         const { query, backend } = fixture();
         const custom = query.extend(ProjectQueries).active().orderBy('-createdAt').limit(2);
@@ -150,7 +218,10 @@ describe('Immutable typed QuerySets', () => {
 
     it('exposes irreplaceable, typed, chainable named managers and rejects cross-resource factories', async () => {
         const { backend } = fixture();
-        const access = bindResourceQuerySets(CONTEXT, backend, { active: (query) => query.filter({ status: 'active' }), archived: (query) => query.filter({ status: 'archived' }) });
+        const access = bindResourceQuerySets(CONTEXT, backend, {
+            active: (query) => query.filter({ status: 'active' }),
+            archived: (query) => query.filter({ status: 'archived' }),
+        });
         expect(Object.isFrozen(access)).toBe(true);
         expect(Reflect.set(access, 'objects', access.active)).toBe(false);
         await access.active.authorizedFor({}, 'test').filter({ name: 'Example' }).all();
@@ -169,10 +240,25 @@ describe('Immutable typed QuerySets', () => {
 
     it('binds a supplied backend and evaluates a named manager from a configure hook', async () => {
         const { backend } = fixture();
-        const application = defineApplication({ policies: [POLICY], databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+        const application = defineApplication({
+            policies: [POLICY],
+            databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
             resourceModels: [{ ...CONTEXT.schemas, metadata: CONTEXT.metadata, queryBackend: backend }],
-            apps: [{ name: 'projects', resources: [defineResource({ model: 'Project', managers: { active: (query) => query.filter({ status: 'active' }) } })],
-                async configure({ resources }) { await resources.get('default.Project').managers.active!.authorizedFor({}, 'test').all(); } }] });
+            apps: [
+                {
+                    name: 'projects',
+                    resources: [
+                        defineResource({
+                            model: 'Project',
+                            managers: { active: (query) => query.filter({ status: 'active' }) },
+                        }),
+                    ],
+                    async configure({ resources }) {
+                        await resources.get('default.Project').managers.active!.authorizedFor({}, 'test').all();
+                    },
+                },
+            ],
+        });
         await application.start();
         expect(backend.all).toHaveBeenCalledWith({ filters: [{ status: 'active' }], orderBy: [] });
         expect(application.resources.get('default.Project').objects.raw()).toBe(backend.raw);
@@ -181,14 +267,26 @@ describe('Immutable typed QuerySets', () => {
 
     it('registers objects and named managers before hooks, even without a live backend', async () => {
         const family: ResourceModel = { ...CONTEXT.schemas, metadata: CONTEXT.metadata };
-        const application = defineApplication({ policies: [POLICY], databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
-            apps: [], resourceModels: [family], resources: [defineResource({ model: 'Project', managers: { active: (query) => query.filter({ status: 'active' }) } })] });
+        const application = defineApplication({
+            policies: [POLICY],
+            databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+            apps: [],
+            resourceModels: [family],
+            resources: [
+                defineResource({
+                    model: 'Project',
+                    managers: { active: (query) => query.filter({ status: 'active' }) },
+                }),
+            ],
+        });
         await application.start();
         const resource = application.resources.get('default.Project');
         expect(resource.objects).toBeInstanceOf(QuerySet);
         expect(resource.managers.active).toBeInstanceOf(QuerySet);
         expect(Reflect.set(resource, 'objects', resource.managers.active)).toBe(false);
-        await expect(resource.objects.authorizedFor({}, 'test').all()).rejects.toMatchObject({ code: 'QUERY_BACKEND_MISSING' });
+        await expect(resource.objects.authorizedFor({}, 'test').all()).rejects.toMatchObject({
+            code: 'QUERY_BACKEND_MISSING',
+        });
         await application.shutdown();
     });
 });

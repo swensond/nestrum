@@ -1,7 +1,7 @@
 import type { Application } from '#core/application/application';
 import type { AppDefinition } from '#core/application/application.types';
-import type { ModelIdentity, PrismaProvider } from '#core/database/database.types';
 import type { Subject } from '#core/authorization/authorization.types';
+import type { ModelIdentity, PrismaProvider } from '#core/database/database.types';
 
 export type AuthSession = {
     readonly user: Readonly<Record<string, unknown> & { id: string }>;

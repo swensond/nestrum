@@ -1,19 +1,29 @@
-import { betterAuth } from 'better-auth';
+import type {
+    Application,
+    Authentication,
+    AuthenticationDefinition,
+    AuthSession,
+    DatabaseDefinition,
+} from '@nestrum/core';
 import { AppError, defineApp, modelIdentity } from '@nestrum/core';
-import type { Application, Authentication, AuthenticationDefinition, AuthSession, DatabaseDefinition } from '@nestrum/core';
-import { AUTH_MODELS, authContract } from '#auth/contracts/contracts';
-import { userExtensions } from '#auth/contracts/fields';
-import type { AuthField } from '#auth/contracts/fields';
-import { createPrismaAuthAdapter } from '#auth/adapter/prisma-adapter';
+import { betterAuth } from 'better-auth';
 import type { AuthPrismaBinding } from '#auth/adapter/prisma-adapter';
-import { SubjectFactory } from '#auth/session/subject-factory';
+import { createPrismaAuthAdapter } from '#auth/adapter/prisma-adapter';
+import { AUTH_MODELS, authContract } from '#auth/contracts/contracts';
+import type { AuthField } from '#auth/contracts/fields';
+import { userExtensions } from '#auth/contracts/fields';
 import type { SubjectMapper } from '#auth/session/subject-factory';
+import { SubjectFactory } from '#auth/session/subject-factory';
 
 export type AuthConfig = {
     readonly database?: string;
     readonly baseURL: string;
     readonly secret: string;
-    readonly prisma: (context: { readonly database: string; readonly definition: DatabaseDefinition; readonly application: Application }) => AuthPrismaBinding | Promise<AuthPrismaBinding>;
+    readonly prisma: (context: {
+        readonly database: string;
+        readonly definition: DatabaseDefinition;
+        readonly application: Application;
+    }) => AuthPrismaBinding | Promise<AuthPrismaBinding>;
     readonly extend?: { readonly user?: Readonly<Record<string, AuthField>> };
     readonly trustedOrigins?: readonly string[];
     readonly subjectFactory?: SubjectMapper;
@@ -22,20 +32,40 @@ export type AuthConfig = {
 function origin(value: string): string {
     try {
         const url = new URL(value);
-        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.origin !== value.replace(/\/$/, '')) { throw new Error(); }
+        if (
+            !['http:', 'https:'].includes(url.protocol) ||
+            url.username ||
+            url.password ||
+            url.origin !== value.replace(/\/$/, '')
+        ) {
+            throw new Error();
+        }
 
         return url.origin;
-    } catch { throw new AppError('AUTH_CONFIG_INVALID', 'Auth URLs must be absolute HTTP(S) origins.'); }
+    } catch {
+        throw new AppError('AUTH_CONFIG_INVALID', 'Auth URLs must be absolute HTTP(S) origins.');
+    }
 }
 
 export function defineAuth(config: AuthConfig): AuthenticationDefinition {
-    if (!config || typeof config.secret !== 'string' || config.secret.length < 32 || typeof config.prisma !== 'function' || config.subjectFactory !== undefined && typeof config.subjectFactory !== 'function') {
-        throw new AppError('AUTH_CONFIG_INVALID', 'Auth requires a secret of at least 32 characters and a Prisma storage factory.');
+    if (
+        !config ||
+        typeof config.secret !== 'string' ||
+        config.secret.length < 32 ||
+        typeof config.prisma !== 'function' ||
+        (config.subjectFactory !== undefined && typeof config.subjectFactory !== 'function')
+    ) {
+        throw new AppError(
+            'AUTH_CONFIG_INVALID',
+            'Auth requires a secret of at least 32 characters and a Prisma storage factory.',
+        );
     }
     const database = config.database ?? 'default';
     const protectedModels = Object.freeze(AUTH_MODELS.map((model) => modelIdentity(model, database)));
     const baseURL = origin(config.baseURL);
-    if (config.trustedOrigins !== undefined && !Array.isArray(config.trustedOrigins)) { throw new AppError('AUTH_CONFIG_INVALID', 'Trusted auth origins must be an array.'); }
+    if (config.trustedOrigins !== undefined && !Array.isArray(config.trustedOrigins)) {
+        throw new AppError('AUTH_CONFIG_INVALID', 'Trusted auth origins must be an array.');
+    }
     const trustedOrigins = Object.freeze((config.trustedOrigins ?? []).map(origin));
     const extensions = userExtensions(config.extend?.user);
     const subjectFactory = new SubjectFactory(config.subjectFactory);
@@ -43,20 +73,41 @@ export function defineAuth(config: AuthConfig): AuthenticationDefinition {
     const prisma = config.prisma;
 
     return Object.freeze({
-        kind: 'better-auth' as const, database, protectedModels,
-        createApp: (provider) => defineApp({ name: 'nestrum.auth', prismaSource: { [database]: authContract(provider, extensions) } }),
+        kind: 'better-auth' as const,
+        database,
+        protectedModels,
+        createApp: (provider) =>
+            defineApp({ name: 'nestrum.auth', prismaSource: { [database]: authContract(provider, extensions) } }),
         async initialize(application: Application): Promise<Authentication> {
             const definition = application.databases.get(database);
             const binding = await prisma({ application, database, definition });
-            if (binding.database !== database) { throw new AppError('AUTH_DATABASE_MISMATCH', 'Auth storage must bind its selected named database.'); }
-            const instance = betterAuth({ baseURL, basePath: '/api/auth', secret, trustedOrigins: [...trustedOrigins],
-                database: createPrismaAuthAdapter(binding, definition.provider), emailAndPassword: { enabled: true },
-                user: { modelName: 'User', additionalFields: Object.fromEntries(Object.entries(extensions).map(([name, value]) => [name, { ...value }])) },
-                session: { modelName: 'Session', cookieCache: { enabled: false } }, account: { modelName: 'Account' }, verification: { modelName: 'Verification' },
-                advanced: { database: { generateId: () => crypto.randomUUID() } } });
+            if (binding.database !== database) {
+                throw new AppError('AUTH_DATABASE_MISMATCH', 'Auth storage must bind its selected named database.');
+            }
+            const instance = betterAuth({
+                baseURL,
+                basePath: '/api/auth',
+                secret,
+                trustedOrigins: [...trustedOrigins],
+                database: createPrismaAuthAdapter(binding, definition.provider),
+                emailAndPassword: { enabled: true },
+                user: {
+                    modelName: 'User',
+                    additionalFields: Object.fromEntries(
+                        Object.entries(extensions).map(([name, value]) => [name, { ...value }]),
+                    ),
+                },
+                session: { modelName: 'Session', cookieCache: { enabled: false } },
+                account: { modelName: 'Account' },
+                verification: { modelName: 'Verification' },
+                advanced: { database: { generateId: () => crypto.randomUUID() } },
+            });
             await instance.$context;
             const getSession = async (request: Request): Promise<AuthSession | null> => {
-                const session = await instance.api.getSession({ headers: request.headers, query: { disableCookieCache: true, disableRefresh: true } });
+                const session = await instance.api.getSession({
+                    headers: request.headers,
+                    query: { disableCookieCache: true, disableRefresh: true },
+                });
 
                 return session as AuthSession | null;
             };
@@ -68,14 +119,24 @@ export function defineAuth(config: AuthConfig): AuthenticationDefinition {
                     if (requestOrigin && requestOrigin !== baseURL && !trustedOrigins.includes(requestOrigin)) {
                         return Response.json({ message: 'Invalid origin', code: 'INVALID_ORIGIN' }, { status: 403 });
                     }
-                    const allowed = request.method === 'POST' ? ['/api/auth/sign-up/email', '/api/auth/sign-in/email', '/api/auth/sign-out'] : request.method === 'GET' ? ['/api/auth/get-session'] : [];
-                    if (!allowed.includes(path)) { return Response.json({ error: { code: 'NOT_FOUND', message: 'Route not found.' } }, { status: 404 }); }
+                    const allowed =
+                        request.method === 'POST'
+                            ? ['/api/auth/sign-up/email', '/api/auth/sign-in/email', '/api/auth/sign-out']
+                            : request.method === 'GET'
+                              ? ['/api/auth/get-session']
+                              : [];
+                    if (!allowed.includes(path)) {
+                        return Response.json(
+                            { error: { code: 'NOT_FOUND', message: 'Route not found.' } },
+                            { status: 404 },
+                        );
+                    }
 
                     return instance.handler(request);
                 },
                 getSession,
-                resolveSubject: async (request: Request) => subjectFactory.create(await getSession(request))
+                resolveSubject: async (request: Request) => subjectFactory.create(await getSession(request)),
             });
-        }
+        },
     });
 }

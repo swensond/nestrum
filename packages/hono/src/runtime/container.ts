@@ -1,5 +1,5 @@
-import { Container } from '@inferdi/inferdi';
 import type { ScopeInputMap, Spec, WithRequirements } from '@inferdi/inferdi';
+import { Container } from '@inferdi/inferdi';
 import type { Application, AuthorizationEnvironment, Subject } from '@nestrum/core';
 
 export type RequestInputs = { subject: Subject; environment: AuthorizationEnvironment; request: Request };

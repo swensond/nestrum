@@ -1,17 +1,17 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { AppDefinition } from '@nestrum/core';
 import { defineApp, defineApplication } from '@nestrum/core';
+import { afterEach, describe, expect, it } from 'vitest';
 import { prismaDatabase } from '../src/index.js';
 import { assemblePrismaContracts, generatePrismaContracts, PrismaContractError } from '../src/node.js';
-import type { AppDefinition } from '@nestrum/core';
 
 const FIXTURES = fileURLToPath(new URL('./fixtures/', import.meta.url));
 const DATABASES = {
     default: prismaDatabase({ provider: 'postgresql', connection: 'postgresql://unused/never-connected' }),
-    documents: prismaDatabase({ provider: 'mongodb', connection: 'mongodb://unused/never-connected' })
+    documents: prismaDatabase({ provider: 'mongodb', connection: 'mongodb://unused/never-connected' }),
 };
 const DIRECTORIES: string[] = [];
 
@@ -30,14 +30,18 @@ function example() {
     return application([
         defineApp({ name: 'projects', dependsOn: ['users'], prisma: { default: ['apps/projects/prisma'] } }),
         defineApp({ name: 'articles', prisma: { documents: ['apps/articles/prisma'] } }),
-        defineApp({ name: 'users', prisma: { default: ['apps/users/prisma'] } })
+        defineApp({ name: 'users', prisma: { default: ['apps/users/prisma'] } }),
     ]);
 }
 
 function modelNames(content: string): string[] {
-    const contract = JSON.parse(content) as { domain: { namespaces: Record<string, { models?: Record<string, unknown> }> } };
+    const contract = JSON.parse(content) as {
+        domain: { namespaces: Record<string, { models?: Record<string, unknown> }> };
+    };
 
-    return Object.values(contract.domain.namespaces).flatMap((namespace) => Object.keys(namespace.models ?? {})).sort();
+    return Object.values(contract.domain.namespaces)
+        .flatMap((namespace) => Object.keys(namespace.models ?? {}))
+        .sort();
 }
 
 afterEach(async () => {
@@ -52,7 +56,11 @@ describe('Prisma fragment assembly', () => {
 
         expect(contracts.map((contract) => contract.database)).toEqual(['default', 'documents']);
         expect(contracts[0]?.fragments.map((fragment) => fragment.app)).toEqual(['users', 'projects', 'projects']);
-        expect(contracts[0]?.fragments.map((fragment) => fragment.path.split('/').at(-1))).toEqual(['user.prisma', 'project-member.prisma', 'project.prisma']);
+        expect(contracts[0]?.fragments.map((fragment) => fragment.path.split('/').at(-1))).toEqual([
+            'user.prisma',
+            'project-member.prisma',
+            'project.prisma',
+        ]);
         expect(contracts[1]?.fragments.map((fragment) => fragment.app)).toEqual(['articles']);
         expect(contracts[0]?.source.startsWith('// use prisma-8\n')).toBe(true);
         expect(Object.isFrozen(contracts)).toBe(true);
@@ -70,20 +78,29 @@ describe('Prisma fragment assembly', () => {
     });
 
     it('does not discover fragments for apps without explicit contributions', async () => {
-        expect(await assemblePrismaContracts(application([defineApp({ name: 'users' })]), { rootDir: FIXTURES })).toEqual([]);
+        expect(
+            await assemblePrismaContracts(application([defineApp({ name: 'users' })]), { rootDir: FIXTURES }),
+        ).toEqual([]);
     });
 
     it('rejects unregistered target databases with app/database identity', async () => {
         const app = application([defineApp({ name: 'projects', prisma: { missing: ['apps/projects/prisma'] } })]);
 
-        await expect(assemblePrismaContracts(app, { rootDir: FIXTURES })).rejects.toMatchObject({ code: 'PRISMA_DATABASE_UNKNOWN' });
+        await expect(assemblePrismaContracts(app, { rootDir: FIXTURES })).rejects.toMatchObject({
+            code: 'PRISMA_DATABASE_UNKNOWN',
+        });
         await expect(assemblePrismaContracts(app, { rootDir: FIXTURES })).rejects.toThrow('App "projects"');
     });
 
     it('reports missing files with app, database, path, and original cause', async () => {
-        await expect(assemblePrismaContracts(application([defineApp({ name: 'users', prisma: { default: ['missing.prisma'] } })]), { rootDir: FIXTURES })).rejects.toMatchObject({
+        await expect(
+            assemblePrismaContracts(
+                application([defineApp({ name: 'users', prisma: { default: ['missing.prisma'] } })]),
+                { rootDir: FIXTURES },
+            ),
+        ).rejects.toMatchObject({
             code: 'PRISMA_FRAGMENT_READ_FAILED',
-            cause: expect.objectContaining({ code: 'ENOENT' })
+            cause: expect.objectContaining({ code: 'ENOENT' }),
         });
     });
 
@@ -92,24 +109,39 @@ describe('Prisma fragment assembly', () => {
         await mkdir(join(rootDir, 'empty'));
         await writeFile(join(rootDir, 'note.txt'), 'not a contract');
 
-        await expect(assemblePrismaContracts(application([{ name: 'empty', prisma: { default: ['empty'] } }]), { rootDir })).rejects.toMatchObject({ code: 'PRISMA_FRAGMENTS_EMPTY' });
-        await expect(assemblePrismaContracts(application([{ name: 'note', prisma: { default: ['note.txt'] } }]), { rootDir })).rejects.toMatchObject({ code: 'PRISMA_FRAGMENT_PATH_INVALID' });
+        await expect(
+            assemblePrismaContracts(application([{ name: 'empty', prisma: { default: ['empty'] } }]), { rootDir }),
+        ).rejects.toMatchObject({ code: 'PRISMA_FRAGMENTS_EMPTY' });
+        await expect(
+            assemblePrismaContracts(application([{ name: 'note', prisma: { default: ['note.txt'] } }]), { rootDir }),
+        ).rejects.toMatchObject({ code: 'PRISMA_FRAGMENT_PATH_INVALID' });
     });
 
     it('rejects overlapping file/directory contributions and duplicate ownership within one database', async () => {
         const app = application([
             { name: 'users', prisma: { default: ['apps/users/prisma'] } },
-            { name: 'other', prisma: { default: ['apps/users/prisma/user.prisma'] } }
+            { name: 'other', prisma: { default: ['apps/users/prisma/user.prisma'] } },
         ]);
 
-        await expect(assemblePrismaContracts(app, { rootDir: FIXTURES })).rejects.toMatchObject({ code: 'PRISMA_FRAGMENT_DUPLICATE' });
+        await expect(assemblePrismaContracts(app, { rootDir: FIXTURES })).rejects.toMatchObject({
+            code: 'PRISMA_FRAGMENT_DUPLICATE',
+        });
         await expect(assemblePrismaContracts(app, { rootDir: FIXTURES })).rejects.toThrow('apps "users" and "other"');
     });
 
     it('permits reuse under different database identities', async () => {
-        const contracts = await assemblePrismaContracts(application([{ name: 'shared', prisma: {
-            default: ['apps/users/prisma/user.prisma'], documents: ['apps/users/prisma/user.prisma']
-        } }]), { rootDir: FIXTURES });
+        const contracts = await assemblePrismaContracts(
+            application([
+                {
+                    name: 'shared',
+                    prisma: {
+                        default: ['apps/users/prisma/user.prisma'],
+                        documents: ['apps/users/prisma/user.prisma'],
+                    },
+                },
+            ]),
+            { rootDir: FIXTURES },
+        );
 
         expect(contracts).toHaveLength(2);
     });
@@ -118,10 +150,14 @@ describe('Prisma fragment assembly', () => {
         const rootDir = await temporaryDirectory();
         await writeFile(join(rootDir, 'user.prisma'), 'model User {\n id Int @id\n}\n');
         await symlink(rootDir, join(rootDir, 'loop'), 'dir');
-        const contracts = await assemblePrismaContracts(application([{ name: 'users', prisma: { default: ['.'] } }]), { rootDir });
+        const contracts = await assemblePrismaContracts(application([{ name: 'users', prisma: { default: ['.'] } }]), {
+            rootDir,
+        });
 
         expect(contracts[0]?.fragments).toHaveLength(1);
-        await expect(assemblePrismaContracts(application([{ name: 'users', prisma: { default: ['loop'] } }]), { rootDir })).rejects.toMatchObject({ code: 'PRISMA_FRAGMENT_PATH_INVALID' });
+        await expect(
+            assemblePrismaContracts(application([{ name: 'users', prisma: { default: ['loop'] } }]), { rootDir }),
+        ).rejects.toMatchObject({ code: 'PRISMA_FRAGMENT_PATH_INVALID' });
     });
 
     it('snapshots app-owned contribution maps and path lists', async () => {
@@ -133,11 +169,15 @@ describe('Prisma fragment assembly', () => {
 
         expect(Object.isFrozen(app.prisma)).toBe(true);
         expect(Object.isFrozen(app.prisma?.default)).toBe(true);
-        expect((await assemblePrismaContracts(application([app]), { rootDir: FIXTURES }))[0]?.fragments).toHaveLength(1);
+        expect((await assemblePrismaContracts(application([app]), { rootDir: FIXTURES }))[0]?.fragments).toHaveLength(
+            1,
+        );
     });
 
     it.each([[], [''], ['  '], 'directory'])('rejects malformed app contribution path lists: %j', (paths) => {
-        expect(() => defineApp({ name: 'invalid', prisma: { default: paths } } as unknown as AppDefinition)).toThrow(expect.objectContaining({ code: 'INVALID_PRISMA_CONTRIBUTION' }));
+        expect(() => defineApp({ name: 'invalid', prisma: { default: paths } } as unknown as AppDefinition)).toThrow(
+            expect.objectContaining({ code: 'INVALID_PRISMA_CONTRIBUTION' }),
+        );
     });
 });
 
@@ -164,44 +204,71 @@ describe('Real Prisma 8 contract generation', () => {
         }
     }, 30_000);
 
-    it.each(['', ' name String\n'])('rejects duplicate/conflicting model declarations with native diagnostics (%j)', async (extraField) => {
-        const rootDir = await temporaryDirectory();
-        await writeFile(join(rootDir, 'one.prisma'), 'model User {\n id Int @id\n}\n');
-        await writeFile(join(rootDir, 'two.prisma'), `model User {\n id Int @id\n${extraField}}\n`);
-        const app = application([{ name: 'one', prisma: { default: ['one.prisma'] } }, { name: 'two', prisma: { default: ['two.prisma'] } }]);
+    it.each(['', ' name String\n'])(
+        'rejects duplicate/conflicting model declarations with native diagnostics (%j)',
+        async (extraField) => {
+            const rootDir = await temporaryDirectory();
+            await writeFile(join(rootDir, 'one.prisma'), 'model User {\n id Int @id\n}\n');
+            await writeFile(join(rootDir, 'two.prisma'), `model User {\n id Int @id\n${extraField}}\n`);
+            const app = application([
+                { name: 'one', prisma: { default: ['one.prisma'] } },
+                { name: 'two', prisma: { default: ['two.prisma'] } },
+            ]);
 
-        const error = await generatePrismaContracts(app, { rootDir, outputDir: 'generated' }).then(
-            () => { throw new Error('Expected duplicate declaration failure.'); },
-            (cause: unknown) => cause
-        );
-        expect(error).toBeInstanceOf(PrismaContractError);
-        expect(error).toMatchObject({ code: 'PRISMA_EMIT_FAILED' });
+            const error = await generatePrismaContracts(app, { rootDir, outputDir: 'generated' }).then(
+                () => {
+                    throw new Error('Expected duplicate declaration failure.');
+                },
+                (cause: unknown) => cause,
+            );
+            expect(error).toBeInstanceOf(PrismaContractError);
+            expect(error).toMatchObject({ code: 'PRISMA_EMIT_FAILED' });
 
-        if (error instanceof Error) {
-            expect(error.message).toMatch(/duplicate|already.*defined/i);
-            expect(error.message).toContain('one:');
-            expect(error.message).toContain('two:');
-        }
-    }, 30_000);
+            if (error instanceof Error) {
+                expect(error.message).toMatch(/duplicate|already.*defined/i);
+                expect(error.message).toContain('one:');
+                expect(error.message).toContain('two:');
+            }
+        },
+        30_000,
+    );
 
     it('rejects unresolved cross-database model references instead of emulating relations', async () => {
         const rootDir = await temporaryDirectory();
-        await writeFile(join(rootDir, 'broken.prisma'), 'model Project {\n id Int @id\n ownerId Int\n owner MissingUser @relation(fields: [ownerId], references: [id])\n}\n');
+        await writeFile(
+            join(rootDir, 'broken.prisma'),
+            'model Project {\n id Int @id\n ownerId Int\n owner MissingUser @relation(fields: [ownerId], references: [id])\n}\n',
+        );
 
-        await expect(generatePrismaContracts(application([{ name: 'projects', prisma: { default: ['broken.prisma'] } }]), { rootDir, outputDir: 'generated' })).rejects.toMatchObject({ code: 'PRISMA_EMIT_FAILED' });
+        await expect(
+            generatePrismaContracts(application([{ name: 'projects', prisma: { default: ['broken.prisma'] } }]), {
+                rootDir,
+                outputDir: 'generated',
+            }),
+        ).rejects.toMatchObject({ code: 'PRISMA_EMIT_FAILED' });
     }, 30_000);
 
     it('rejects empty generation before writing output', async () => {
         const rootDir = await temporaryDirectory();
 
-        await expect(generatePrismaContracts(application([]), { rootDir, outputDir: 'generated' })).rejects.toMatchObject({ code: 'PRISMA_FRAGMENTS_EMPTY' });
+        await expect(
+            generatePrismaContracts(application([]), { rootDir, outputDir: 'generated' }),
+        ).rejects.toMatchObject({ code: 'PRISMA_FRAGMENTS_EMPTY' });
     });
 
     it('reports unsupported legacy updatedAt syntax instead of silently altering fragments', async () => {
         const rootDir = await temporaryDirectory();
-        await writeFile(join(rootDir, 'legacy.prisma'), 'model Project {\n id Int @id\n updatedAt DateTime @updatedAt\n}\n');
+        await writeFile(
+            join(rootDir, 'legacy.prisma'),
+            'model Project {\n id Int @id\n updatedAt DateTime @updatedAt\n}\n',
+        );
 
-        await expect(generatePrismaContracts(application([{ name: 'projects', prisma: { default: ['legacy.prisma'] } }]), { rootDir, outputDir: 'generated' })).rejects.toThrow('@updatedAt');
+        await expect(
+            generatePrismaContracts(application([{ name: 'projects', prisma: { default: ['legacy.prisma'] } }]), {
+                rootDir,
+                outputDir: 'generated',
+            }),
+        ).rejects.toThrow('@updatedAt');
     }, 30_000);
 
     it('reports output errors without overwriting an existing file', async () => {
@@ -209,7 +276,9 @@ describe('Real Prisma 8 contract generation', () => {
         const outputDir = join(rootDir, 'existing-file');
         await writeFile(outputDir, 'preserve me');
 
-        await expect(generatePrismaContracts(example(), { rootDir: FIXTURES, outputDir })).rejects.toMatchObject({ code: 'PRISMA_OUTPUT_FAILED' });
+        await expect(generatePrismaContracts(example(), { rootDir: FIXTURES, outputDir })).rejects.toMatchObject({
+            code: 'PRISMA_OUTPUT_FAILED',
+        });
         expect(await readFile(outputDir, 'utf8')).toBe('preserve me');
     });
 });

@@ -1,7 +1,7 @@
-import { validateDatabaseDefinition } from './database-definition.js';
 import { DatabaseRegistryError } from './database.errors.js';
-import { validateDatabaseName } from './model-identity.js';
 import type { DatabaseDefinition, DatabaseEntry } from './database.types.js';
+import { validateDatabaseDefinition } from './database-definition.js';
+import { validateDatabaseName } from './model-identity.js';
 
 export class DatabaseRegistry {
     private readonly definitions = new Map<string, DatabaseDefinition>();
@@ -9,29 +9,50 @@ export class DatabaseRegistry {
 
     constructor(config: Readonly<Record<string, DatabaseDefinition>> | readonly DatabaseEntry[]) {
         if (config === null || typeof config !== 'object') {
-            throw new DatabaseRegistryError('INVALID_DATABASE_CONFIG', 'Database configuration must be a named object or an array of named entries.');
+            throw new DatabaseRegistryError(
+                'INVALID_DATABASE_CONFIG',
+                'Database configuration must be a named object or an array of named entries.',
+            );
         }
 
-        const entries: readonly DatabaseEntry[] = Array.isArray(config) ? config as readonly DatabaseEntry[] : Object.entries(config);
+        const entries: readonly DatabaseEntry[] = Array.isArray(config)
+            ? (config as readonly DatabaseEntry[])
+            : Object.entries(config);
 
         for (const entry of entries) {
             if (!Array.isArray(entry) || entry.length !== 2) {
-                throw new DatabaseRegistryError('INVALID_DATABASE_CONFIG', 'Database entries must contain a name and definition.');
+                throw new DatabaseRegistryError(
+                    'INVALID_DATABASE_CONFIG',
+                    'Database entries must contain a name and definition.',
+                );
             }
 
             const [name, definition] = entry;
             validateDatabaseName(name);
 
             if (this.definitions.has(name)) {
-                throw new DatabaseRegistryError('DUPLICATE_DATABASE', `Database "${name}" is registered more than once.`);
+                throw new DatabaseRegistryError(
+                    'DUPLICATE_DATABASE',
+                    `Database "${name}" is registered more than once.`,
+                );
             }
 
             validateDatabaseDefinition(definition);
-            this.definitions.set(name, Object.freeze({ kind: definition.kind, provider: definition.provider, connection: definition.connection }));
+            this.definitions.set(
+                name,
+                Object.freeze({
+                    kind: definition.kind,
+                    provider: definition.provider,
+                    connection: definition.connection,
+                }),
+            );
         }
 
         if (!this.definitions.has('default')) {
-            throw new DatabaseRegistryError('DEFAULT_DATABASE_REQUIRED', 'Application databases must include an own entry named "default".');
+            throw new DatabaseRegistryError(
+                'DEFAULT_DATABASE_REQUIRED',
+                'Application databases must include an own entry named "default".',
+            );
         }
 
         this.databaseNames = Object.freeze([...this.definitions.keys()]);

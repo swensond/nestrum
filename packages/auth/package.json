@@ -17,8 +17,12 @@
             "import": "./dist/index.js"
         }
     },
-    "files": ["dist"],
-    "scripts": { "build": "tsc -p tsconfig.json" },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc -p tsconfig.json"
+    },
     "dependencies": {
         "@nestrum/core": "workspace:*",
         "@nestrum/prisma": "workspace:*",
