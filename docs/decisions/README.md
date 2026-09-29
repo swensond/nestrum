@@ -14,3 +14,5 @@ Use ADR-style records when future sessions need the reasoning for a durable deci
 - [0007 — QuerySets over Prisma 8 collections](0007-querysets-and-prisma-collections.md): fluent native adapters, typed manager access, terminal semantics, and explicit raw/client boundaries.
 
 - [0008 — Authorization query boundary](0008-authorization-query-boundary.md): default-deny evaluation, action/operation binding, database scopes, and fail-closed object terminal restrictions.
+
+- [0009 — HTTP runtime and scope ownership](0009-http-runtime-and-scope-ownership.md): Fetch boundary, typed request inputs, InferDI lifecycle, and bounded cleanup/draining.

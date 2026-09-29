@@ -21,5 +21,12 @@ export default [
             environment: 'node',
             include: ['packages/zod/tests/**/*.test.ts']
         }
+    }),
+    defineProject({
+        test: {
+            name: '@nestrum/hono',
+            environment: 'node',
+            include: ['packages/hono/tests/**/*.test.ts']
+        }
     })
 ];

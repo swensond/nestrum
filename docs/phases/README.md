@@ -1,6 +1,6 @@
 # Implementation phases
 
-Phases 0–7 are complete; Phases 8–16 are not started. Each task should introduce one primary abstraction or integrate two existing abstractions, and leave the repository green.
+Phases 0–8 are complete; Phases 9–16 are not started. Each task should introduce one primary abstraction or integrate two existing abstractions, and leave the repository green.
 
 | Phase | Goal | Packages | Status |
 | --- | --- | --- | --- |
@@ -12,7 +12,7 @@ Phases 0–7 are complete; Phases 8–16 are not started. Each task should intro
 | [5 — Resource System](phase-05-resources.md) | Register metadata-driven resources backed by validated models and generated schemas. | @nestrum/core | Complete |
 | [6 — QuerySets and Managers](phase-06-querysets.md) | Provide immutable Prisma-backed QuerySets as the standard access layer. | @nestrum/core, @nestrum/prisma | Complete |
 | [7 — ABAC Engine](phase-07-abac.md) | Implement default-deny resource/action authorization with database collection scopes. | @nestrum/core, @nestrum/prisma | Complete |
-| [8 — Hono and InferDI Runtime Integration](phase-08-hono-runtime.md) | Create the request-scoped HTTP runtime before authentication. | @nestrum/hono | Not Started |
+| [8 — Hono and InferDI Runtime Integration](phase-08-hono-runtime.md) | Create the request-scoped HTTP runtime before authentication. | @nestrum/hono | Complete |
 | [9 — Opt-In Public Resource API and OpenAPI](phase-09-public-api.md) | Generate public CRUD and OpenAPI only for explicitly enabled resource operations. | @nestrum/hono | Not Started |
 | [10 — Framework-Owned Better Auth](phase-10-auth.md) | Make Better Auth a built-in subsystem with owned Prisma 8 contracts and adapter. | @nestrum/auth | Not Started |
 | [11 — Admin Backend Boundary](phase-11-admin-backend.md) | Create the private admin API independently of public API exposure. | @nestrum/admin | Not Started |

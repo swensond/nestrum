@@ -1,6 +1,6 @@
 # Nestrum
 
-A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–7 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, and default-deny ABAC.
+A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–8 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, default-deny ABAC, and a Hono/InferDI runtime.
 
 ## Development
 
@@ -14,7 +14,7 @@ pnpm typecheck
 pnpm check
 ```
 
-`pnpm test:watch` starts interactive watch mode. `pnpm check` runs tests, type checking, and builds. Core, Prisma, and Zod packages emit ESM JavaScript and declarations to their dist directories. Workspace tests/type checking resolve source through the nestrum-source condition; ordinary Node imports use compiled output.
+`pnpm test:watch` starts interactive watch mode. `pnpm check` runs tests, type checking, and builds. Core, Prisma, Zod, and Hono packages emit ESM JavaScript and declarations to their dist directories. Workspace tests/type checking resolve source through the nestrum-source condition; ordinary Node imports use compiled output.
 
 Start with [the documentation index](docs/README.md), [architecture](docs/architecture.md), and [MVP scope](docs/mvp.md). Implement one bounded phase at a time; documentation and validation are part of completion.
 
@@ -129,3 +129,21 @@ await Project.objects.authorizedFor(subject, 'archive').filter({ id: projectId }
 ```
 
 Scopes constrain database reads/counts/writes. Object callbacks reject an entire read result on denial; they never silently filter records after fetching. Create checks validated input before inserting. Count and bulk writes reject per-object policies; custom actions must declare their allowed query operations. See [Phase 7](docs/phases/phase-07-abac.md) for the complete boundary and examples.
+
+## HTTP runtime
+
+```ts
+import { createHonoRuntime } from '@nestrum/hono';
+
+const runtime = createHonoRuntime({ application });
+runtime.hono.get('/health', (context) => context.json({ status: context.var.nestrum.application.state }));
+await runtime.start();
+const response = await runtime.fetch(new Request('http://localhost/health'));
+// Pass runtime.fetch to your Fetch-compatible HTTP host.
+// Stop the host listener when shutting down, then:
+await runtime.shutdown();
+```
+
+Requests are gated until startup completes. Each request has an InferDI scope on context.var.di and a frozen framework context on context.var.nestrum. Default subjects are anonymous; headers do not authenticate requests. Scopes dispose after the awaited route pipeline, including error paths. Shutdown rejects new requests and drains active pipelines before app shutdown and disposal of the owned root.
+
+Use createRuntimeContainer(application) to register typed services and provide a di.container/createScope pair; a supplied root remains application-owned. This phase exposes a Fetch handler rather than opening a TCP listener. Generated CRUD/OpenAPI remains Phase 9. See [Phase 8](docs/phases/phase-08-hono-runtime.md) for service registration, error contracts, and scope ownership.

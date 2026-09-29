@@ -2,7 +2,7 @@
 
 ## Current implementation
 
-Phases 0–7 provide workspace tooling, @nestrum/core application/registry/lifecycle primitives, named database definitions, and @nestrum/prisma fragment assembly with real PostgreSQL/MongoDB contract emission. Phase 4 adds portable immutable metadata compilation and @nestrum/zod runtime schema families. The portable Prisma root entry point holds configuration and metadata; @nestrum/prisma/node handles filesystem/process work. Phase 5 adds model-validated resources and schema composition before app hooks. Phase 6 adds immutable QuerySets/managers and Prisma adapters for application-supplied collections. Phase 7 adds default-deny policies, explicit QuerySet authorization contexts, collection scopes, and object decisions. Automatic client creation/disposal, HTTP, authentication, admin, and Nestrum CLI remain unimplemented.
+Phases 0–8 provide workspace tooling, @nestrum/core application/registry/lifecycle primitives, named database definitions, and @nestrum/prisma fragment assembly with real PostgreSQL/MongoDB contract emission. Phase 4 adds portable immutable metadata compilation and @nestrum/zod runtime schema families. The portable Prisma root entry point holds configuration and metadata; @nestrum/prisma/node handles filesystem/process work. Phase 5 adds model-validated resources and schema composition before app hooks. Phase 6 adds immutable QuerySets/managers and Prisma adapters for application-supplied collections. Phase 7 adds default-deny policies, explicit QuerySet authorization contexts, collection scopes, and object decisions. Phase 8 adds a Fetch-based Hono runtime, InferDI request scopes, error mapping, and bounded pipeline draining. Automatic client creation/disposal, generated routes, authentication, admin, and Nestrum CLI remain unimplemented.
 
 ## Principles and dependencies
 
@@ -10,7 +10,7 @@ Nestrum favors Django-like conventions, useful defaults, runtime registration, m
 
 The target stack is Hono, InferDI, Prisma 8, Better Auth, Zod with Nestrum-owned generation, `@hono/zod-openapi`, Svelte 5/SvelteKit, TypeScript 7, pnpm, and Vitest. Svelte checks use `svelte-check-native`. Playwright is reserved for high-level end-to-end validation. Node is the initial runtime; avoid unnecessary Node dependencies in portable core code. Bun, Deno, and Cloudflare are future work where Prisma and drivers permit.
 
-Package scope is `@nestrum/*`: `core`, `prisma`, `zod`, `hono`, `auth`, `admin`, `admin-svelte`, `cli`, and `testing`. Core, prisma, and zod exist today. The generator consumes Prisma metadata; Prisma depends on core; core depends directly on Zod and imports neither Prisma nor the generator. Shared model metadata types live in core and retain compatible Prisma exports. Applications eventually live under `apps/example` and `apps/admin-dev`; container infrastructure is introduced when needed.
+Package scope is `@nestrum/*`: `core`, `prisma`, `zod`, `hono`, `auth`, `admin`, `admin-svelte`, `cli`, and `testing`. Core, prisma, zod, and hono exist today. The generator consumes Prisma metadata; Prisma depends on core; core depends directly on Zod and imports neither Prisma nor the generator. Shared model metadata types live in core and retain compatible Prisma exports. Applications eventually live under `apps/example` and `apps/admin-dev`; container infrastructure is introduced when needed.
 
 ## Applications and lifecycle
 
@@ -103,7 +103,13 @@ Count/update/delete cannot enforce arbitrary object callbacks atomically and rej
 
 ## HTTP and public API
 
-Hono owns HTTP; InferDI supplies isolated request scopes and cleanup. Scopes may expose application, databases, authorization, subject, and environment. Consistent error mapping and anonymous subjects precede authentication integration.
+Hono owns HTTP; InferDI supplies isolated request scopes and cleanup. Phase 8 adds @nestrum/hono, pinned Hono 4.13.11 and @inferdi/inferdi/@inferdi/hono 6.1.0. createHonoRuntime creates a typed Hono app and detachable Fetch handler. start awaits the existing application lifecycle; requests return 503 until ready or after traffic is stopped. shutdown gates new requests, drains active route pipelines including cleanup/error reporting, shuts down apps, and disposes the default root. It does not open or close a TCP listener; host wiring remains application-owned until CLI integration.
+
+createRuntimeContainer registers application/databases/resources/authorization values and declares subject/environment/request scope inputs. Every ready request uses the official InferDI Hono adapter to open a child scope. Context variables di and nestrum expose the concrete InferDI scope and frozen framework context. Default subjects are { anonymous: true }, with no header-based identity inference. Trusted resolveSubject/resolveEnvironment hooks can enrich context; method/path are fixed to the actual request. Record/array/date attributes are copied before binding. Custom DI roots/factories retain exact service types and remain caller-owned; supplied framework values are never DI-owned resources.
+
+Scopes dispose after the bounded await-next pipeline, including setup and handler failures, and asynchronous disposal is awaited. Cleanup errors go to the error observer and preserve an already produced response. Scoped services must not outlive this pipeline; streamed bodies and background tasks are not covered by automatic disposal or shutdown draining. Request cancellation and listener/signal integration remain later lifecycle work.
+
+HTTP errors have an error.code/message envelope. AppError 4xx messages and authorization reasons are public; 5xx messages/causes are redacted. Zod request errors map to 400 with issue paths; Hono HTTPException retains appropriate headers with a JSON envelope; unmatched routes return 404. onError observes full server-side failures with request/scope-dispose phases, and observer errors cannot replace responses. Core imports neither Hono nor InferDI nor Node APIs. See [Phase 8](phases/phase-08-hono-runtime.md) and [ADR 0009](decisions/0009-http-runtime-and-scope-ownership.md).
 
 Opt-in public CRUD routes live under `/api/*`: GET collection, GET `/:id`, POST collection, PATCH `/:id`, and DELETE `/:id`. The pipeline is generated Zod validation → QuerySet and ABAC → Prisma → generated Read validation → response. OpenAPI is generated from the same enabled operations through `@hono/zod-openapi`. Arbitrary Prisma `select/include`, nested writes, and unrestricted relationship expansion are excluded.
 
@@ -133,7 +139,7 @@ Provider extension seams preserve future Mongo collection compression, indexes, 
 
 The root compiler is pinned TypeScript 7.0.2, using `tsc`. Packages compile under strict NodeNext resolution to ES2022 ESM and declarations. Core compilation uses ES2022 and DOM declarations (Zod references the web-standard URL), without ambient Node types; test/config checking has explicit Node types. Vitest 5 uses `test.projects`; `vitest.workspace.ts` is an explicitly imported list, not deprecated workspace discovery. See [the tooling decision](decisions/0001-workspace-tooling.md).
 
-With three packages, root no-emit checking and Vitest SSR resolution use the nestrum-source export condition for current workspace sources. Package builds retain ordinary declaration/dist resolution and execute in dependency order (core before prisma before zod). Ordinary Node imports resolve compiled JavaScript. The Phase 2 factory remains configuration-only; Phase 3 adds real Prisma dependencies for offline emission.
+With four packages, root no-emit checking and Vitest SSR resolution use the nestrum-source export condition for current workspace sources. Package builds retain ordinary declaration/dist resolution and execute in dependency order (core before prisma/hono, prisma before zod). Ordinary Node imports resolve compiled JavaScript. The Phase 2 factory remains configuration-only; Phase 3 adds real Prisma dependencies for offline emission.
 
 Cross-feature core imports use the #core/* package import alias. Core compilation selects source through nestrum-source; normal runtime/type consumers resolve emitted JavaScript/declarations. Relative imports remain within feature modules.
 

@@ -67,3 +67,11 @@ _Avoid_: Pagination, result filtering
 **Object decision**:
 A policy decision about an action on one particular record or proposed record.
 _Avoid_: Field permission, collection scope
+
+**Request scope**:
+The lifetime boundary of work performed for one handled HTTP request. It is separate from a policy's boundary of eligible records.
+_Avoid_: Collection scope, global service lifetime
+
+**Authorization environment**:
+Attributes of the context in which an action is requested, such as the request method, path, or trusted contextual facts.
+_Avoid_: Subject, process environment variables
