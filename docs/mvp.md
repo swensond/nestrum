@@ -2,7 +2,7 @@
 
 ## Status
 
-Not complete. Phases 0–4 are complete; Phases 5–16 are not started. Workspace, app lifecycle, named databases, offline SQL/Mongo contract assembly/emission, immutable metadata, and runtime Zod families are implemented. Live runtime/resource integration remains later work. The frozen scope below remains the full MVP target.
+Not complete. Phases 0–5 are complete; Phases 6–16 are not started. Workspace, app lifecycle, named databases, offline SQL/Mongo contract assembly/emission, immutable metadata, and runtime Zod families are implemented. Resource registration/composition and pre-hook model validation are implemented. Live client/runtime integration remains later work. The frozen scope below remains the full MVP target.
 
 ## Included
 
@@ -38,7 +38,7 @@ model Project {
 
 The example above remains frozen MVP intent. Phase 4 supports emission via authoring: { default: 'prisma7' } using the official PostgreSQL compatibility adapter and a separate datasource fragment. It maps cuid() to cuid2 and DateTime to Temporal.PlainDateTime. Native mode still rejects legacy @updatedAt; see [Phase 4](phases/phase-04-zod-generation.md) for actual representations and limitations.
 
-Then registers a resource (target API):
+Then defines a resource (implemented in Phase 5; runtime managers/routes arrive later):
 
 ```ts
 const ProjectResource = defineResource({

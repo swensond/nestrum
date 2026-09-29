@@ -1,6 +1,6 @@
 # Nestrum
 
-A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–4 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, and generated Zod families.
+A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–5 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, and resource registration/composition.
 
 ## Development
 
@@ -80,3 +80,20 @@ This offline step emits contract.json and contract.d.ts for each contributed dat
 ## Metadata and Zod
 
 compileModelMetadata({ database, provider, contract }) from @nestrum/prisma compiles emitted contract JSON. generateModelSchemas(metadata) from @nestrum/zod returns model/create/update/read/where/orderBy schemas and stable names. Object schemas support Zod .extend() composition. Runtime values follow Prisma codecs, including bigint, Date, and Temporal; JSON transport and resources arrive in later phases. See [Phase 4](docs/phases/phase-04-zod-generation.md) for usage and supported shapes.
+
+## Resources
+
+```ts
+import { defineResource } from '@nestrum/core';
+import { z } from 'zod';
+
+const ProjectResource = defineResource({
+    model: 'Project',
+    api: { list: true },
+    schemas: {
+        create: (schema) => schema.extend({ name: z.string().min(3) })
+    }
+});
+```
+
+Register definitions through app.resources or application.resources and supply generated families through application resourceModels (an array or loader). Startup validates every model and composes schemas before app hooks. Lookup uses application.resources.get('default.Project'). Public flags default to false and do not yet create routes. See [Phase 5](docs/phases/phase-05-resources.md) for a complete bootstrap example.

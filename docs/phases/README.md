@@ -1,6 +1,6 @@
 # Implementation phases
 
-Phases 0–4 are complete; Phases 5–16 are not started. Each task should introduce one primary abstraction or integrate two existing abstractions, and leave the repository green.
+Phases 0–5 are complete; Phases 6–16 are not started. Each task should introduce one primary abstraction or integrate two existing abstractions, and leave the repository green.
 
 | Phase | Goal | Packages | Status |
 | --- | --- | --- | --- |
@@ -9,7 +9,7 @@ Phases 0–4 are complete; Phases 5–16 are not started. Each task should intro
 | [2 — Named Database Registry](phase-02-databases.md) | Introduce named Prisma-backed databases and a required default without full contract generation. | @nestrum/core, @nestrum/prisma | Complete |
 | [3 — Prisma 8 Multi-File Contract Assembly](phase-03-prisma-contracts.md) | Allow apps and framework modules to contribute Prisma fragments independently per database. | @nestrum/prisma | Complete |
 | [4 — Prisma Metadata Compiler and Framework-Owned Zod](phase-04-zod-generation.md) | Compile Prisma 8 metadata into Nestrum model metadata and baseline generated Zod schema families. | @nestrum/prisma, @nestrum/zod | Complete |
-| [5 — Resource System](phase-05-resources.md) | Register metadata-driven resources backed by validated models and generated schemas. | @nestrum/core | Not Started |
+| [5 — Resource System](phase-05-resources.md) | Register metadata-driven resources backed by validated models and generated schemas. | @nestrum/core | Complete |
 | [6 — QuerySets and Managers](phase-06-querysets.md) | Provide immutable Prisma-backed QuerySets as the standard access layer. | @nestrum/core, @nestrum/prisma | Not Started |
 | [7 — ABAC Engine](phase-07-abac.md) | Implement default-deny resource/action authorization with database collection scopes. | @nestrum/core, @nestrum/prisma | Not Started |
 | [8 — Hono and InferDI Runtime Integration](phase-08-hono-runtime.md) | Create the request-scoped HTTP runtime before authentication. | @nestrum/hono | Not Started |

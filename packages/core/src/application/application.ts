@@ -1,3 +1,6 @@
+import type { ResourceModel } from '#core/resource/resource.types';
+import { ResourceRegistry } from '#core/resource/resource-registry';
+import { ResourceError } from '#core/resource/resource.errors';
 import { AppRegistry } from './app-registry.js';
 import { DatabaseRegistry } from '#core/database/database-registry';
 import { AppError, AppLifecycleError } from './application.errors.js';
@@ -6,6 +9,8 @@ import type { AppContext, AppDefinition, AppHookName, ApplicationConfig, Applica
 export class Application {
     readonly apps: AppRegistry;
     readonly databases: DatabaseRegistry;
+    readonly resources: ResourceRegistry;
+    private readonly resourceModels: ApplicationConfig['resourceModels'];
     private currentState: ApplicationState = 'created';
     private startedApps: AppDefinition[] = [];
     private readonly context: AppContext;
@@ -13,7 +18,15 @@ export class Application {
     constructor(config: ApplicationConfig) {
         this.databases = new DatabaseRegistry(config.databases);
         this.apps = new AppRegistry(config.apps);
-        this.context = Object.freeze({ application: this, apps: this.apps, databases: this.databases });
+        if (config.resources !== undefined && !Array.isArray(config.resources)) {
+            throw new ResourceError('RESOURCE_CONFIG_INVALID', 'Application resources must be an array.');
+        }
+        if (config.resourceModels !== undefined && !Array.isArray(config.resourceModels) && typeof config.resourceModels !== 'function') {
+            throw new ResourceError('RESOURCE_MODELS_INVALID', 'Resource models must be an array or loader function.');
+        }
+        this.resources = new ResourceRegistry([...(config.resources ?? []), ...this.apps.all().flatMap((app) => app.resources ?? [])], this.databases);
+        this.resourceModels = Array.isArray(config.resourceModels) ? Object.freeze([...config.resourceModels]) : config.resourceModels;
+        this.context = Object.freeze({ application: this, apps: this.apps, databases: this.databases, resources: this.resources });
     }
 
     get state(): ApplicationState {
@@ -32,6 +45,18 @@ export class Application {
         this.currentState = 'starting';
 
         try {
+            let models: readonly ResourceModel[];
+            if (typeof this.resourceModels === 'function') {
+                try {
+                    models = await this.resourceModels(this);
+                } catch (cause) {
+                    throw new ResourceError('RESOURCE_MODELS_LOAD_FAILED', 'Unable to load resource models before app configuration.', { cause });
+                }
+            } else {
+                models = this.resourceModels ?? [];
+            }
+            this.resources.initialize(models);
+
             for (const app of this.apps.all()) {
                 this.startedApps.push(app);
                 await this.runHook(app, 'configure');

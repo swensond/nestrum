@@ -2,7 +2,7 @@
 
 ## Current implementation
 
-Phases 0–4 provide workspace tooling, @nestrum/core application/registry/lifecycle primitives, named database definitions, and @nestrum/prisma fragment assembly with real PostgreSQL/MongoDB contract emission. Phase 4 adds portable immutable metadata compilation and @nestrum/zod runtime schema families. The portable Prisma root entry point holds configuration and metadata; @nestrum/prisma/node handles filesystem/process work. Live clients, resources, QuerySets, authorization, HTTP, authentication, admin, and Nestrum CLI remain unimplemented.
+Phases 0–5 provide workspace tooling, @nestrum/core application/registry/lifecycle primitives, named database definitions, and @nestrum/prisma fragment assembly with real PostgreSQL/MongoDB contract emission. Phase 4 adds portable immutable metadata compilation and @nestrum/zod runtime schema families. The portable Prisma root entry point holds configuration and metadata; @nestrum/prisma/node handles filesystem/process work. Phase 5 adds model-validated resources and schema composition before app hooks. Live clients, QuerySets, authorization, HTTP, authentication, admin, and Nestrum CLI remain unimplemented.
 
 ## Principles and dependencies
 
@@ -10,7 +10,7 @@ Nestrum favors Django-like conventions, useful defaults, runtime registration, m
 
 The target stack is Hono, InferDI, Prisma 8, Better Auth, Zod with Nestrum-owned generation, `@hono/zod-openapi`, Svelte 5/SvelteKit, TypeScript 7, pnpm, and Vitest. Svelte checks use `svelte-check-native`. Playwright is reserved for high-level end-to-end validation. Node is the initial runtime; avoid unnecessary Node dependencies in portable core code. Bun, Deno, and Cloudflare are future work where Prisma and drivers permit.
 
-Package scope is `@nestrum/*`: `core`, `prisma`, `zod`, `hono`, `auth`, `admin`, `admin-svelte`, `cli`, and `testing`. Core, prisma, and zod exist today. Zod consumes Prisma metadata; Prisma depends on core; core does not import prisma. Applications eventually live under `apps/example` and `apps/admin-dev`; container infrastructure is introduced when needed.
+Package scope is `@nestrum/*`: `core`, `prisma`, `zod`, `hono`, `auth`, `admin`, `admin-svelte`, `cli`, and `testing`. Core, prisma, and zod exist today. The generator consumes Prisma metadata; Prisma depends on core; core depends directly on Zod and imports neither Prisma nor the generator. Shared model metadata types live in core and retain compatible Prisma exports. Applications eventually live under `apps/example` and `apps/admin-dev`; container infrastructure is introduced when needed.
 
 ## Applications and lifecycle
 
@@ -20,7 +20,7 @@ Phase 1 implements defineApp(definition), AppRegistry, and Application. Phase 2 
 
 Duplicate names, missing dependencies, and cycles fail. App names are nonempty with no leading/trailing whitespace. Ordering uses depth-first traversal in registration order, following each app's declared dependency order. Shared/repeated dependencies execute once. Independent apps retain registration order; dependencies can move ahead of earlier registered dependents. Cycle errors report the cycle path.
 
-Awaiting application.start() runs all configure hooks in topological order, then all ready hooks in that order. Hooks receive a frozen { application, apps, databases } context and may return void or a Promise. Awaiting application.shutdown() runs shutdown hooks in reverse topological order. Calls after completed startup/shutdown are idempotent. Overlapping lifecycle operations are rejected, and stopped/failed instances cannot restart.
+Awaiting application.start() first loads/validates registered resource models, then runs all configure hooks in topological order, then all ready hooks in that order. Hooks receive a frozen { application, apps, databases } context and may return void or a Promise. Awaiting application.shutdown() runs shutdown hooks in reverse topological order. Calls after completed startup/shutdown are idempotent. Overlapping lifecycle operations are rejected, and stopped/failed instances cannot restart.
 
 Startup failure attempts reverse cleanup for every app whose configure phase was entered, including the failing app. Ready failure cleans up every configured app. Cleanup continues after hook failures. Hook errors retain app/hook identity and original cause; multiple errors are preserved in AggregateError causes. Every eligible shutdown hook is attempted at most once. See [the lifecycle decision](decisions/0002-application-lifecycle.md) and [Phase 1](phases/phase-01-application.md).
 
@@ -73,6 +73,10 @@ Codec representations remain distinct: Date, bigint, ISO strings, and Temporal t
 
 `defineResource({ model: 'Project' })` resolves to `default.Project`. Missing models fail at bootstrap and at build time where feasible. Public API exposure defaults to disabled; explicit operation flags enable list, retrieve, create, update, and delete. `api: false` is a normal admin-only resource.
 
+Phase 5 implements defineResource, ResourceRegistry, and ResourceError in core. Definitions default to database default and normalize the five API flags to false. Apps contribute resources arrays; application-level resources come first, then app contributions in topological/declaration order. Duplicate identities and unknown databases fail at construction. Model existence and schema composition validate at startup before configure hooks. Registered values expose inherited metadata and resolved schema families; no managers exist yet.
+
+Application config resourceModels is a precompiled family array or a loader receiving the application and returning families synchronously/asynchronously. This lets the loader run contract emission using the already validated app graph. Hook contexts expose resources. The registry publishes atomically and supports get(identity), has(identity), and all(); access before initialization fails. Application startup fails before any hooks if models or composition fail. Core remains portable and does no emission itself. Standalone ResourceRegistry.initialize enables explicit application-owned build checks; no generated static model catalog exists yet. See [Phase 5](phases/phase-05-resources.md) and [ADR 0006](decisions/0006-resource-bootstrap-boundary.md).
+
 ## QuerySets and managers
 
 Immutable, chainable, strongly typed Prisma-backed QuerySets are the primary access layer. Filtering, Django-style ordering (including `'-createdAt'`), and limits compose without evaluation. Evaluation includes `all`, `first`, `get`, `exists`, `count`, `create`, `update`, and `delete`.
@@ -115,7 +119,7 @@ Provider extension seams preserve future Mongo collection compression, indexes, 
 
 ## Tooling decisions
 
-The root compiler is pinned TypeScript 7.0.2, using `tsc`. Packages compile under strict NodeNext resolution to ES2022 ESM and declarations. Core compilation starts without ambient Node types; test/config checking has explicit Node types. Vitest 5 uses `test.projects`; `vitest.workspace.ts` is an explicitly imported list, not deprecated workspace discovery. See [the tooling decision](decisions/0001-workspace-tooling.md).
+The root compiler is pinned TypeScript 7.0.2, using `tsc`. Packages compile under strict NodeNext resolution to ES2022 ESM and declarations. Core compilation uses ES2022 and DOM declarations (Zod references the web-standard URL), without ambient Node types; test/config checking has explicit Node types. Vitest 5 uses `test.projects`; `vitest.workspace.ts` is an explicitly imported list, not deprecated workspace discovery. See [the tooling decision](decisions/0001-workspace-tooling.md).
 
 With three packages, root no-emit checking and Vitest SSR resolution use the nestrum-source export condition for current workspace sources. Package builds retain ordinary declaration/dist resolution and execute in dependency order (core before prisma before zod). Ordinary Node imports resolve compiled JavaScript. The Phase 2 factory remains configuration-only; Phase 3 adds real Prisma dependencies for offline emission.
 

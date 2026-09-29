@@ -8,3 +8,5 @@ Use ADR-style records when future sessions need the reasoning for a durable deci
 - [0004 — Prisma contract assembly](0004-prisma-contract-assembly.md): app fragment ownership, native validation, release-candidate compatibility, and generated artifact boundaries.
 
 - [0005 — Metadata and runtime schema representations](0005-metadata-and-runtime-schemas.md): actual codec representations, canonical metadata, runtime generation, and explicit compatibility authoring.
+
+- [0006 — Resource bootstrap and package boundaries](0006-resource-bootstrap-boundary.md): shared metadata ownership, cycle-free schema composition, and pre-hook resource validation.

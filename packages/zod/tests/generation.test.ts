@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { Temporal } from '@js-temporal/polyfill';
-import { defineApplication } from '@nestrum/core';
+import { defineApplication, defineResource } from '@nestrum/core';
 import { compileModelMetadata, prismaDatabase, PrismaMetadataError } from '@nestrum/prisma';
+import type { ResourceModel } from '@nestrum/core';
 import type { ModelMetadata } from '@nestrum/prisma';
 import { generatePrismaContracts } from '@nestrum/prisma/node';
 import { generateModelSchemas } from '../src/index.js';
@@ -214,6 +215,35 @@ describe('Prisma 8 metadata compilation', () => {
 });
 
 describe('Framework-owned Zod families', () => {
+    it('boots real emitted SQL/Mongo resources with generated schemas and resource composition', async () => {
+        const application = defineApplication({
+            databases: { default: prismaDatabase({ provider: 'postgresql', connection: 'unused' }), documents: prismaDatabase({ provider: 'mongodb', connection: 'unused' }) },
+            apps: [{ name: 'projects', prisma: { default: ['sql.prisma'] }, resources: [defineResource({ model: 'Project', api: { list: true }, schemas: { create: (schema) => schema.extend({ name: z.string().min(3) }) } })] },
+                { name: 'articles', prisma: { documents: ['mongo.prisma'] }, resources: [defineResource({ model: 'Article', database: 'documents', api: false })] }],
+            async resourceModels(application) {
+                const generated = await generatePrismaContracts(application, { rootDir: directory, outputDir: 'bootstrap' });
+                const families: ResourceModel[] = [];
+                for (const contract of generated.contracts) {
+                    const metadata = compileModelMetadata({ database: contract.database, provider: contract.provider,
+                        contract: JSON.parse(await readFile(contract.contractPath, 'utf8')) });
+                    families.push(...metadata.map((model) => generateModelSchemas(model)));
+                }
+
+                return families;
+            }
+        });
+        await application.start();
+        const project = application.resources.get('default.Project');
+        const article = application.resources.get('documents.Article');
+        expect(project.schemas.create.safeParse({ ...projectValue(), name: 'ab' }).success).toBe(false);
+        expect(project.schemas.create.safeParse(projectValue()).success).toBe(true);
+        expect(project.api.list).toBe(true);
+        expect(project.api.create).toBe(false);
+        expect(article.schemas.read.safeParse(articleValue()).success).toBe(true);
+        expect(Object.values(article.api).every((enabled) => !enabled)).toBe(true);
+        await application.shutdown();
+    });
+
     it('generates all six families with stable names and composable strict object schemas', () => {
         const schemas = generateModelSchemas(project());
         expect(schemas.names).toEqual({ model: 'ProjectModelSchema', create: 'ProjectCreateSchema', update: 'ProjectUpdateSchema', read: 'ProjectReadSchema', where: 'ProjectWhereSchema', orderBy: 'ProjectOrderBySchema' });

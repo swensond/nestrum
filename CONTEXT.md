@@ -35,3 +35,7 @@ _Avoid_: Model instance, record, physical table
 **Schema family**:
 A related set of validation contracts for a model's records, creation, changes, filtering, and ordering.
 _Avoid_: Database schema, Prisma fragment
+
+**Resource**:
+A model's registered application-facing definition, with validation rules and explicitly selected public operations. Resources can participate in administration without exposing a public API.
+_Avoid_: Route, model instance, admin page

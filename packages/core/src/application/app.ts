@@ -1,4 +1,6 @@
 import { AppRegistryError } from './application.errors.js';
+import { defineResource } from '#core/resource/resource';
+import { ResourceError } from '#core/resource/resource.errors';
 import type { AppDefinition } from './application.types.js';
 
 export function defineApp(definition: AppDefinition): AppDefinition {
@@ -6,6 +8,9 @@ export function defineApp(definition: AppDefinition): AppDefinition {
         throw new AppRegistryError('INVALID_APP_NAME', 'App names must be nonempty and have no leading or trailing whitespace.');
     }
 
+    if (definition.resources !== undefined && !Array.isArray(definition.resources)) {
+        throw new ResourceError('RESOURCE_CONFIG_INVALID', `App ${definition.name} resources must be an array.`);
+    }
     const prisma: Record<string, readonly string[]> = Object.create(null) as Record<string, readonly string[]>;
 
     if (definition.prisma !== undefined) {
@@ -24,6 +29,7 @@ export function defineApp(definition: AppDefinition): AppDefinition {
 
     return Object.freeze({
         ...definition,
+        ...(definition.resources === undefined ? {} : { resources: Object.freeze(Array.from(definition.resources, defineResource)) }),
         ...(definition.dependsOn === undefined ? {} : { dependsOn: Object.freeze([...definition.dependsOn]) }),
         ...(definition.prisma === undefined ? {} : { prisma: Object.freeze(prisma) })
     });

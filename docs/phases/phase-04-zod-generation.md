@@ -116,7 +116,7 @@ Validated on Node 26.10.0 with pnpm 12.6.0. The full check runs pnpm test, pnpm 
 
 ## Known Limitations
 
-Compilation/generation remains an explicit pre-start step; Application.start does not yet run this pipeline. Schemas are runtime objects with dynamic field shapes, not statically generated per-model TypeScript declarations. Read schemas validate Prisma runtime values; JSON transport for bigint, Date, and Temporal remains future API work.
+Compilation/generation remains explicit. Phase 5 can invoke it through an application-supplied resourceModels loader before app hooks; core still does not automatically emit contracts. Schemas are runtime objects with dynamic field shapes, not statically generated per-model TypeScript declarations. Read schemas validate Prisma runtime values; JSON transport for bigint, Date, and Temporal remains future API work.
 
 Only the documented codec allowlist is supported. Decimal, JSON/BSON, binary, embedded/composite models, arbitrary codec extensions, database checks, and full storage/type-parameter constraints are not inferred. Native rc.13 has upstream authoring limitations: SQL Boolean @default(true) fails native emission and Mongo @default is unsupported. Storage defaults that successfully emit and mutation presets are supported by the compiler. Compatibility authoring maps legacy cuid() to Prisma's cuid2 generator and DateTime to Temporal.PlainDateTime; it does not promise legacy generated-ID bytes or Date objects.
 
@@ -124,7 +124,7 @@ The Where family is a validated baseline, not a promise that every operator/orde
 
 ## Follow-Ups
 
-Phase 5 registers resources against this metadata and composes these schemas. Phase 6 integrates typed contracts and provider operations; Phase 9 introduces transport schemas/serialization. Later lifecycle work integrates generation at bootstrap. Additional field families beyond the initial scalar scope are recorded in [post-MVP](../post-mvp.md).
+Phase 5 now registers resources against this metadata and composes these schemas. Shared metadata types move to core with compatible Prisma re-exports. Phase 6 integrates typed contracts and provider operations; Phase 9 introduces transport schemas/serialization. Later lifecycle work integrates generation at bootstrap. Additional field families beyond the initial scalar scope are recorded in [post-MVP](../post-mvp.md).
 
 ## Completion Notes
 

@@ -1,0 +1,5 @@
+# 0006 — Resource bootstrap and package boundaries
+
+Resources belong in core but inherit Prisma metadata and framework-generated Zod families. Having core import the generator would create core → zod → prisma → core. Shared model metadata therefore moves to core, Prisma preserves its type re-exports, and core accepts schema families through a structural ResourceModel contract. Core depends directly on the same Zod release for typed callbacks and validation, while compilation and generation remain in their respective packages.
+
+An optional application resourceModels loader runs before any configure hook and receives the validated app/database registries. This lets applications emit their own app fragments and generate families without constructing an incomplete second application. Missing models and composition failures stop startup before hooks, and the registry publishes only fully validated results. A precompiled family array supports offline builds and avoids startup process work. Core performs no Node operations, and automatic framework-owned emission remains later lifecycle integration.
