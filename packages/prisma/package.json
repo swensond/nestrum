@@ -1,0 +1,37 @@
+{
+    "name": "@nestrum/prisma",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "exports": {
+        ".": {
+            "nestrum-source": "./src/index.ts",
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
+        "./node": {
+            "nestrum-source": "./src/node.ts",
+            "types": "./dist/node.d.ts",
+            "import": "./dist/node.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc -p tsconfig.json"
+    },
+    "dependencies": {
+        "@nestrum/core": "workspace:*",
+        "@prisma/orm-mongo": "8.0.0-rc.13",
+        "@prisma/orm-postgres": "8.0.0-rc.13",
+        "prisma": "8.0.0-rc.13"
+    },
+    "imports": {
+        "#prisma/*": {
+            "nestrum-source": "./src/*.ts",
+            "types": "./dist/*.d.ts",
+            "default": "./dist/*.js"
+        }
+    }
+}

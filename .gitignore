@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.pnpm-store/
+.svelte-kit/
+test-results/
+playwright-report/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.tsbuildinfo
+.nestrum/

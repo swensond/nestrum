@@ -1,0 +1,24 @@
+{
+    "name": "@nestrum/core",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "imports": {
+        "#core/*": {
+            "nestrum-source": "./src/*.ts",
+            "types": "./dist/*.d.ts",
+            "default": "./dist/*.js"
+        }
+    },
+    "exports": {
+        ".": {
+            "nestrum-source": "./src/index.ts",
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "files": ["dist"],
+    "scripts": {
+        "build": "tsc -p tsconfig.json"
+    }
+}

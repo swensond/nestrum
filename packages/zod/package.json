@@ -1,0 +1,27 @@
+{
+    "name": "@nestrum/zod",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "exports": {
+        ".": {
+            "nestrum-source": "./src/index.ts",
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc -p tsconfig.json"
+    },
+    "dependencies": {
+        "@nestrum/prisma": "workspace:*",
+        "zod": "4.6.5"
+    },
+    "devDependencies": {
+        "@nestrum/core": "workspace:*",
+        "@js-temporal/polyfill": "0.5.1"
+    }
+}

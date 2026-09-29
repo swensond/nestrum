@@ -1,0 +1,30 @@
+import { AppRegistryError } from './application.errors.js';
+import type { AppDefinition } from './application.types.js';
+
+export function defineApp(definition: AppDefinition): AppDefinition {
+    if (typeof definition.name !== 'string' || !definition.name || definition.name.trim() !== definition.name) {
+        throw new AppRegistryError('INVALID_APP_NAME', 'App names must be nonempty and have no leading or trailing whitespace.');
+    }
+
+    const prisma: Record<string, readonly string[]> = Object.create(null) as Record<string, readonly string[]>;
+
+    if (definition.prisma !== undefined) {
+        if (definition.prisma === null || typeof definition.prisma !== 'object' || Array.isArray(definition.prisma)) {
+            throw new AppRegistryError('INVALID_PRISMA_CONTRIBUTION', `App "${definition.name}" Prisma contributions must be a database-to-path-list object.`);
+        }
+
+        for (const [database, paths] of Object.entries(definition.prisma)) {
+            if (!Array.isArray(paths) || paths.length === 0 || paths.some((path: unknown) => typeof path !== 'string' || !path.trim())) {
+                throw new AppRegistryError('INVALID_PRISMA_CONTRIBUTION', `App "${definition.name}" Prisma contributions for "${database}" must contain nonempty file or directory paths.`);
+            }
+
+            prisma[database] = Object.freeze([...paths]);
+        }
+    }
+
+    return Object.freeze({
+        ...definition,
+        ...(definition.dependsOn === undefined ? {} : { dependsOn: Object.freeze([...definition.dependsOn]) }),
+        ...(definition.prisma === undefined ? {} : { prisma: Object.freeze(prisma) })
+    });
+}

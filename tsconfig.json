@@ -1,0 +1,9 @@
+{
+    "extends": "./tsconfig.base.json",
+    "compilerOptions": {
+        "noEmit": true,
+        "customConditions": ["nestrum-source"],
+        "types": ["node"]
+    },
+    "include": ["packages/*/src/**/*.ts", "packages/*/tests/**/*.ts", "vitest.config.ts", "vitest.workspace.ts"]
+}

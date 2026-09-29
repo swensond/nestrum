@@ -1,0 +1,11 @@
+# 0004 — Prisma contract assembly and validation
+
+Apps declare database-to-path-list contributions on their definitions. Core snapshots this metadata without importing Node or Prisma runtime code; @nestrum/prisma/node reads files in app dependency order, groups them by registered database, and invokes the real Prisma emitter. This keeps filesystem/process operations behind a Node entry point and leaves contract parsing and semantics with Prisma instead of duplicating its language.
+
+Direct Prisma CLI and PostgreSQL/MongoDB facade dependencies are pinned to 8.0.0-rc.13. Newer documentation describes native glob input, but the installed facade accepts only a single native contract path. Nestrum therefore assembles a generated contract.prisma per database from separate app-owned fragments, preserving source comments and copied fragments. Apps do not maintain a giant schema. Identical and conflicting model declarations are both rejected by Prisma; declarations are never silently merged.
+
+Each generation gets a fresh run directory, so no old fragment is accidentally included and no existing output is replaced. Emit-only configs omit database connections and disable CLI telemetry. Absolute module/source paths let generation work outside the workspace. The resulting configs are local generated artifacts and should be regenerated after moving an installation; they are not portable user configuration.
+
+Prisma 8 emits contract.json and contract.d.ts rather than a traditional generated PrismaClient. Phase 4 will consume the emitted IR. The original MVP example's @updatedAt and legacy cuid() syntax fail under this pinned native authoring path; the frozen target remains unchanged, and compatibility must be resolved explicitly in subsequent phases. Native generation reports diagnostics instead of rewriting input. Phase 4 adds an explicit official PostgreSQL compatibility adapter; see [ADR 0005](0005-metadata-and-runtime-schemas.md).
+
+Application.start() still executes app hooks. Phase 3 provides an explicit generation step before startup; automatic integration of the completed metadata/resource pipeline belongs to later lifecycle work. No live databases, migrations, resources, or QuerySets are introduced here.
