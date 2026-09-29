@@ -1,0 +1,5 @@
+# 0007 — QuerySets over Prisma 8 collections
+
+The pinned Prisma 8 release exposes immutable fluent collections, not traditional PrismaClient model delegates. Nestrum stores its own deferred query state and adapts it to those collections, preserving conjunctive filters and runtime schema validation. Core defines the portable QuerySet execution contract; the supported implementation is the Prisma adapter subpath. raw() returns the original collection and deliberately ignores saved manager/query state.
+
+ResourceModel optionally carries a backend so managers can initialize before app hooks without making core create database clients. Unbound resources still have objects and fail explicitly on evaluation. Typed access derives from a typed Prisma collection; dynamic bootstrap metadata cannot infer a static row catalog. SQL count uses aggregate count, bulk writes use count-returning terminals, and Mongo requires an explicit database-count callback instead of an expensive post-fetch fallback. Native clients and connection ownership remain application concerns until later lifecycle integration.

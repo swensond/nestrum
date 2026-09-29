@@ -10,3 +10,5 @@ Use ADR-style records when future sessions need the reasoning for a durable deci
 - [0005 — Metadata and runtime schema representations](0005-metadata-and-runtime-schemas.md): actual codec representations, canonical metadata, runtime generation, and explicit compatibility authoring.
 
 - [0006 — Resource bootstrap and package boundaries](0006-resource-bootstrap-boundary.md): shared metadata ownership, cycle-free schema composition, and pre-hook resource validation.
+
+- [0007 — QuerySets over Prisma 8 collections](0007-querysets-and-prisma-collections.md): fluent native adapters, typed manager access, terminal semantics, and explicit raw/client boundaries.

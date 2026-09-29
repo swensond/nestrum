@@ -40,5 +40,9 @@ export function defineResource(config: ResourceConfig): ResourceDefinition {
         }
     }
 
-    return Object.freeze({ model: config.model, database, identity, api: Object.freeze(api), schemas: Object.freeze({ ...config.schemas }) });
+    if (config.managers !== undefined && (!config.managers || typeof config.managers !== 'object' || Array.isArray(config.managers) || Object.values(config.managers).some((value) => typeof value !== 'function'))) {
+        throw new ResourceError('RESOURCE_CONFIG_INVALID', `Resource ${identity} managers must be a factory map.`);
+    }
+
+    return Object.freeze({ model: config.model, database, identity, api: Object.freeze(api), schemas: Object.freeze({ ...config.schemas }), managers: Object.freeze({ ...config.managers }) });
 }

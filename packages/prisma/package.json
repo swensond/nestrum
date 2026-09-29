@@ -13,6 +13,11 @@
             "nestrum-source": "./src/node.ts",
             "types": "./dist/node.d.ts",
             "import": "./dist/node.js"
+        },
+        "./querysets": {
+            "nestrum-source": "./src/querysets.ts",
+            "types": "./dist/querysets.d.ts",
+            "import": "./dist/querysets.js"
         }
     },
     "files": [

@@ -17,3 +17,7 @@ export { ResourceRegistry } from './resource/resource-registry.js';
 export { ResourceError } from './resource/resource.errors.js';
 export type { ResourceConfig, ResourceDefinition, ResourceApi, ResourceApiOperation, ResourceModel, ResourceSchemaFamily, ResourceSchemaComposers, RegisteredResource } from './resource/resource.types.js';
 export type { FieldMetadata, ModelMetadata, RelationMetadata, ScalarKind } from './resource/model-metadata.types.js';
+
+export { QuerySet, QuerySetError, bindResourceQuerySets, snapshotQueryValue } from './queryset/queryset.js';
+export type { QueryBackend, QuerySpec, QueryOrder, QueryWhere, QueryFilter } from './queryset/queryset.types.js';
+export type { ResourceManagers } from './resource/resource.types.js';

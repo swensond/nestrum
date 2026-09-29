@@ -103,7 +103,7 @@ const resources = new ResourceRegistry([ProjectResource], application.databases)
 resources.initialize(precompiledModels);
 ```
 
-Application owns initialization of application.resources; use a separate registry for standalone validation. Registered resources expose model/database/identity/api/metadata/schemas. Definition schema callbacks live on the definition; the registered resource exposes resolved schemas. ResourceDefinition has no QuerySet manager yet.
+Application owns initialization of application.resources; use a separate registry for standalone validation. Registered resources expose model/database/identity/api/metadata/schemas. Definition schema callbacks live on the definition; the registered resource exposes resolved schemas. Phase 6 adds manager factories to ResourceDefinition and resolved managers to RegisteredResource.
 
 ## Files / Packages Changed
 
@@ -143,7 +143,7 @@ API flags are registration metadata only; no routes or authorization exist yet. 
 
 ## Follow-Ups
 
-Phase 6 introduces QuerySets and managers using registered resources. Phase 7 adds ABAC; Phase 9 consumes opt-in operation flags for actual routes. Later lifecycle work consolidates built-in emission/bootstrap. Static catalogs/schema source generation remain deferred; no post-MVP implementation was added here.
+Phase 6 now introduces QuerySets and managers using registered resources. Phase 7 adds ABAC; Phase 9 consumes opt-in operation flags for actual routes. Later lifecycle work consolidates built-in emission/bootstrap. Static catalogs/schema source generation remain deferred; no post-MVP implementation was added here.
 
 ## Completion Notes
 

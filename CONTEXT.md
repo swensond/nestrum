@@ -39,3 +39,11 @@ _Avoid_: Database schema, Prisma fragment
 **Resource**:
 A model's registered application-facing definition, with validation rules and explicitly selected public operations. Resources can participate in administration without exposing a public API.
 _Avoid_: Route, model instance, admin page
+
+**QuerySet**:
+A model-specific description of a collection query that can be refined before it is evaluated. Branches describe independent selections of records.
+_Avoid_: Result array, Prisma collection
+
+**Manager**:
+A named entry point into a resource's queries, often starting with a conventional selection. The objects manager is the resource's unqualified entry point.
+_Avoid_: Database client, fetched collection

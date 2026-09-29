@@ -1,3 +1,5 @@
+import { bindResourceQuerySets } from '#core/queryset/queryset';
+import type { QueryBackend } from '#core/queryset/queryset.types';
 import { z } from 'zod';
 import { modelIdentity } from '#core/database/model-identity';
 import type { DatabaseRegistry } from '#core/database/database-registry';
@@ -57,8 +59,11 @@ export class ResourceRegistry {
                 throw new ResourceError('RESOURCE_MODEL_MISSING', `Resource ${definition.identity} has no compiled Prisma model.`);
             }
             const schemas = this.compose(definition, model);
-            registered.set(definition.identity, Object.freeze({ model: definition.model, database: definition.database, identity: definition.identity,
-                api: definition.api, metadata: model.metadata, schemas }));
+            const context = { model: definition.model, database: definition.database, identity: definition.identity,
+                api: definition.api, metadata: model.metadata, schemas };
+            const access = bindResourceQuerySets(context, model.queryBackend as QueryBackend<Record<string, unknown>, Partial<Record<string, unknown>>, Partial<Record<string, unknown>>> | undefined, definition.managers);
+            const managers = Object.freeze(Object.fromEntries(Object.entries(access).filter(([name]) => name !== 'objects')));
+            registered.set(definition.identity, Object.freeze({ ...context, ...access, managers }));
         }
 
         this.ordered = Object.freeze([...registered.values()]);

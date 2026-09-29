@@ -1,6 +1,6 @@
 # Nestrum
 
-A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–5 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, and resource registration/composition.
+A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–6 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, and QuerySets/managers.
 
 ## Development
 
@@ -97,3 +97,9 @@ const ProjectResource = defineResource({
 ```
 
 Register definitions through app.resources or application.resources and supply generated families through application resourceModels (an array or loader). Startup validates every model and composes schemas before app hooks. Lookup uses application.resources.get('default.Project'). Public flags default to false and do not yet create routes. See [Phase 5](docs/phases/phase-05-resources.md) for a complete bootstrap example.
+
+## QuerySets
+
+Every registered resource exposes objects. Bind a Prisma 8 collection through ResourceModel.queryBackend using createPrismaQueryBackend from @nestrum/prisma/querysets. Queries chain filter(...).orderBy('-createdAt').limit(20) before all()/first()/get()/exists()/count(); writes use create/update/delete. Named managers compose the same immutable QuerySets. bindResourceQuerySets provides typed access such as Project.active when using a typed Prisma collection.
+
+raw() returns the original Prisma collection and bypasses Nestrum validation, manager filters, and future automatic ABAC. Applications currently own clients and bindings; Mongo count requires a database-count callback. See [Phase 6](docs/phases/phase-06-querysets.md) for usage, semantics, and provider limitations.
