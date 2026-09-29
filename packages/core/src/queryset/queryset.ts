@@ -1,8 +1,12 @@
 import { AppError } from '#core/application/application.errors';
+import { AuthorizationError, PolicyError } from '#core/authorization/authorization.errors';
+import { compilePolicyScope } from '#core/authorization/filter';
+import type { AuthorizationEngine, PreparedAuthorization } from '#core/authorization/authorization';
+import type { AuthorizationEnvironment, QueryOperation, Subject } from '#core/authorization/authorization.types';
 import type { RegisteredResource } from '#core/resource/resource.types';
-import type { QueryBackend, QueryOrder, QuerySpec, QueryWhere } from './queryset.types.js';
+import type { QueryBackend, QueryOrder, QuerySpec, QueryState, QueryWhere } from './queryset.types.js';
 
-type QueryContext = Pick<RegisteredResource, 'identity' | 'metadata' | 'schemas'>;
+type QueryContext = Pick<RegisteredResource, 'identity' | 'metadata' | 'schemas'> & { readonly authorization?: AuthorizationEngine };
 
 export class QuerySetError extends AppError {
     constructor(code: 'QUERY_BACKEND_MISSING' | 'QUERY_ARGUMENT_INVALID' | 'QUERY_NOT_FOUND' | 'QUERY_MULTIPLE_RESULTS' | 'QUERY_OPERATION_UNSUPPORTED' | 'QUERY_MANAGER_INVALID', message: string, options?: ErrorOptions) {
@@ -35,15 +39,24 @@ export function snapshotQueryValue<T>(value: T, ancestors = new Set<object>()): 
 export class QuerySet<Row extends object = Record<string, unknown>, Create extends object = Partial<Row>, Update extends object = Partial<Row>, Raw = unknown> {
     readonly #context: QueryContext;
     readonly #backend: QueryBackend<Row, Create, Update, Raw> | undefined;
-    readonly #state: QuerySpec;
+    readonly #state: QueryState;
 
-    constructor(context: QueryContext, backend?: QueryBackend<Row, Create, Update, Raw>, state: QuerySpec = { filters: [], orderBy: [] }) {
+    constructor(context: QueryContext, backend?: QueryBackend<Row, Create, Update, Raw>, state: QueryState = { filters: [], orderBy: [] }) {
         this.#context = context;
         this.#backend = backend;
         this.#state = snapshotQueryValue(state);
         if (new.target === QuerySet) {
             Object.freeze(this);
         }
+    }
+
+    authorizedFor(subject: Subject, action: string, environment: AuthorizationEnvironment = {}): this {
+        if (!subject || typeof subject !== 'object' || Array.isArray(subject) || !environment || typeof environment !== 'object' || Array.isArray(environment) ||
+            typeof action !== 'string' || !action.trim() || action.trim() !== action) {
+            throw new AuthorizationError('CONTEXT_INVALID');
+        }
+
+        return this.chain({ ...this.#state, authorization: snapshotQueryValue({ subject, action, environment }) });
     }
 
     filter(where: QueryWhere<Row>): this {
@@ -76,12 +89,17 @@ export class QuerySet<Row extends object = Record<string, unknown>, Create exten
     }
 
     async all(): Promise<Row[]> {
+        const { query, permission } = await this.authorize('read');
         if (this.#state.limit === 0) {
             return [];
         }
-        const rows = await this.backend().all(snapshotQueryValue(this.#state));
+        const rows = await this.backend().all(query);
+        const result = rows.map((row) => this.#context.schemas.read.parse(row) as Row);
+        for (const row of result) {
+            await permission.checkObject(snapshotQueryValue(row));
+        }
 
-        return rows.map((row) => this.#context.schemas.read.parse(row) as Row);
+        return result;
     }
 
     async first(): Promise<Row | null> {
@@ -108,11 +126,15 @@ export class QuerySet<Row extends object = Record<string, unknown>, Create exten
     }
 
     async count(): Promise<number> {
-        return this.backend().count(snapshotQueryValue({ filters: this.#state.filters, orderBy: [] }));
+        const { query } = await this.authorize('count');
+
+        return this.backend().count({ filters: query.filters, orderBy: [] });
     }
 
     async create(data: Create): Promise<Row> {
         const parsed = this.#context.schemas.create.parse(snapshotQueryValue(data)) as Create;
+        const { permission } = await this.authorize('create', parsed);
+        await permission.checkObject(snapshotQueryValue(parsed));
         const row = await this.backend().create(parsed);
 
         return this.#context.schemas.read.parse(row) as Row;
@@ -121,14 +143,16 @@ export class QuerySet<Row extends object = Record<string, unknown>, Create exten
     async update(data: Update): Promise<number> {
         this.rejectWindow('update');
         const parsed = this.#context.schemas.update.parse(snapshotQueryValue(data)) as Update;
+        const { query } = await this.authorize('update', parsed);
 
-        return this.backend().update(snapshotQueryValue({ filters: this.#state.filters, orderBy: [] }), parsed);
+        return this.backend().update({ filters: query.filters, orderBy: [] }, parsed);
     }
 
     async delete(): Promise<number> {
         this.rejectWindow('delete');
+        const { query } = await this.authorize('delete');
 
-        return this.backend().delete(snapshotQueryValue({ filters: this.#state.filters, orderBy: [] }));
+        return this.backend().delete({ filters: query.filters, orderBy: [] });
     }
 
     raw(): Raw {
@@ -139,14 +163,32 @@ export class QuerySet<Row extends object = Record<string, unknown>, Create exten
         return this.#context === other.#context && this.#backend === other.#backend;
     }
 
-    extend<Extended extends QuerySet<Row, Create, Update, Raw>>(type: new (context: QueryContext, backend: QueryBackend<Row, Create, Update, Raw> | undefined, state: QuerySpec) => Extended): Extended {
+    extend<Extended extends QuerySet<Row, Create, Update, Raw>>(type: new (context: QueryContext, backend: QueryBackend<Row, Create, Update, Raw> | undefined, state: QueryState) => Extended): Extended {
         return new type(this.#context, this.#backend, snapshotQueryValue(this.#state));
     }
 
-    protected chain(state: QuerySpec): this {
-        const type = this.constructor as new (context: QueryContext, backend: QueryBackend<Row, Create, Update, Raw> | undefined, state: QuerySpec) => this;
+    protected chain(state: QueryState): this {
+        const type = this.constructor as new (context: QueryContext, backend: QueryBackend<Row, Create, Update, Raw> | undefined, state: QueryState) => this;
 
         return new type(this.#context, this.#backend, state);
+    }
+
+    private async authorize(operation: QueryOperation, input?: object): Promise<{ query: QuerySpec; permission: PreparedAuthorization }> {
+        const binding = this.#state.authorization;
+        if (!binding || !this.#context.authorization) { throw new AuthorizationError('CONTEXT_REQUIRED'); }
+        const permission = await this.#context.authorization.prepare(this.#context.identity, snapshotQueryValue(binding), operation, snapshotQueryValue(input));
+        const filters = [...this.#state.filters];
+        if (permission.scope) {
+            const scope = compilePolicyScope(permission.scope, this.#context.metadata.fields.filter((field) => !field.array).map((field) => field.name));
+            try {
+                this.#context.schemas.where.parse(snapshotQueryValue(scope));
+            } catch (cause) {
+                throw new PolicyError('POLICY_SCOPE_INVALID', `Policy scope does not validate for ${this.#context.identity}.`, { cause });
+            }
+            filters.push(scope);
+        }
+
+        return { query: snapshotQueryValue({ filters, orderBy: this.#state.orderBy, ...(this.#state.limit === undefined ? {} : { limit: this.#state.limit }) }), permission };
     }
 
     private rejectWindow(operation: string): void {
@@ -170,7 +212,7 @@ export function bindResourceQuerySets<Row extends object, Create extends object,
     const objects = new QuerySet(resource, backend);
     const result: Record<string, QuerySet<Row, Create, Update, Raw>> = { objects };
     for (const [name, factory] of Object.entries(managers)) {
-        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || ['objects', 'managers', 'model', 'database', 'identity', 'api', 'metadata', 'schemas', 'constructor', 'prototype', '__proto__', 'then'].includes(name)) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || ['objects', 'managers', 'model', 'database', 'identity', 'api', 'metadata', 'schemas', 'authorization', 'constructor', 'prototype', '__proto__', 'then'].includes(name)) {
             throw new QuerySetError('QUERY_MANAGER_INVALID', `Invalid or reserved manager name ${name}.`);
         }
         let manager: QuerySet<Row, Create, Update, Raw>;

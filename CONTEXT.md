@@ -47,3 +47,23 @@ _Avoid_: Result array, Prisma collection
 **Manager**:
 A named entry point into a resource's queries, often starting with a conventional selection. The objects manager is the resource's unqualified entry point.
 _Avoid_: Database client, fetched collection
+
+**Subject**:
+The actor whose attributes are considered when deciding whether an action is permitted. A subject may represent an anonymous actor.
+_Avoid_: Auth user, session, request
+
+**Action**:
+A named operation for which a subject seeks permission on a resource, including domain operations such as archive or approve.
+_Avoid_: HTTP method, role
+
+**Policy**:
+The rules deciding whether a subject may perform an action on a resource in its surrounding environment.
+_Avoid_: Manager filter, role list
+
+**Collection scope**:
+The policy-defined boundary of records eligible for an action. It is distinct from a caller's selection within that boundary.
+_Avoid_: Pagination, result filtering
+
+**Object decision**:
+A policy decision about an action on one particular record or proposed record.
+_Avoid_: Field permission, collection scope

@@ -1,6 +1,6 @@
 # Nestrum
 
-A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–6 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, and QuerySets/managers.
+A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–7 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, and default-deny ABAC.
 
 ## Development
 
@@ -79,7 +79,7 @@ This offline step emits contract.json and contract.d.ts for each contributed dat
 
 ## Metadata and Zod
 
-compileModelMetadata({ database, provider, contract }) from @nestrum/prisma compiles emitted contract JSON. generateModelSchemas(metadata) from @nestrum/zod returns model/create/update/read/where/orderBy schemas and stable names. Object schemas support Zod .extend() composition. Runtime values follow Prisma codecs, including bigint, Date, and Temporal; JSON transport and resources arrive in later phases. See [Phase 4](docs/phases/phase-04-zod-generation.md) for usage and supported shapes.
+compileModelMetadata({ database, provider, contract }) from @nestrum/prisma compiles emitted contract JSON. generateModelSchemas(metadata) from @nestrum/zod returns model/create/update/read/where/orderBy schemas and stable names. Object schemas support Zod .extend() composition. Runtime values follow Prisma codecs, including bigint, Date, and Temporal; JSON transport arrives in later phases. See [Phase 4](docs/phases/phase-04-zod-generation.md) for usage and supported shapes.
 
 ## Resources
 
@@ -100,6 +100,32 @@ Register definitions through app.resources or application.resources and supply g
 
 ## QuerySets
 
-Every registered resource exposes objects. Bind a Prisma 8 collection through ResourceModel.queryBackend using createPrismaQueryBackend from @nestrum/prisma/querysets. Queries chain filter(...).orderBy('-createdAt').limit(20) before all()/first()/get()/exists()/count(); writes use create/update/delete. Named managers compose the same immutable QuerySets. bindResourceQuerySets provides typed access such as Project.active when using a typed Prisma collection.
+Every registered resource exposes objects. Bind a Prisma 8 collection through ResourceModel.queryBackend using createPrismaQueryBackend from @nestrum/prisma/querysets. Queries use authorizedFor(subject, 'read').filter(...).orderBy('-createdAt').limit(20) before all()/first()/get()/exists()/count(); writes use create/update/delete. Named managers compose the same immutable QuerySets. bindResourceQuerySets provides typed access such as Project.active when using a typed Prisma collection.
 
-raw() returns the original Prisma collection and bypasses Nestrum validation, manager filters, and future automatic ABAC. Applications currently own clients and bindings; Mongo count requires a database-count callback. See [Phase 6](docs/phases/phase-06-querysets.md) for usage, semantics, and provider limitations.
+raw() returns the original Prisma collection and bypasses Nestrum validation, manager filters, and automatic ABAC. Applications currently own clients and bindings; Mongo count requires a database-count callback. See [Phase 6](docs/phases/phase-06-querysets.md) for usage, semantics, and provider limitations.
+
+## Authorization
+
+Register policies through application policies or app policies. Missing policies, actions, and QuerySet authorization contexts deny. Policies are copied/frozen before app hooks; hooks expose authorization.
+
+```ts
+import { allow, definePolicy, deny, eq } from '@nestrum/core';
+
+const ProjectPolicy = definePolicy({
+    resource: 'default.Project',
+    authorize: ({ subject }) => typeof subject.id === 'string' ? allow() : deny('ANONYMOUS'),
+    actions: {
+        read: { scope: ({ subject }) => eq('ownerId', subject.id as string) },
+        update: { scope: ({ subject }) => eq('ownerId', subject.id as string) },
+        archive: {
+            operations: ['update'],
+            scope: ({ subject }) => eq('ownerId', subject.id as string)
+        }
+    }
+});
+// Include ProjectPolicy in the application's or owning app's policies array.
+await Project.objects.authorizedFor(subject, 'read').filter({ status: 'active' }).all();
+await Project.objects.authorizedFor(subject, 'archive').filter({ id: projectId }).update({ status: 'archived' });
+```
+
+Scopes constrain database reads/counts/writes. Object callbacks reject an entire read result on denial; they never silently filter records after fetching. Create checks validated input before inserting. Count and bulk writes reject per-object policies; custom actions must declare their allowed query operations. See [Phase 7](docs/phases/phase-07-abac.md) for the complete boundary and examples.

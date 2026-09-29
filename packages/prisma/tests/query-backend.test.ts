@@ -4,11 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AsyncIterableResult } from '@prisma/orm-mongo/components/runtime';
 import { createMongoCollection } from '@prisma/orm-mongo/orm';
-import { defineApplication, QuerySetError } from '@nestrum/core';
+import { and, AuthorizationEngine, compilePolicyScope, defineApplication, eq, inFilter, isNull, neq, not, notIn, or, QuerySet, QuerySetError } from '@nestrum/core';
+import { generateModelSchemas } from '../../zod/src/index.js';
 import { prismaDatabase } from '../src/index.js';
 import { generatePrismaContracts } from '../src/node.js';
 import { createPrismaQueryBackend } from '../src/querysets.js';
-import type { QuerySpec } from '@nestrum/core';
+import type { ModelMetadata, QuerySpec } from '@nestrum/core';
 
 const SPEC: QuerySpec = { filters: [{ name: 'Hello' }, { id: { gte: 1, notIn: [5] } }], orderBy: [{ field: 'id', direction: 'desc' }, { field: 'name', direction: 'asc' }], limit: 3 };
 let directory: string;
@@ -26,6 +27,14 @@ afterAll(async () => {
         await rm(directory, { recursive: true, force: true });
     }
 });
+
+function queryMetadata(identity: ModelMetadata['identity'], provider: ModelMetadata['provider'], names: string[]): ModelMetadata {
+    const [database, name] = identity.split('.');
+
+    return { identity, database: database!, name: name!, provider, namespace: provider === 'postgresql' ? 'public' : '', relations: [],
+        fields: names.map((field) => ({ name: field, codec: field === 'id' ? 'pg/int4@1' : 'pg/text@1', kind: field === 'id' ? 'number' : 'string', array: false, nullable: true, optional: false,
+            primaryKey: field === 'id' || field === '_id', hasCreateDefault: false, hasUpdateDefault: false })) };
+}
 
 function sqlCollection() {
     const calls: { method: string; value?: unknown }[] = [];
@@ -47,6 +56,29 @@ function sqlCollection() {
 }
 
 describe('Installed Prisma 8 query adapters', () => {
+    it('applies an authorized QuerySet scope alongside caller filters in native SQL predicates', async () => {
+        const { collection, calls } = sqlCollection();
+        const metadata = queryMetadata('default.Project', 'postgresql', ['id', 'name']);
+        const schemas = generateModelSchemas(metadata);
+        const authorization = new AuthorizationEngine([{ resource: 'default.Project', actions: { read: { scope: ({ subject }) => eq('id', subject.id as number) } } }]);
+        const query = new QuerySet({ identity: 'default.Project', metadata, schemas, authorization }, createPrismaQueryBackend(collection, { provider: 'postgresql' }));
+        await query.authorizedFor({ id: 1 }, 'read').filter({ name: 'Hello' }).all();
+        expect(calls.map((call) => call.method)).toEqual(['where', 'where', 'all']);
+        expect(calls[0]?.value).toMatchObject({ exprs: [{ kind: 'eq', field: 'name', value: 'Hello' }] });
+        expect(calls[1]?.value).toMatchObject({ exprs: [{ kind: 'eq', field: 'id', value: 1 }] });
+    });
+
+    it('compiles every authorization AST helper into native SQL predicate nodes', async () => {
+        const { collection, calls } = sqlCollection();
+        const scope = and(eq('id', 1), neq('name', 'Blocked'), inFilter('id', [1, 2]), notIn('id', [3]), isNull('name'), or(eq('id', 4), not(eq('id', 5))));
+        await createPrismaQueryBackend(collection, { provider: 'postgresql' }).all({ filters: [compilePolicyScope(scope, ['id', 'name'])], orderBy: [] });
+        expect(calls.map((call) => call.method)).toEqual(['where', 'all']);
+        expect(calls[0]?.value).toMatchObject({ kind: 'and', exprs: [{ kind: 'and', exprs: [
+            { kind: 'and', exprs: [{ kind: 'eq' }] }, { kind: 'and', exprs: [{ kind: 'not' }] }, { kind: 'and', exprs: [{ kind: 'in' }] },
+            { kind: 'and', exprs: [{ kind: 'not' }] }, { kind: 'and', exprs: [{ kind: 'isNull' }] }, { kind: 'and', exprs: [{ kind: 'or' }] }
+        ] }] });
+    });
+
     it('compiles SQL equality/ranges/logical operators and ordered selector arrays using public Prisma AST', async () => {
         const { collection, calls } = sqlCollection();
         const backend = createPrismaQueryBackend(collection, { provider: 'postgresql' });
@@ -107,6 +139,27 @@ describe('Installed Prisma 8 query adapters', () => {
         expect(await backend.count(spec)).toBe(4);
         expect(count).toHaveBeenCalledWith(expect.objectContaining({ kind: 'and' }));
         expect(backend.raw).toBe(collection);
+    });
+
+    it('places ABAC scope predicates in a real Mongo pipeline and passes the same scope to database counts', async () => {
+        const plans: unknown[] = [];
+        const executor = {
+            query<Row>(plan: unknown) { plans.push(plan); return new AsyncIterableResult((async function* () { yield { _id: '507f1f77bcf86cd799439011', name: 'Hello' } as unknown as Row; })()); },
+            async execute(plan: unknown) { plans.push(plan); return { affectedRows: 1 }; }
+        };
+        const count = vi.fn(async (_filter: unknown) => 1);
+        const backend = createPrismaQueryBackend(createMongoCollection(mongoContract, 'Article', executor), { provider: 'mongodb', count });
+        const metadata = queryMetadata('documents.Article', 'mongodb', ['_id', 'name']);
+        const schemas = generateModelSchemas(metadata);
+        const authorization = new AuthorizationEngine([{ resource: 'documents.Article', actions: { read: { scope: ({ subject }) => and(eq('_id', subject.id as string), not(neq('name', 'Hello'))) } } }]);
+        const query = new QuerySet({ identity: 'documents.Article', metadata, schemas, authorization }, backend).authorizedFor({ id: '507f1f77bcf86cd799439011' }, 'read');
+        await query.filter({ name: 'Hello' }).all();
+        expect(plans[0]).toMatchObject({ collection: 'Article', command: { pipeline: [
+            { kind: 'match', filter: { kind: 'and' } }
+        ] } });
+        expect(JSON.stringify(plans[0])).toContain('507f1f77bcf86cd799439011');
+        expect(await query.count()).toBe(1);
+        expect(count).toHaveBeenCalledWith(expect.objectContaining({ kind: 'and' }));
     });
 
     it('rejects unimplemented provider operators rather than broadening filters', async () => {

@@ -12,3 +12,5 @@ Use ADR-style records when future sessions need the reasoning for a durable deci
 - [0006 — Resource bootstrap and package boundaries](0006-resource-bootstrap-boundary.md): shared metadata ownership, cycle-free schema composition, and pre-hook resource validation.
 
 - [0007 — QuerySets over Prisma 8 collections](0007-querysets-and-prisma-collections.md): fluent native adapters, typed manager access, terminal semantics, and explicit raw/client boundaries.
+
+- [0008 — Authorization query boundary](0008-authorization-query-boundary.md): default-deny evaluation, action/operation binding, database scopes, and fail-closed object terminal restrictions.

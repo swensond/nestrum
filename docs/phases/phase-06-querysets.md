@@ -24,7 +24,7 @@ ABAC (Phase 7), automatic database client creation/disposal, transactions, HTTP/
 
 Prisma 8 rc.13 exposes fluent model collections rather than Prisma 7 findMany/findUnique delegates. Nestrum translates its QuerySet state into those actual collection methods. Core owns portable QuerySets and a narrow execution contract; @nestrum/prisma/querysets owns the supported Prisma integration. This is a Prisma-specific framework, not a promise of interchangeable ORMs. See [ADR 0007](../decisions/0007-querysets-and-prisma-collections.md).
 
-A ResourceModel may carry queryBackend alongside its metadata/generated families. This avoids introducing live clients or a second application bootstrap subsystem. ResourceRegistry creates managers before app hooks. Resources without a backend still expose objects, but evaluation/raw fails explicitly with QUERY_BACKEND_MISSING.
+A ResourceModel may carry queryBackend alongside its metadata/generated families. This avoids introducing live clients or a second application bootstrap subsystem. ResourceRegistry creates managers before app hooks. Resources without a backend still expose objects, but authorized evaluation/raw fails explicitly with QUERY_BACKEND_MISSING. Phase 7 now requires an authorization context and policy before evaluation; see its phase record.
 
 ## Implementation
 
@@ -77,17 +77,17 @@ const Project = bindResourceQuerySets(resource, backend, {
     archived: (query) => query.filter({ status: 'archived' })
 });
 
-await Project.objects.filter({ status: 'active' }).orderBy('-createdAt').limit(20).all();
-await Project.active.filter({ name: 'Example' }).first();
-await Project.objects.get({ id: projectId });
-await Project.objects.count();
-await Project.objects.create(createInput);
-await Project.objects.filter({ id: projectId }).update(updateInput);
-await Project.objects.filter({ id: projectId }).delete();
+await Project.objects.authorizedFor(subject, 'read').filter({ status: 'active' }).orderBy('-createdAt').limit(20).all();
+await Project.active.authorizedFor(subject, 'read').filter({ name: 'Example' }).first();
+await Project.objects.authorizedFor(subject, 'read').get({ id: projectId });
+await Project.objects.authorizedFor(subject, 'read').count();
+await Project.objects.authorizedFor(subject, 'create').create(createInput);
+await Project.objects.authorizedFor(subject, 'update').filter({ id: projectId }).update(updateInput);
+await Project.objects.authorizedFor(subject, 'delete').filter({ id: projectId }).delete();
 const nativeCollection = Project.active.raw();
 ```
 
-The example uses app-owned db/application/input values and a model with the named fields. The typed helper is optional; application.resources.get(...).objects works directly with dynamic field types. Custom managers can also be accessed through resource.managers.active.
+The example now assumes Phase 7 policies registered for each operation and an app-owned subject. It uses app-owned db/application/input values and a model with the named fields. The typed helper is optional; application.resources.get(...).objects works directly with dynamic field types. Custom managers can also be accessed through resource.managers.active.
 
 Mongo binding:
 
@@ -106,7 +106,7 @@ runCountPipeline is an application-supplied database operation, not an exported 
 
 ## raw safety semantics
 
-raw() returns the exact original Prisma collection, regardless of QuerySet/manager filters, ordering, or limits. It bypasses Nestrum input/output validation and manager behavior. After Phase 7 adds authorization, raw remains outside automatic Nestrum ABAC scopes/object checks. Calling it is an explicit decision to own those responsibilities. This is direct collection access, not a legacy Prisma 7 delegate or a filtered QuerySet.
+raw() returns the exact original Prisma collection, regardless of QuerySet/manager filters, ordering, or limits. It bypasses Nestrum input/output validation and manager behavior. Phase 7 authorization is now implemented; raw remains outside automatic Nestrum ABAC scopes/object checks. Calling it is an explicit decision to own those responsibilities. This is direct collection access, not a legacy Prisma 7 delegate or a filtered QuerySet.
 
 ## Files / Packages Changed
 
@@ -148,7 +148,7 @@ Automatic bootstrap resource row types are dynamic. Typed access requires a coll
 
 ## Follow-Ups
 
-Phase 7 integrates ABAC without introducing field-level checks; collection scopes must stay in database queries. Later runtime/lifecycle work owns client creation/disposal and can centralize Mongo count execution. Broader query operators remain follow-ups within later MVP integration where needed; no post-MVP system was introduced.
+Phase 7 integrates ABAC without field-level checks; collection scopes stay in database queries. All QuerySet terminals now require authorizedFor and a registered policy; object-policy count/bulk restrictions are documented there. Later runtime/lifecycle work owns client creation/disposal and can centralize Mongo count execution. Broader query operators remain follow-ups within later MVP integration where needed; no post-MVP system was introduced.
 
 ## Completion Notes
 

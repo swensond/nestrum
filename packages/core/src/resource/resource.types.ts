@@ -1,5 +1,6 @@
 import type { QuerySet } from '#core/queryset/queryset';
 import type { QueryBackend } from '#core/queryset/queryset.types';
+import type { AuthorizationEngine } from '#core/authorization/authorization';
 import type { z } from 'zod';
 import type { ModelMetadata } from './model-metadata.types.js';
 import type { ModelIdentity } from '#core/database/database.types';
@@ -34,6 +35,7 @@ export type ResourceDefinition = {
     readonly managers: ResourceManagers;
 };
 export type RegisteredResource = {
+    readonly authorization: AuthorizationEngine;
     readonly model: string;
     readonly database: string;
     readonly identity: ModelIdentity;

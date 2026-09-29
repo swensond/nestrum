@@ -1,4 +1,5 @@
 import { bindResourceQuerySets } from '#core/queryset/queryset';
+import { AuthorizationEngine } from '#core/authorization/authorization';
 import type { QueryBackend } from '#core/queryset/queryset.types';
 import { z } from 'zod';
 import { modelIdentity } from '#core/database/model-identity';
@@ -12,7 +13,7 @@ export class ResourceRegistry {
     private registered: ReadonlyMap<string, RegisteredResource> | undefined;
     private ordered: readonly RegisteredResource[] = Object.freeze([]);
 
-    constructor(definitions: readonly ResourceDefinition[], private readonly databases: DatabaseRegistry) {
+    constructor(definitions: readonly ResourceDefinition[], private readonly databases: DatabaseRegistry, private readonly authorization = new AuthorizationEngine()) {
         if (!Array.isArray(definitions)) {
             throw new ResourceError('RESOURCE_CONFIG_INVALID', 'Resources must be an array of definitions.');
         }
@@ -60,7 +61,7 @@ export class ResourceRegistry {
             }
             const schemas = this.compose(definition, model);
             const context = { model: definition.model, database: definition.database, identity: definition.identity,
-                api: definition.api, metadata: model.metadata, schemas };
+                api: definition.api, metadata: model.metadata, schemas, authorization: this.authorization };
             const access = bindResourceQuerySets(context, model.queryBackend as QueryBackend<Record<string, unknown>, Partial<Record<string, unknown>>, Partial<Record<string, unknown>>> | undefined, definition.managers);
             const managers = Object.freeze(Object.fromEntries(Object.entries(access).filter(([name]) => name !== 'objects')));
             registered.set(definition.identity, Object.freeze({ ...context, ...access, managers }));

@@ -2,7 +2,7 @@
 
 ## Status
 
-Not complete. Phases 0–6 are complete; Phases 7–16 are not started. Workspace, app lifecycle, named databases, offline SQL/Mongo contract assembly/emission, immutable metadata, and runtime Zod families are implemented. Resource registration/composition and pre-hook model validation are implemented. Immutable QuerySets, managers, and supplied-client Prisma adapters are implemented. Automatic client/runtime integration remains later work. The frozen scope below remains the full MVP target.
+Not complete. Phases 0–7 are complete; Phases 8–16 are not started. Workspace, app lifecycle, named databases, offline SQL/Mongo contract assembly/emission, immutable metadata, and runtime Zod families are implemented. Resource registration/composition and pre-hook model validation are implemented. Immutable QuerySets, managers, and supplied-client Prisma adapters are implemented. Default-deny ABAC, scoped QuerySets, object decisions, and custom actions are implemented. Count/bulk writes require collection policies without per-object checks; safe object mutation orchestration remains an MVP follow-up. Automatic client/runtime integration remains later work. The frozen scope below remains the full MVP target.
 
 ## Included
 

@@ -2,6 +2,8 @@ import { AppRegistryError } from './application.errors.js';
 import { defineResource } from '#core/resource/resource';
 import { ResourceError } from '#core/resource/resource.errors';
 import type { AppDefinition } from './application.types.js';
+import { definePolicy } from '#core/authorization/authorization';
+import { PolicyError } from '#core/authorization/authorization.errors';
 
 export function defineApp(definition: AppDefinition): AppDefinition {
     if (typeof definition.name !== 'string' || !definition.name || definition.name.trim() !== definition.name) {
@@ -12,6 +14,9 @@ export function defineApp(definition: AppDefinition): AppDefinition {
         throw new ResourceError('RESOURCE_CONFIG_INVALID', `App ${definition.name} resources must be an array.`);
     }
     const prisma: Record<string, readonly string[]> = Object.create(null) as Record<string, readonly string[]>;
+    if (definition.policies !== undefined && !Array.isArray(definition.policies)) {
+        throw new PolicyError('POLICY_INVALID', `App ${definition.name} policies must be an array.`);
+    }
 
     if (definition.prisma !== undefined) {
         if (definition.prisma === null || typeof definition.prisma !== 'object' || Array.isArray(definition.prisma)) {
@@ -29,6 +34,7 @@ export function defineApp(definition: AppDefinition): AppDefinition {
 
     return Object.freeze({
         ...definition,
+        ...(definition.policies === undefined ? {} : { policies: Object.freeze(Array.from(definition.policies, definePolicy)) }),
         ...(definition.resources === undefined ? {} : { resources: Object.freeze(Array.from(definition.resources, defineResource)) }),
         ...(definition.dependsOn === undefined ? {} : { dependsOn: Object.freeze([...definition.dependsOn]) }),
         ...(definition.prisma === undefined ? {} : { prisma: Object.freeze(prisma) })

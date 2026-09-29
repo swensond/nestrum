@@ -1,4 +1,6 @@
 import type { ResourceModel } from '#core/resource/resource.types';
+import { AuthorizationEngine } from '#core/authorization/authorization';
+import { PolicyError } from '#core/authorization/authorization.errors';
 import { ResourceRegistry } from '#core/resource/resource-registry';
 import { ResourceError } from '#core/resource/resource.errors';
 import { AppRegistry } from './app-registry.js';
@@ -10,6 +12,7 @@ export class Application {
     readonly apps: AppRegistry;
     readonly databases: DatabaseRegistry;
     readonly resources: ResourceRegistry;
+    readonly authorization: AuthorizationEngine;
     private readonly resourceModels: ApplicationConfig['resourceModels'];
     private currentState: ApplicationState = 'created';
     private startedApps: AppDefinition[] = [];
@@ -24,9 +27,11 @@ export class Application {
         if (config.resourceModels !== undefined && !Array.isArray(config.resourceModels) && typeof config.resourceModels !== 'function') {
             throw new ResourceError('RESOURCE_MODELS_INVALID', 'Resource models must be an array or loader function.');
         }
-        this.resources = new ResourceRegistry([...(config.resources ?? []), ...this.apps.all().flatMap((app) => app.resources ?? [])], this.databases);
+        if (config.policies !== undefined && !Array.isArray(config.policies)) { throw new PolicyError('POLICY_INVALID', 'Application policies must be an array.'); }
+        this.authorization = new AuthorizationEngine([...(config.policies ?? []), ...this.apps.all().flatMap((app) => app.policies ?? [])]);
+        this.resources = new ResourceRegistry([...(config.resources ?? []), ...this.apps.all().flatMap((app) => app.resources ?? [])], this.databases, this.authorization);
         this.resourceModels = Array.isArray(config.resourceModels) ? Object.freeze([...config.resourceModels]) : config.resourceModels;
-        this.context = Object.freeze({ application: this, apps: this.apps, databases: this.databases, resources: this.resources });
+        this.context = Object.freeze({ application: this, apps: this.apps, databases: this.databases, resources: this.resources, authorization: this.authorization });
     }
 
     get state(): ApplicationState {
