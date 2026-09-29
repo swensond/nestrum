@@ -1,6 +1,6 @@
 # Nestrum
 
-A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–9 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, default-deny ABAC, a Hono/InferDI runtime, and opt-in public CRUD with OpenAPI.
+A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–10 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, default-deny ABAC, a Hono/InferDI runtime, opt-in public CRUD with OpenAPI, and framework-owned Better Auth.
 
 ## Development
 
@@ -130,6 +130,22 @@ await Project.objects.authorizedFor(subject, 'archive').filter({ id: projectId }
 
 Scopes constrain database reads/counts/writes. Object callbacks reject an entire read result on denial; they never silently filter records after fetching. Create checks validated input before inserting. Count and bulk writes reject per-object policies; custom actions must declare their allowed query operations. See [Phase 7](docs/phases/phase-07-abac.md) for the complete boundary and examples.
 
+## Authentication
+
+```ts
+import { defineAuth, field } from '@nestrum/auth';
+
+const auth = defineAuth({
+    database: 'identity',
+    baseURL: 'https://app.example.com',
+    secret: process.env.BETTER_AUTH_SECRET!,
+    extend: { user: { timezone: field.string().optional().input() } },
+    prisma: ({ database }) => configuredPrismaAuthCollections(database)
+});
+```
+
+`auth.database` selects the configured store. Nestrum contributes protected User, Session, Account, and Verification contracts and owns the Better Auth Prisma 8 adapter. Email/password, session, logout, and session retrieval are available under `/api/auth`. Valid sessions become ABAC subjects; absent, expired, or invalid sessions are anonymous. Domain profile data remains separate from the core auth user. See [Phase 10](docs/phases/phase-10-auth.md).
+
 ## HTTP runtime
 
 ```ts
@@ -144,7 +160,7 @@ const response = await runtime.fetch(new Request('http://localhost/health'));
 await runtime.shutdown();
 ```
 
-Requests are gated until startup completes. Each request has an InferDI scope on context.var.di and a frozen framework context on context.var.nestrum. Default subjects are anonymous; headers do not authenticate requests. Scopes dispose after the awaited route pipeline, including error paths. Shutdown rejects new requests and drains active pipelines before app shutdown and disposal of the owned root.
+Requests are gated until startup completes. Each request has an InferDI scope on context.var.di and a frozen framework context on context.var.nestrum. Auth sessions become subjects when configured; otherwise subjects are anonymous, and headers do not authenticate requests. Scopes dispose after the awaited route pipeline, including error paths. Shutdown rejects new requests and drains active pipelines before app shutdown and disposal of the owned root.
 
 Use createRuntimeContainer(application) to register typed services and provide a di.container/createScope pair; a supplied root remains application-owned. The runtime exposes a Fetch handler; the application owns its TCP listener. See [Phase 8](docs/phases/phase-08-hono-runtime.md) for service registration, error contracts, and scope ownership.
 

@@ -30,6 +30,7 @@ These features are outside the frozen MVP unless a small supporting abstraction 
 - Provider-specific optimizations outside Node.
 - GraphQL, advanced relationship expansion, generated external SDKs, and public arbitrary Prisma expressions.
 - Field-level ABAC is excluded from the MVP; any later adoption requires revisiting stable response and admin contracts.
+- Social auth providers, MFA, email verification delivery, account linking, and broader Better Auth plugin coverage.
 
 ## Implementation follow-ups
 

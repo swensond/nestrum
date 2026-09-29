@@ -28,3 +28,4 @@ export type { FilterExpression, FilterValue } from './authorization/filter.js';
 export type { Subject, AuthorizationEnvironment, AuthorizationDecision, AuthorizationBinding, QueryOperation, PolicyContext, PolicyCheck, ActionPolicy, PolicyDefinition } from './authorization/authorization.types.js';
 export type { PreparedAuthorization } from './authorization/authorization.js';
 export type { QueryState } from './queryset/queryset.types.js';
+export type { Authentication, AuthenticationDefinition, AuthSession } from './auth/auth.types.js';

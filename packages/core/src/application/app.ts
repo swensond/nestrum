@@ -14,6 +14,16 @@ export function defineApp(definition: AppDefinition): AppDefinition {
         throw new ResourceError('RESOURCE_CONFIG_INVALID', `App ${definition.name} resources must be an array.`);
     }
     const prisma: Record<string, readonly string[]> = Object.create(null) as Record<string, readonly string[]>;
+    const prismaSource: Record<string, string> = Object.create(null) as Record<string, string>;
+    if (definition.prismaSource !== undefined) {
+        if (!definition.prismaSource || typeof definition.prismaSource !== 'object' || Array.isArray(definition.prismaSource)) {
+            throw new AppRegistryError('INVALID_PRISMA_CONTRIBUTION', 'Inline Prisma contributions must be a database-to-source object.');
+        }
+        for (const [database, source] of Object.entries(definition.prismaSource)) {
+            if (typeof source !== 'string' || !source.trim()) { throw new AppRegistryError('INVALID_PRISMA_CONTRIBUTION', 'Inline Prisma contributions must contain nonempty source.'); }
+            prismaSource[database] = source;
+        }
+    }
     if (definition.policies !== undefined && !Array.isArray(definition.policies)) {
         throw new PolicyError('POLICY_INVALID', `App ${definition.name} policies must be an array.`);
     }
@@ -34,6 +44,7 @@ export function defineApp(definition: AppDefinition): AppDefinition {
 
     return Object.freeze({
         ...definition,
+        ...(definition.prismaSource === undefined ? {} : { prismaSource: Object.freeze(prismaSource) }),
         ...(definition.policies === undefined ? {} : { policies: Object.freeze(Array.from(definition.policies, definePolicy)) }),
         ...(definition.resources === undefined ? {} : { resources: Object.freeze(Array.from(definition.resources, defineResource)) }),
         ...(definition.dependsOn === undefined ? {} : { dependsOn: Object.freeze([...definition.dependsOn]) }),

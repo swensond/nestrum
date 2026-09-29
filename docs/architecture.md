@@ -121,9 +121,11 @@ Each operation binds trusted request subject/environment to its read/create/upda
 
 ## Authentication
 
-`@nestrum/auth` owns the Better Auth Prisma 8 adapter and protected `User`, `Session`, `Account`, and `Verification` contracts. Apps select an auth database using `auth.database` and extend sanctioned fields through `auth.extend`, for example an optional user timezone. The core user stays minimal and authentication-oriented; domain data normally belongs in a separate one-to-one profile.
+`@nestrum/auth` owns the Better Auth 1.7.6 Prisma 8 adapter and protected `User`, `Session`, `Account`, and `Verification` contracts. `defineAuth` selects one configured database and registers the explicit `nestrum.auth` app, whose inline provider-aware fragment is assembled with app-owned fragments. Auth identities cannot be ordinary resources. The core user stays minimal and authentication-oriented; domain data normally belongs in a separate one-to-one profile.
 
-Register, login, logout, and session retrieval are MVP features. A SubjectFactory maps Better Auth sessions into ABAC subjects.
+Only sanctioned `AuthField` extensions are accepted, and core fields cannot be overwritten. The adapter uses Better Auth's `createAdapterFactory`, translates predicates into QuerySpecs, supports selected fields/paging/counts, and rejects unscoped mutations and unsupported operators. It declares sequential transaction behavior because client ownership remains later work.
+
+Register, login, logout, and session retrieval are MVP features below `/api/auth`. Foreign origins are rejected. A `SubjectFactory` maps a validated live Better Auth session into an ABAC subject, with anonymous fallback for absent or expired sessions. Explicit runtime subject resolvers take precedence.
 
 ## Admin and extensions
 

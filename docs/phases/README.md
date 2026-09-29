@@ -1,6 +1,6 @@
 # Implementation phases
 
-Phases 0–9 are complete; Phases 10–16 are not started. Each task should introduce one primary abstraction or integrate two existing abstractions, and leave the repository green.
+Phases 0–10 are complete; Phases 11–16 are not started. Each task should introduce one primary abstraction or integrate two existing abstractions, and leave the repository green.
 
 | Phase | Goal | Packages | Status |
 | --- | --- | --- | --- |
@@ -14,7 +14,7 @@ Phases 0–9 are complete; Phases 10–16 are not started. Each task should intr
 | [7 — ABAC Engine](phase-07-abac.md) | Implement default-deny resource/action authorization with database collection scopes. | @nestrum/core, @nestrum/prisma | Complete |
 | [8 — Hono and InferDI Runtime Integration](phase-08-hono-runtime.md) | Create the request-scoped HTTP runtime before authentication. | @nestrum/hono | Complete |
 | [9 — Opt-In Public Resource API and OpenAPI](phase-09-public-api.md) | Generate public CRUD and OpenAPI only for explicitly enabled resource operations. | @nestrum/hono | Complete |
-| [10 — Framework-Owned Better Auth](phase-10-auth.md) | Make Better Auth a built-in subsystem with owned Prisma 8 contracts and adapter. | @nestrum/auth | Not Started |
+| [10 — Framework-Owned Better Auth](phase-10-auth.md) | Make Better Auth a built-in subsystem with owned Prisma 8 contracts and adapter. | @nestrum/auth | Complete |
 | [11 — Admin Backend Boundary](phase-11-admin-backend.md) | Create the private admin API independently of public API exposure. | @nestrum/admin | Not Started |
 | [12 — Prebuilt Svelte Admin Shell](phase-12-admin-shell.md) | Build a prebuilt metadata-driven Svelte 5/SvelteKit admin shell. | @nestrum/admin-svelte | Not Started |
 | [13 — Generic Svelte Admin CRUD](phase-13-admin-crud.md) | Deliver usable generic list/create/edit/delete without per-resource Svelte code. | @nestrum/admin-svelte | Not Started |

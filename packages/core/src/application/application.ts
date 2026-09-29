@@ -1,4 +1,5 @@
 import type { ResourceModel } from '#core/resource/resource.types';
+import type { Authentication, AuthenticationDefinition } from '#core/auth/auth.types';
 import { AuthorizationEngine } from '#core/authorization/authorization';
 import { PolicyError } from '#core/authorization/authorization.errors';
 import { ResourceRegistry } from '#core/resource/resource-registry';
@@ -9,6 +10,8 @@ import { AppError, AppLifecycleError } from './application.errors.js';
 import type { AppContext, AppDefinition, AppHookName, ApplicationConfig, ApplicationState } from './application.types.js';
 
 export class Application {
+    private authentication: Authentication | undefined;
+    private readonly authDefinition: AuthenticationDefinition | undefined;
     readonly apps: AppRegistry;
     readonly databases: DatabaseRegistry;
     readonly resources: ResourceRegistry;
@@ -20,7 +23,12 @@ export class Application {
 
     constructor(config: ApplicationConfig) {
         this.databases = new DatabaseRegistry(config.databases);
-        this.apps = new AppRegistry(config.apps);
+        this.authDefinition = config.auth;
+        if (config.auth && (config.auth.kind !== 'better-auth' || !this.databases.has(config.auth.database) || typeof config.auth.createApp !== 'function' ||
+            typeof config.auth.initialize !== 'function' || !Array.isArray(config.auth.protectedModels))) {
+            throw new AppError('AUTH_CONFIG_INVALID', 'Authentication requires a Nestrum Better Auth definition and a configured database.');
+        }
+        this.apps = new AppRegistry(config.auth ? [config.auth.createApp(this.databases.get(config.auth.database).provider), ...config.apps] : config.apps);
         if (config.resources !== undefined && !Array.isArray(config.resources)) {
             throw new ResourceError('RESOURCE_CONFIG_INVALID', 'Application resources must be an array.');
         }
@@ -29,7 +37,11 @@ export class Application {
         }
         if (config.policies !== undefined && !Array.isArray(config.policies)) { throw new PolicyError('POLICY_INVALID', 'Application policies must be an array.'); }
         this.authorization = new AuthorizationEngine([...(config.policies ?? []), ...this.apps.all().flatMap((app) => app.policies ?? [])]);
-        this.resources = new ResourceRegistry([...(config.resources ?? []), ...this.apps.all().flatMap((app) => app.resources ?? [])], this.databases, this.authorization);
+        const definitions = [...(config.resources ?? []), ...this.apps.all().flatMap((app) => app.resources ?? [])];
+        if (definitions.some((definition) => config.auth?.protectedModels.includes(definition.identity))) {
+            throw new AppError('AUTH_MODEL_PROTECTED', 'Authentication models cannot be registered as ordinary resources.');
+        }
+        this.resources = new ResourceRegistry(definitions, this.databases, this.authorization);
         this.resourceModels = Array.isArray(config.resourceModels) ? Object.freeze([...config.resourceModels]) : config.resourceModels;
         this.context = Object.freeze({ application: this, apps: this.apps, databases: this.databases, resources: this.resources, authorization: this.authorization });
     }
@@ -37,6 +49,8 @@ export class Application {
     get state(): ApplicationState {
         return this.currentState;
     }
+
+    get auth(): Authentication | undefined { return this.authentication; }
 
     async start(): Promise<void> {
         if (this.currentState === 'ready') {
@@ -61,6 +75,9 @@ export class Application {
                 models = this.resourceModels ?? [];
             }
             this.resources.initialize(models);
+            if (this.authDefinition) {
+                this.authentication = await this.authDefinition.initialize(this);
+            }
 
             for (const app of this.apps.all()) {
                 this.startedApps.push(app);

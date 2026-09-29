@@ -1,0 +1,14 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "rootDir": "src",
+        "skipLibCheck": true,
+        "outDir": "dist",
+        "customConditions": ["nestrum-source"],
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true,
+        "lib": ["ES2022", "DOM", "ESNext.Disposable"]
+    },
+    "include": ["src/**/*.ts"]
+}

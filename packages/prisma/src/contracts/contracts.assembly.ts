@@ -40,6 +40,12 @@ export async function assemblePrismaContracts(application: ContractApplication, 
     const owners = new Map<string, PrismaFragment>();
 
     for (const app of application.apps.all()) {
+        for (const [database, content] of Object.entries(app.prismaSource ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
+            if (!application.databases.has(database)) { throw new PrismaContractError('PRISMA_DATABASE_UNKNOWN', `App "${app.name}" contributes inline fragments to an unregistered database.`); }
+            const group = fragments.get(database) ?? [];
+            group.push(Object.freeze({ app: app.name, path: `${app.name}:inline:${database}`, content }));
+            fragments.set(database, group);
+        }
         for (const database of Object.keys(app.prisma ?? {}).sort()) {
             if (!application.databases.has(database)) {
                 throw new PrismaContractError('PRISMA_DATABASE_UNKNOWN', `App "${app.name}" contributes Prisma fragments to unregistered database "${database}".`);

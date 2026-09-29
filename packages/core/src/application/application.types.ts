@@ -7,6 +7,7 @@ import type { PolicyDefinition } from '#core/authorization/authorization.types';
 
 import type { ResourceDefinition, ResourceModel } from '#core/resource/resource.types';
 import type { ResourceRegistry } from '#core/resource/resource-registry';
+import type { AuthenticationDefinition } from '#core/auth/auth.types';
 
 export type AppContext = {
     readonly application: Application;
@@ -25,6 +26,7 @@ export type AppDefinition = {
     readonly resources?: readonly ResourceDefinition[];
     readonly policies?: readonly PolicyDefinition[];
     readonly prisma?: Readonly<Record<string, readonly string[]>>;
+    readonly prismaSource?: Readonly<Record<string, string>>;
     readonly configure?: AppHook;
     readonly ready?: AppHook;
     readonly shutdown?: AppHook;
@@ -33,6 +35,7 @@ export type AppDefinition = {
 export type ApplicationConfig = {
     readonly apps: readonly AppDefinition[];
     readonly databases: DatabaseConfig;
+    readonly auth?: AuthenticationDefinition;
     readonly resources?: readonly ResourceDefinition[];
     readonly policies?: readonly PolicyDefinition[];
     readonly resourceModels?: readonly ResourceModel[] | ((application: Application) => readonly ResourceModel[] | Promise<readonly ResourceModel[]>);

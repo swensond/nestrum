@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -11,7 +11,7 @@ Make Better Auth a built-in subsystem with owned Prisma 8 contracts and adapter.
 ## Scope
 
 - Contribute protected User, Session, Account, and Verification fragments.
-- Implement a Nestrum-owned Better Auth Prisma 8 adapter.
+- Implement a Nestrum-owned Better Auth Prisma 8 adapter over Prisma 8 QueryBackend collections.
 - Select auth storage through auth.database.
 - Permit sanctioned user extension fields while protecting minimal core auth models.
 - Provide register, login, logout, session retrieval, and SubjectFactory session-to-ABAC mapping.
@@ -22,32 +22,59 @@ Replaceable auth providers, application profile data in core auth user, and admi
 
 ## Architecture Decisions
 
-Keep domain/profile data separate from the authentication-oriented user. This phase may be split into contracts/adapter, session routes, and SubjectFactory sessions, each leaving the repository green.
+Keep domain/profile data separate from the authentication-oriented user. Better Auth remains a framework-owned subsystem and is configured through defineAuth. The auth app contributes inline per-database Prisma contracts, while application-owned contract files remain app-owned. Auth records are accessed only through the owned adapter and cannot be registered as ordinary resources.
+
+Better Auth 1.7.6's createAdapterFactory contract is the integration boundary. The adapter advertises dates/booleans but no JSON/arrays/numeric IDs, maps Better Auth where operators into provider-neutral QuerySpecs, projects explicit selections, bounds pagination, and rejects unscoped mutations. Prisma 8 transactions are not assumed; the adapter declares sequential operation semantics. Auth IDs are generated as strings.
+
+The framework selects one named database and checks the binding identity at bootstrap. Its protected model identities are <database>.User, Session, Account, and Verification. Domain profile fields do not get added to User automatically. User extensions use Nestrum AuthField descriptors and are translated to Better Auth additionalFields; reserved core names, malformed descriptors, and required server-owned fields without defaults fail before startup.
+
+Session subject resolution is trusted runtime input: absent/expired/invalid sessions become { anonymous: true }, valid sessions map to { id, anonymous: false } by default, and a SubjectMapper can add domain attributes. Header identity is never inferred. Auth endpoints are mounted under /api/auth and reject foreign Origin headers; the selected base origin is allowed by default.
 
 ## Implementation
 
-Not implemented. The scope and public API below are planned targets, not available behavior.
+@nestrum/auth now exports defineAuth, field, SubjectFactory, createPrismaAuthAdapter, authContract, and the auth types. ApplicationConfig accepts auth: AuthenticationDefinition; application.auth is initialized between model registration and app hooks. @nestrum/hono uses application.auth.resolveSubject unless a runtime resolveSubject override is provided, then mounts Better Auth GET/POST routes under /api/auth.
 
 ## Public API
 
-Planned: auth: { database: 'identity', extend: { user: { timezone: field.string().optional() } } }; SubjectFactory.
+```ts
+import { defineAuth, field } from '@nestrum/auth';
+import { createHonoRuntime } from '@nestrum/hono';
+
+const auth = defineAuth({
+    database: 'identity',
+    baseURL: 'https://app.example.com',
+    secret: process.env.BETTER_AUTH_SECRET!,
+    extend: { user: { timezone: field.string().optional().input() } },
+    prisma: ({ database }) => configuredPrismaAuthCollections(database),
+    subjectFactory: ({ user }) => ({ id: user.id, timezone: user.timezone })
+});
+
+const runtime = createHonoRuntime({ application: defineApplication({ databases, apps, auth }) });
+```
+
+Better Auth's standard email/password endpoints are available below `/api/auth`: sign-up/email, sign-in/email, sign-out, and get-session. The framework validates and delegates the endpoint semantics to Better Auth. A trusted `prisma` factory supplies the four Prisma 8 collections and, for MongoDB, per-model count callbacks. No direct Prisma CLI or client ownership is introduced in this phase.
 
 ## Files / Packages Changed
 
-None yet. Planned scope: @nestrum/auth. Introduce only packages needed by this phase.
+- @nestrum/auth: contracts, AuthField descriptors, Better Auth 1.7.6 adapter, defineAuth, SubjectFactory, and tests.
+- @nestrum/core: auth configuration/definition, protected application registration, app auth initialization, and exported session types.
+- @nestrum/prisma: inline Prisma source assembly for framework-owned fragments.
+- @nestrum/hono: application session subject fallback and /api/auth route mounting.
+- workspace package/lockfile and Vitest workspace.
+- Architecture, MVP, README, and this phase documentation.
 
 ## Tests
 
-Adapter operations, selected database isolation, protected contract conflicts, extension validation, register/login/logout/session flows, and subject mapping.
+Adapter operations, provider contract generation, selected database isolation, protected contract conflicts, extension validation, selection/pagination and unscoped mutation guards, register/login/logout/session flows, origin/cookie handling, expired sessions, forged identity rejection, and SubjectFactory mapping.
 
 ## Acceptance Criteria
 
-- [ ] Auth works on the selected named database
-- [ ] Owned Prisma 8 adapter works
-- [ ] Owned auth models are protected
-- [ ] Sanctioned user extension works
-- [ ] Session maps to ABAC subject
-- [ ] Documentation is updated
+- [x] Auth works on the selected named database
+- [x] Owned Prisma 8 adapter works
+- [x] Owned auth models are protected
+- [x] Sanctioned user extension works
+- [x] Session maps to ABAC subject
+- [x] Documentation is updated
 
 ## Validation
 
@@ -58,16 +85,24 @@ pnpm check
 pnpm build
 ```
 
-Not run: phase not started.
+Validated on 2026-09-29:
+
+- `pnpm install`: passed with Better Auth 1.7.6 and the updated workspace lockfile.
+- `pnpm check`: passed, executing 270 tests in 13 files, strict typecheck, and all five package builds.
+- Auth integration tests passed registration/password hashing, named database selection, protected contracts, extensions, origin checks, cookies, login/logout, session retrieval, expired/forged sessions, adapter selection/paging/count/mutations, and SubjectFactory mapping.
+- Compiled ESM and TypeScript consumer checks passed for auth exports, core Authentication types, and Hono session resolution.
+- Documentation QA and `git diff --check` passed.
 
 ## Known Limitations
 
-All capabilities in this phase remain unimplemented. Verify dependency versions and provider/runtime constraints before implementation.
+This phase uses Better Auth's email/password and session APIs but does not add social providers, plugins, email verification delivery, MFA, or admin. The adapter intentionally declares sequential transaction behavior because application-owned Prisma 8 collections do not yet expose a framework transaction lifecycle. Atomic consume/increment adapter methods are not required for the MVP auth flows.
+
+Auth contract emission is inline and provider-aware, but contract generation still follows the existing explicit application-owned workflow. Auth does not create or close database clients. Mongo live integration and SQL live integration remain Phase 16. Domain profile storage is intentionally separate.
 
 ## Follow-Ups
 
-Complete this bounded phase before proceeding to the next. Capture newly deferred features in [post-MVP](../post-mvp.md).
+Phase 11 can consume application.auth and SubjectFactory for admin access. Phase 15 can move auth route registration into the final lifecycle barrier and add client/disconnect ownership. Phase 16 should run live selected-database SQL and Mongo auth flows. Social auth, verification delivery, MFA, account linking, and richer auth plugins remain deferred.
 
 ## Completion Notes
 
-No completion claims. Update this record with actual implementation, test evidence, deviations, and limitations when work begins.
+Phase 10 is complete. Framework-owned Better Auth contracts, adapter, sessions, and subject mapping compose with the selected named database, application lifecycle, Hono request context, and ABAC. Required validation and compiled consumers pass. Client ownership, live database proof, richer providers/plugins, and admin integration remain explicitly scoped to later phases.

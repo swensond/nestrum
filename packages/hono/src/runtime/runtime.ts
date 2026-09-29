@@ -47,7 +47,7 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
             try {
                 const request = context.req.raw;
                 const bindings = context.env ?? {};
-                const subject = attributes(options.resolveSubject ? await options.resolveSubject(request, bindings) : { anonymous: true });
+                const subject = attributes(options.resolveSubject ? await options.resolveSubject(request, bindings) : await options.application.auth?.resolveSubject(request) ?? { anonymous: true });
                 const extra = attributes(options.resolveEnvironment ? await options.resolveEnvironment(request, bindings) : {});
                 const environment = Object.freeze({ ...extra, method: request.method, path: new URL(request.url).pathname });
                 const application = options.application;
@@ -88,6 +88,13 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
         this.currentState = 'starting';
         try {
             await this.options.application.start();
+            const auth = this.options.application.auth;
+            if (auth) {
+                if (this.hono.routes.some((route) => route.method !== 'ALL' && (route.path.startsWith(auth.basePath) || route.path.startsWith('/api/:') || route.path === '/api/*'))) {
+                    throw new AppError('HTTP_AUTH_ROUTE_CONFLICT', 'Authentication routes overlap an existing route.');
+                }
+                this.hono.on(['GET', 'POST'], `${auth.basePath}/*`, (context) => auth.handle(context.req.raw));
+            }
             this.publicDocument = registerPublicApi(this.hono, this.options.application.resources.all(), this.options.publicApi);
             this.currentState = 'ready';
         } catch (error) {
