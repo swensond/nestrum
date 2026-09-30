@@ -6,6 +6,8 @@ import { CliError } from './cli.errors.js';
 import { loadCliConfig } from './config.js';
 import { runDatabaseCommand } from './database-command.js';
 import { parseRuntimeArguments, RUNTIME_COMMANDS, RUNTIME_HELP } from './runtime-arguments.js';
+import { runServe } from './serve.js';
+import { installShutdownSignals } from './signals.js';
 
 const args = process.argv.slice(2);
 try {
@@ -20,6 +22,16 @@ try {
             process.stdout.write(
                 `Built ${manifest.apps.length} app(s), ${manifest.resources} resource(s), ${manifest.databases.length} database(s) into ${directory}\n`,
             );
+        } else if (parsed.command === 'serve') {
+            const server = await runServe({
+                ...(parsed.config === undefined ? {} : { config: parsed.config }),
+                flags: {
+                    ...(parsed.host === undefined ? {} : { host: parsed.host }),
+                    ...(parsed.port === undefined ? {} : { port: parsed.port }),
+                },
+            });
+            process.stdout.write(`Nestrum listening on http://${server.host}:${server.port}\n`);
+            installShutdownSignals(server);
         }
     } else {
         const parsed = parseCliArguments(args);

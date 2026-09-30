@@ -68,7 +68,7 @@ PM2.0 documentation is complete. PM2.1–PM2.5 are Not Started; admin 2FA is not
 
 The [self-serving runtime initiative](post-mvp/runtime/README.md) is the first planned post-MVP initiative. Users define `nestrum.config.ts` and explicit apps; Nestrum owns development, production builds, HTTP startup, admin serving, and shutdown through `nestrum dev`, `nestrum build`, and `nestrum serve`.
 
-PM1.0 documentation and PM1.1 (`@nestrum/runtime` adapter contracts), PM1.2 (`@nestrum/runtime-node`), and PM1.3 (`nestrum build`) are complete. PM1.4–PM1.6 are Not Started; the commands and proposed configuration APIs are not shipped by this plan. The remaining MVP atomic object-policy write gate stays open independently.
+PM1.0 documentation and PM1.1 (`@nestrum/runtime` adapter contracts), PM1.2 (`@nestrum/runtime-node`), PM1.3 (`nestrum build`), and PM1.4 (`nestrum serve`, without database-backed auth/admin verification) are complete. PM1.5–PM1.6 are Not Started; the commands and proposed configuration APIs are not shipped by this plan. The remaining MVP atomic object-policy write gate stays open independently.
 
 | Phase | Goal | Status |
 | --- | --- | --- |
@@ -76,7 +76,7 @@ PM1.0 documentation and PM1.1 (`@nestrum/runtime` adapter contracts), PM1.2 (`@n
 | [PM1.1](post-mvp/runtime/phase-01-runtime-adapter.md) | Portable `@nestrum/runtime` adapter contracts | Complete |
 | [PM1.2](post-mvp/runtime/phase-02-node-runtime.md) | Node HTTP adapter in `@nestrum/runtime-node` | Complete |
 | [PM1.3](post-mvp/runtime/phase-03-build.md) | Validated production build and manifest | Complete |
-| [PM1.4](post-mvp/runtime/phase-04-serve.md) | Production startup from a prior build | Not Started |
+| [PM1.4](post-mvp/runtime/phase-04-serve.md) | Production startup from a prior build | Complete |
 | [PM1.5](post-mvp/runtime/phase-05-dev.md) | Generation, watching, restart, and admin development | Not Started |
 | [PM1.6](post-mvp/runtime/phase-06-hardening.md) | Shutdown, health/readiness, and lifecycle integration | Not Started |
 
