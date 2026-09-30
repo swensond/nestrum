@@ -9,7 +9,9 @@ export type CliConfig = {
     readonly authoring?: GeneratePrismaOptions['authoring'];
     readonly extensions?: GeneratePrismaOptions['extensions'];
     readonly timeoutMs?: number;
+    readonly server?: ServerConfig;
 };
+export type ServerConfig = { readonly host?: string; readonly port?: number };
 export type DatabaseCommand = 'generate' | 'migrate' | 'status';
 export type CliArguments = {
     readonly command: DatabaseCommand;

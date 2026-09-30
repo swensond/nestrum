@@ -22,6 +22,11 @@
     },
     "dependencies": {
         "@nestrum/core": "workspace:*",
-        "@nestrum/prisma": "workspace:*"
+        "@nestrum/hono": "workspace:*",
+        "@nestrum/prisma": "workspace:*",
+        "@nestrum/runtime": "workspace:*",
+        "@nestrum/runtime-node": "workspace:*",
+        "@nestrum/zod": "workspace:*",
+        "esbuild": "0.28.2"
     }
 }

@@ -307,9 +307,24 @@ importers:
       '@nestrum/core':
         specifier: workspace:*
         version: link:../core
+      '@nestrum/hono':
+        specifier: workspace:*
+        version: link:../hono
       '@nestrum/prisma':
         specifier: workspace:*
         version: link:../prisma
+      '@nestrum/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@nestrum/runtime-node':
+        specifier: workspace:*
+        version: link:../runtime-node
+      '@nestrum/zod':
+        specifier: workspace:*
+        version: link:../zod
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
 
   packages/core:
     dependencies:

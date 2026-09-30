@@ -1,14 +1,26 @@
 #!/usr/bin/env node
 import { AppError } from '@nestrum/core';
 import { CLI_HELP, parseCliArguments } from './arguments.js';
+import { runBuild } from './build.js';
 import { CliError } from './cli.errors.js';
 import { loadCliConfig } from './config.js';
 import { runDatabaseCommand } from './database-command.js';
+import { parseRuntimeArguments, RUNTIME_COMMANDS, RUNTIME_HELP } from './runtime-arguments.js';
 
 const args = process.argv.slice(2);
 try {
     if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-        process.stdout.write(`${CLI_HELP}\n`);
+        process.stdout.write(`${RUNTIME_HELP}\n\n${CLI_HELP}\n`);
+    } else if (RUNTIME_COMMANDS.includes(args[0] ?? '')) {
+        const parsed = parseRuntimeArguments(args);
+        if (parsed.command === 'build') {
+            const { manifest, directory } = await runBuild({
+                ...(parsed.config === undefined ? {} : { config: parsed.config }),
+            });
+            process.stdout.write(
+                `Built ${manifest.apps.length} app(s), ${manifest.resources} resource(s), ${manifest.databases.length} database(s) into ${directory}\n`,
+            );
+        }
     } else {
         const parsed = parseCliArguments(args);
         const result = await runDatabaseCommand(await loadCliConfig(parsed.config), parsed);

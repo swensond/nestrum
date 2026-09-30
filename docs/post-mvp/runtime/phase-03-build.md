@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -29,17 +29,32 @@ Separate build-time validation from live database connection and runtime hook ex
 
 ## Implementation
 
-Planned pipeline: config → application/app graph validation → contracts → Prisma artifacts → metadata → Zod → resource/manager/policy/auth/admin validation → server build → admin build → manifest publication.
+`nestrum build [--config <path>]` (`packages/cli/src/build.ts`, `manifest.ts`, `runtime-arguments.ts`):
 
-Define the initial versioned manifest with runtime adapter, entry module, admin assets, database/app identities, artifact locations, framework/build compatibility data, and timestamp as needed. Required artifacts must be complete before a manifest is published; failed builds must not appear usable.
+1. **Discover configuration.** A single `nestrum.config.{ts,mts,mjs,js}` in the working directory, or `--config`. Multiple candidates without `--config` fail.
+2. **Reset.** The previous manifest and `server/`, `generated/`, `contracts/` are removed first; the manifest is written last, so a failed build never leaves a usable build.
+3. **Compile.** esbuild bundles the configuration and all relative application sources into `.nestrum/server/index.mjs` (ESM, Node 22 target, no source maps). Packages stay external and resolve from the project's `node_modules`, so serving needs no TypeScript transpilation.
+4. **Load and validate.** The bundle is imported and passed through `defineCliConfig`. The `Application` constructor already validates the app dependency graph, databases, Better Auth, admin, policies, and resource-to-database references; failures become `BUILD_VALIDATION_FAILED`.
+5. **Contracts and metadata.** For each database, `generatePrismaContracts` assembles fragments and emits the contract into `.nestrum/contracts/`; `compileModelMetadata` writes `.nestrum/generated/models/<database>.json`.
+6. **Resource validation.** Zod schema families are generated from the compiled metadata and passed to the resource registry, so a resource naming a missing model fails (`RESOURCE_MODEL_MISSING`) without any live service.
+7. **Manifest.** `.nestrum/manifest.json` (version 1) records the Nestrum version, timestamp, runtime adapter package, entry path with SHA-256, app names, resource count, auth flag, admin shell package, per-database provider/contract/metadata paths, and configured server defaults.
+
+Configuration reconciliation: `defineConfig` is exported from `@nestrum/cli` (core cannot depend on the CLI) and is an alias of `defineCliConfig`, which gained an optional validated `server: { host?, port? }`. Existing `nestrum db` commands and `defineCliConfig` are unchanged. `Application` gained the read-only `authConfigured`/`adminConfigured` getters so build tooling can classify the application before startup. `.nestrum/` was already ignored by `.gitignore`.
+
+Decisions:
+
+- **Connections.** Connection strings remain in the application definition; the manifest and diagnostics contain none. Applications should read secrets from the environment.
+- **Zod.** Runtime schema families derived from metadata remain the baseline; static Zod source files are still deferred, so only metadata is emitted.
+- **Admin.** The prebuilt `@nestrum/admin-ui` shell is referenced by package name in the manifest and resolved at serve time rather than copied into `.nestrum/admin/`: its server output imports SvelteKit packages that must resolve from the admin-ui package. Rebuilding the shell with application-supplied Svelte component registries is not part of this phase.
+- **Migrations.** Nothing connects to a database or migrates.
 
 ## Public API
 
-Planned `nestrum build`, application configuration contract, `.nestrum/` output, and production manifest schema. Internal artifact layout remains framework-owned. Document supported options and defaults when implemented.
+`nestrum build [--config <path>]`; `defineConfig`, `discoverConfig`, `runBuild`, `bundleConfig`, `readManifest`, and the `BuildManifest` type from `@nestrum/cli`. The `.nestrum/` layout beyond `manifest.json` is framework-owned.
 
 ## Files / Packages Changed
 
-Planned: `packages/cli` build/config integration, required core/Prisma/Zod/admin-ui build seams, ignore rules, example configuration/scripts as appropriate, [architecture](../../architecture.md), and runtime phase/index documentation.
+`packages/cli` (build, manifest, runtime arguments, config), `packages/core` (`authConfigured`/`adminConfigured`), `.gitignore`, `pnpm-lock.yaml`, [architecture](../../architecture.md), and runtime phase/index documentation.
 
 ## Tests
 
@@ -47,17 +62,17 @@ Build a valid example and verify all declared artifacts. Reject missing resource
 
 ## Acceptance Criteria
 
-- [ ] Valid application builds.
-- [ ] Invalid resource/model fails build.
-- [ ] Invalid app dependency graph fails build.
-- [ ] Admin builds.
-- [ ] Manifest is written with required compatibility/artifact data.
-- [ ] Output is sufficient for production serving.
-- [ ] Documentation describes the implemented pipeline/configuration.
+- [x] Valid application builds.
+- [x] Invalid resource/model fails build.
+- [x] Invalid app dependency graph fails build.
+- [x] Admin builds.
+- [x] Manifest is written with required compatibility/artifact data.
+- [x] Output is sufficient for production serving.
+- [x] Documentation describes the implemented pipeline/configuration.
 
 ## Validation
 
-Run targeted build/manifest tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, and `pnpm check`. Include applicable native Svelte checks and compiled artifact verification. Record output/relocation limitations and `git diff --check` results.
+Validated: five build tests (valid build with artifacts, missing model, invalid app graph, compile errors/missing config, tampered/incompatible build) pass; `tsc --noEmit` clean; `pnpm -r build` succeeds; the compiled `node packages/cli/dist/bin.js build` produced a manifest in a scratch project. Relocation limitation: the bundle rewrites module-relative paths (`import.meta.url`), and the project must keep `node_modules` reachable from `.nestrum/server/`.
 
 ## Known Limitations
 
@@ -69,4 +84,4 @@ Exact output layout, static versus runtime Zod representation, manifest version 
 
 ## Completion Notes
 
-Pending implementation and validation.
+PM1.3 builds and validates but does not serve. Applications still construct Prisma clients and `resourceModels` themselves (see [PM1.4](phase-04-serve.md)).
