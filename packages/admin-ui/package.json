@@ -13,6 +13,41 @@
             "nestrum-source": "./src/node/index.ts",
             "types": "./dist/node/index.d.ts",
             "import": "./dist/node/index.js"
+        },
+        "./components/ResourceList": {
+            "nestrum-source": "./src/lib/ResourceList.svelte",
+            "types": "./dist/lib/ResourceList.svelte",
+            "import": "./dist/lib/ResourceList.svelte"
+        },
+        "./components/ResourceTable": {
+            "nestrum-source": "./src/lib/ResourceTable.svelte",
+            "types": "./dist/lib/ResourceTable.svelte",
+            "import": "./dist/lib/ResourceTable.svelte"
+        },
+        "./components/ResourceForm": {
+            "nestrum-source": "./src/lib/ResourceForm.svelte",
+            "types": "./dist/lib/ResourceForm.svelte",
+            "import": "./dist/lib/ResourceForm.svelte"
+        },
+        "./components/ResourceCreate": {
+            "nestrum-source": "./src/lib/ResourceCreate.svelte",
+            "types": "./dist/lib/ResourceCreate.svelte",
+            "import": "./dist/lib/ResourceCreate.svelte"
+        },
+        "./components/ResourceEdit": {
+            "nestrum-source": "./src/lib/ResourceEdit.svelte",
+            "types": "./dist/lib/ResourceEdit.svelte",
+            "import": "./dist/lib/ResourceEdit.svelte"
+        },
+        "./components/ResourceDelete": {
+            "nestrum-source": "./src/lib/ResourceDelete.svelte",
+            "types": "./dist/lib/ResourceDelete.svelte",
+            "import": "./dist/lib/ResourceDelete.svelte"
+        },
+        "./components/FieldRenderer": {
+            "nestrum-source": "./src/lib/FieldRenderer.svelte",
+            "types": "./dist/lib/FieldRenderer.svelte",
+            "import": "./dist/lib/FieldRenderer.svelte"
         }
     },
     "files": [

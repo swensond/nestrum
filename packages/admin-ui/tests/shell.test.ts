@@ -1,7 +1,6 @@
 import { render } from 'svelte/server';
 import { describe, expect, it, vi } from 'vitest';
 import { AdminMetadataClient, AdminMetadataError, loadAdminState } from '../src/lib/metadata.js';
-import ResourceWorkspace from '../src/lib/ResourceWorkspace.svelte';
 import { resourceHref, selectWorkspace } from '../src/lib/routes.js';
 import { resource } from './fixtures.js';
 import ShellFixture from './ShellFixture.svelte';
@@ -116,9 +115,6 @@ describe('Metadata-driven administration', () => {
         for (const view of ['list', 'new', 'detail'] as const) {
             const workspace = selectWorkspace(state, 'projects', view, view === 'detail' ? 'record-one' : undefined);
             expect(workspace?.resource.identity).toBe('default.Project');
-            const output = await render(ResourceWorkspace, { props: { workspace: workspace! } });
-            expect(output.body).toContain('Project');
-            expect(output.body).not.toContain('<form');
         }
         expect(selectWorkspace(state, 'missing', 'list')).toBeNull();
         expect(selectWorkspace({ status: 'sign-in', message: 'Sign in' }, 'projects', 'new')).toBeNull();

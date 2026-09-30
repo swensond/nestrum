@@ -29,11 +29,11 @@ TypeScript 7.0.2 compiles package exports and powers `svelte-check-native` 1.8.0
 
 ## Implementation
 
-The root layout loads validated metadata for each route navigation and invalidates it after session changes. Navigation, labels, field descriptions, create links, and route availability derive from that metadata. The shell provides overview, generic resource, new-record, and record-detail workspaces. SvelteKit canonicalizes the overview URL to `/admin/`.
+At Phase 12 completion, the root layout loads validated metadata for each route navigation and invalidates it after session changes. Navigation, labels, field descriptions, create links, and route availability derive from that metadata. The shell provides overview, generic resource, new-record, and record-detail workspaces. SvelteKit canonicalizes the overview URL to `/admin/`.
 
 Loading hides the previous navigation and protected content. Missing or expired sessions show an email/password sign-in form; denied access and unavailable metadata show safe messages with retry. Sign-in and sign-out use the framework-owned `/api/auth` endpoints and refresh the server layout. Unknown resources and unavailable operations return a generic 404 after successful metadata discovery. Metadata capabilities guide presentation; backend authorization remains authoritative.
 
-The metadata client validates response shape, field kinds, unique identities/slugs, and safe route slugs with Zod. It does not cache across requests or sessions. Response errors, malformed JSON, and network failures do not expose backend details. Generic workspaces display metadata only and issue no record CRUD requests.
+The metadata client validates response shape, field kinds, unique identities/slugs, and safe route slugs with Zod. It does not cache across requests or sessions. Response errors, malformed JSON, and network failures do not expose backend details. The original generic workspaces displayed metadata only and issued no record CRUD requests. Phase 13 now replaces them with CRUD components and actions.
 
 Hono reserves `/admin` and `/admin/*` when `adminUi` is configured, requires a private admin backend, and rejects overlapping application routes. The public `runtime.fetch` readiness guard now rejects traffic before Hono routing, preventing an early host request from freezing its matcher before framework routes are registered. Applications must still register their manual routes before startup and use `runtime.fetch` as the host entry point.
 
@@ -67,7 +67,7 @@ The portable root export provides `AdminMetadataClient`, `AdminMetadataError`, `
 
 Seventeen shell tests cover one/two-resource navigation, dynamic metadata, request credentials and caching, malformed/duplicate/unsafe metadata, session/error/loading boundaries, label escaping, generic routes, and capability presentation.
 
-The production build verification mounts the actual prebuilt server through Hono. It checks early-request readiness, all four routes, dynamic resource visibility, unavailable resources, route-data caching, missing/expired/forged sessions, denied access, forwarded foreign origins, concurrent session isolation, static JS/HEAD/cache behavior, traversal rejection, and absence of CRUD calls. It also rejects exact, wildcard, and catch-all mount conflicts. A runtime unit test rejects a shell without a configured private backend.
+The production build verification mounts the actual prebuilt server through Hono. It checks early-request readiness, all four routes, dynamic resource visibility, unavailable resources, route-data caching, missing/expired/forged sessions, denied access, forwarded foreign origins, concurrent session isolation, static JS/HEAD/cache behavior, traversal rejection, and, at Phase 12 completion, absence of CRUD calls. Phase 13 extends the production check to actual CRUD. It also rejects exact, wildcard, and catch-all mount conflicts. A runtime unit test rejects a shell without a configured private backend.
 
 ## Acceptance Criteria
 
@@ -93,7 +93,7 @@ Verified: `pnpm check` passed with 315 tests across 15 files, all seven package 
 
 ## Known Limitations
 
-- Generic routes are metadata workspaces; list/create/edit/delete forms and record operations remain Phase 13.
+- At Phase 12 completion, generic routes were metadata workspaces. Phase 13 now implements list/create/edit/delete forms and record operations.
 - This adapter targets Node and serves prebuilt files from disk. The shell has a fixed `/admin` base; alternate bases and other runtimes are deferred.
 - Login/logout require JavaScript and use the framework-owned email/password flow. Browser automation of the live Better Auth cookie exchange remains an integration follow-up; shell rendering and forwarding use controlled session fixtures here.
 - `vite dev` runs the UI alone. Applications using it must provide a same-origin proxy to their runtime for `/__admin` and `/api/auth`; the production mount handles internal metadata dispatch itself.

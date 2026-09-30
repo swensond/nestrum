@@ -1,4 +1,4 @@
-import { mkdir, readdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
 /** @returns {import('@sveltejs/kit').Adapter} */
@@ -9,9 +9,13 @@ export default function adapter() {
             const output = 'dist';
             builder.rimraf(`${output}/server`);
             builder.rimraf(`${output}/assets`);
+            builder.rimraf(`${output}/lib`);
             builder.writeServer(`${output}/server`);
             builder.writeClient(`${output}/assets`);
-            await mkdir(output, { recursive: true });
+            await mkdir(`${output}/lib`, { recursive: true });
+            for (const component of (await readdir('src/lib')).filter((file) => file.endsWith('.svelte'))) {
+                await copyFile(`src/lib/${component}`, `${output}/lib/${component}`);
+            }
             const assets = await readdir(`${output}/assets`, { recursive: true, withFileTypes: true });
             const files = assets
                 .filter((entry) => entry.isFile() && !entry.name.startsWith('.') && !entry.parentPath.includes('/.'))

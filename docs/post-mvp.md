@@ -23,6 +23,7 @@ These features are outside the frozen MVP unless a small supporting abstraction 
 - Polished visual design, custom pages, dashboards/widgets, and full theme system.
 - Inline related editing, bulk actions, and advanced search.
 - Rich text editors, file uploads, and relation pickers beyond basic needs.
+- Cursor/offset admin pagination and advanced precision/timezone widgets. Phase 13 provides bounded list limits, ordering, UTC instant inputs, and local Temporal inputs.
 
 ## Runtime and API
 
