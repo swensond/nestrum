@@ -5,9 +5,8 @@ import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
-import { totpCode, totpStep } from '@nestrum/auth';
+import { totpCode, totpSecretFromUri, totpStep } from '@nestrum/auth';
 import { runServe } from '@nestrum/cli';
-import postgres from '@nestrum/example-postgres';
 
 const ROOT_DIR = fileURLToPath(new URL('../', import.meta.url));
 const execute = promisify(execFile);
@@ -24,7 +23,6 @@ const freePort = async () => {
 const docker = async (args) =>
     (await execute('docker', [...compose, ...args], { timeout: 90_000, maxBuffer: 1024 * 1024 })).stdout;
 let server;
-let identityClient;
 
 try {
     console.log('Starting dedicated Docker PostgreSQL and MongoDB services.');
@@ -142,20 +140,16 @@ try {
         }),
         200,
     );
-    assert.equal(staff.user.staff, false, 'Public signup cannot grant staff.');
-    // A trusted operator promotes staff directly in the identity database, using the same built contract.
-    identityClient = postgres({
-        contractJson: JSON.parse(await readFile(join(ROOT_DIR, '.nestrum/contracts/identity.json'), 'utf8')),
-        url: connections.identity,
-    });
-    await identityClient.connect();
-    await identityClient.orm.public.User.where({ id: staff.user.id }).updateAndCount({ staff: true });
+    assert.equal(staff.user.staff, undefined, 'Public signup cannot set staff.');
+    assert.equal(staff.user.twoFactorEnabled, false);
+    // A trusted operator lists staff user ids (STAFF_USER_IDS); signup itself grants nothing.
+    example.staffUserIds.add(staff.user.id);
     const signin = await request('/api/auth/sign-in/email', {
         method: 'POST',
         body: credentials('staff@example.test'),
     });
     await json(signin, 200);
-    const cookie = signin.headers
+    let cookie = signin.headers
         .getSetCookie()
         .map((value) => value.split(';')[0])
         .join('; ');
@@ -180,17 +174,6 @@ try {
     const setupRequired = await json(await request('/__admin/resources', { cookie }), 403);
     assert.equal(setupRequired.error.code, 'ADMIN_2FA_REQUIRED');
     assert.equal(setupRequired.error.reason, 'setup-required');
-    const signInAgain = async () => {
-        const response = await request('/api/auth/sign-in/email', {
-            method: 'POST',
-            body: credentials('staff@example.test'),
-        });
-        await json(response, 200);
-        return response.headers
-            .getSetCookie()
-            .map((value) => value.split(';')[0])
-            .join('; ');
-    };
     const navigate = (path, sessionCookie) =>
         fetch(`${host.baseURL}${path}`, {
             redirect: 'manual',
@@ -200,69 +183,76 @@ try {
     assert.equal(setupRedirect.status, 303);
     assert.equal(setupRedirect.headers.get('location'), '/admin/auth/2fa/setup?next=%2Fadmin%2Fprojects');
     assert.equal((await navigate('/admin/auth/2fa/setup', cookie)).status, 200);
+    const cookieFrom = (response) =>
+        response.headers
+            .getSetCookie()
+            .filter((value) => !/=;|Max-Age=0/i.test(value))
+            .map((value) => value.split(';')[0])
+            .join('; ');
+    // Better Auth's twoFactor plugin owns enrollment: enable (password), then verify a TOTP to activate.
+    const preEnrollment = cookie;
     const enrollment = await json(
-        await request('/__admin/auth/2fa/enroll/start', { method: 'POST', cookie, body: {} }),
-        201,
-    );
-    assert.equal(
-        (await request('/__admin/auth/2fa/enroll/confirm', { method: 'POST', cookie, body: { code: '000000' } }))
-            .status,
-        400,
+        await request('/api/auth/two-factor/enable', {
+            method: 'POST',
+            cookie,
+            body: { password: credentials('staff@example.test').password },
+        }),
+        200,
     );
     assert.equal(
         (await request('/__admin/resources', { cookie })).status,
         403,
         'An unconfirmed secret grants nothing.',
     );
-    const confirmed = await json(
-        await request('/__admin/auth/2fa/enroll/confirm', {
-            method: 'POST',
-            cookie,
-            body: { code: totpCode(enrollment.secret, totpStep(Date.now())) },
-        }),
-        200,
+    assert.equal(
+        (await request('/api/auth/two-factor/verify-totp', { method: 'POST', cookie, body: { code: '000000' } }))
+            .status,
+        401,
     );
-    assert.equal(confirmed.recoveryCodes.length, 10);
-    // Assurance belongs to one login session; another session must complete a challenge.
-    const secondCookie = await signInAgain();
-    const challengeRequired = await json(await request('/__admin/resources', { cookie: secondCookie }), 403);
-    assert.equal(challengeRequired.error.reason, 'challenge-required');
-    const challengeRedirect = await navigate('/admin/projects', secondCookie);
-    assert.equal(challengeRedirect.status, 303);
-    assert.equal(challengeRedirect.headers.get('location'), '/admin/auth/2fa?next=%2Fadmin%2Fprojects');
-    assert.equal((await navigate('/admin/auth/2fa', secondCookie)).status, 200);
+    const totpSecret = totpSecretFromUri(enrollment.totpURI);
+    const activated = await request('/api/auth/two-factor/verify-totp', {
+        method: 'POST',
+        cookie,
+        body: { code: totpCode(totpSecret, totpStep(Date.now())) },
+    });
+    await json(activated, 200);
+    cookie = cookieFrom(activated);
+    assert.equal((await request('/__admin/resources', { cookie })).status, 200);
+    // Activation replaced the enrolling session, so the pre-enrollment cookie is dead.
+    assert.equal((await request('/__admin/resources', { cookie: preEnrollment })).status, 401);
+    // Signing in now yields no session until a code is verified.
+    const signInPending = async () => {
+        const response = await request('/api/auth/sign-in/email', {
+            method: 'POST',
+            body: credentials('staff@example.test'),
+        });
+        assert.equal((await json(response, 200)).twoFactorRedirect, true);
+        return cookieFrom(response);
+    };
+    const pending = await signInPending();
+    assert.equal((await request('/__admin/resources', { cookie: pending })).status, 401);
+    const challengeRedirect = await navigate('/admin/projects', pending);
+    assert.equal(challengeRedirect.status, 303, 'A pending sign-in is an unauthenticated browser request.');
+    const backupCodes = enrollment.backupCodes;
+    assert.ok(backupCodes.length > 0);
+    const viaBackup = await request('/api/auth/two-factor/verify-backup-code', {
+        method: 'POST',
+        cookie: pending,
+        body: { code: backupCodes[0] },
+    });
+    await json(viaBackup, 200);
+    assert.equal((await request('/__admin/resources', { cookie: cookieFrom(viaBackup) })).status, 200);
     assert.equal(
         (
-            await request('/__admin/auth/2fa/challenge', {
+            await request('/api/auth/two-factor/verify-backup-code', {
                 method: 'POST',
-                cookie: secondCookie,
-                body: { code: '000000' },
+                cookie: await signInPending(),
+                body: { code: backupCodes[0] },
             })
         ).status,
-        400,
+        401,
+        'A backup code works once.',
     );
-    await json(
-        await request('/__admin/auth/2fa/recovery/verify', {
-            method: 'POST',
-            cookie: secondCookie,
-            body: { code: confirmed.recoveryCodes[0] },
-        }),
-        200,
-    );
-    assert.equal((await request('/__admin/resources', { cookie: secondCookie })).status, 200);
-    const thirdCookie = await signInAgain();
-    assert.equal(
-        (
-            await request('/__admin/auth/2fa/recovery/verify', {
-                method: 'POST',
-                cookie: thirdCookie,
-                body: { code: confirmed.recoveryCodes[0] },
-            })
-        ).status,
-        400,
-        'A recovery code works once.',
-    );
-    assert.equal((await request('/__admin/resources', { cookie: thirdCookie })).status, 403);
     console.log('Real admin 2FA enrollment, challenge, recovery and redirects passed.');
     const metadata = await json(await request('/__admin/resources', { cookie }), 200);
     assert.deepEqual(
@@ -430,12 +420,9 @@ try {
     assert.equal((await request('/api/projects/project-one', { cookie })).status, 404);
     await json(await request('/api/auth/sign-out', { method: 'POST', cookie, body: {} }), 200);
     assert.equal((await request('/__admin/resources', { cookie })).status, 401);
-    assert.equal((await identityClient.orm.public.User.where({ id: staff.user.id }).first()).staff, true);
     console.log(
         'Real auth/session ABAC, SQL/public CRUD, Mongo/admin CRUD, managers/scopes, OpenAPI and generic Svelte forms passed.',
     );
-    await identityClient.close();
-    identityClient = undefined;
     await server.shutdown();
     assert.deepEqual(events.slice(-5), [
         'shutdown:articles',
@@ -448,7 +435,6 @@ try {
     console.log('Reverse app/DI/database shutdown and traffic gating passed.');
 } finally {
     try {
-        await identityClient?.close();
         await server?.shutdown();
     } finally {
         await docker(['down', '--volumes', '--remove-orphans']);

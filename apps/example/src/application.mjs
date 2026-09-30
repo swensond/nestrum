@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { defineAdmin } from '@nestrum/admin';
-import { defineAuth, field } from '@nestrum/auth';
+import { defineAuth } from '@nestrum/auth';
 import { allow, defineApplication, deny } from '@nestrum/core';
 import mongo, { bindMongoCollection } from '@nestrum/example-mongo';
 import postgres from '@nestrum/example-postgres';
@@ -15,6 +15,8 @@ export function createExample({
     baseURL = 'http://127.0.0.1:3100',
     events = [],
     secret = process.env.AUTH_SECRET,
+    // User ids allowed into admin. An operator adds an id after the person signs up; signup itself grants nothing.
+    staffUserIds = new Set((process.env.STAFF_USER_IDS ?? '').split(',').filter(Boolean)),
 } = {}) {
     if (!connections || !secret) {
         throw new Error('Example requires explicit database connections and AUTH_SECRET.');
@@ -25,8 +27,7 @@ export function createExample({
         database: 'identity',
         baseURL,
         secret,
-        extend: { user: { staff: field.boolean().default(false) } },
-        subjectFactory: ({ user }) => ({ id: user.id, anonymous: false, staff: user.staff === true }),
+        subjectFactory: ({ user }) => ({ id: user.id, anonymous: false, staff: staffUserIds.has(user.id) }),
         prisma: () => ({ database: 'identity', collections: clients.get('identity').orm.public }),
     });
     const admin = defineAdmin();
@@ -140,5 +141,5 @@ export function createExample({
         ),
     });
 
-    return { application, clients, events };
+    return { application, clients, events, staffUserIds };
 }

@@ -6,64 +6,64 @@ Complete
 
 ## Goal
 
-Implement an explicit framework-level assurance abstraction for the current authenticated session.
+Give admin an explicit, server-authoritative notion of whether the current session has satisfied the second factor, built on Better Auth's `twoFactor` plugin rather than a parallel implementation.
 
 ## Scope
 
-- Model at least `single-factor` and `two-factor` assurance levels.
-- Expose current-session assurance separately from authentication/configured-factor state.
-- Attach assurance to the current session/challenge context and expire it independently from login.
-- Define default-required admin configuration and `assuranceTtlSeconds` validation.
-- Provide a testable service/context seam for later enrollment and admin enforcement.
+- Wire Better Auth's `twoFactor` plugin into `defineAuth` (issuer and lockout configurable) and persist its `TwoFactor` table and `User.twoFactorEnabled` through a prebaked auth contract.
+- Define the admin policy `admin.security.twoFactor.{required, assuranceTtlSeconds}` with validation.
+- Define how a Better Auth session is judged to have satisfied the factor (`sessionAssurance`).
 
 ## Out of Scope
 
-TOTP generation/verification, recovery persistence, admin route middleware, Svelte pages, WebAuthn, and final E2E hardening.
+TOTP generation/verification, backup codes, and lockout (all owned by the plugin), admin route middleware (PM2.3), Svelte pages (PM2.4), WebAuthn, and browser hardening (PM2.5).
 
 ## Architecture Decisions
 
-Depends on [PM2.0](phase-00-contract.md). Preserve Better Auth session ownership; do not fork login/session identity. A configured factor is not assurance. TTL checks must be server-authoritative and robust to expiry/clock boundaries. Keep factor types extensible without weakening the required two-factor decision.
+Depends on [PM2.0](phase-00-contract.md). **Better Auth's plugin, not custom code.** The plugin challenges at sign-in: for a user with `twoFactorEnabled`, password sign-in creates no session until a TOTP or backup code is verified. A live session of such a user has therefore passed the second factor, so admin assurance is derived from session fields instead of a separate table.
+
+This changes one contract in the original plan: assurance cannot expire *independently* of the login session, because the plugin only verifies during sign-in. `assuranceTtlSeconds` instead bounds the age of the session for admin purposes; an older session is denied with `challenge-required` and the user signs in again (which repeats the challenge). The login session itself is not shortened or revoked.
 
 ## Implementation
 
-- **Vocabulary** (`@nestrum/core`, `auth/auth.types.ts`): `AssuranceLevel` (`single-factor` | `two-factor`), `AssuranceMethod` (`totp` | `recovery`), `SessionAssurance` (`level`, `configured`, `method?`, `verifiedAt?`, `expiresAt?`), and the `TwoFactorService` seam exposed as `Authentication.twoFactor`. `configured` (the user has an active factor) and `level` (this session satisfied a challenge) are separate fields.
-- **Storage** (`@nestrum/auth`): assurance is a framework-owned `AdminAssurance` row keyed by the Better Auth **session id** (unique), with `userId`, `method`, `verifiedAt`, and `expiresAt`. A new login is a new session and therefore starts single-factor; Better Auth's `Session`, cookies, and login lifetime are untouched. On PostgreSQL the row cascades when the session is deleted (sign-out, expiry cleanup); on MongoDB, stale rows are pruned for the user at the next grant. Reading assurance requires an active factor, a row for this session and user, and `expiresAt > now` (expiry is exclusive and server-authoritative).
-- **Configuration** (`@nestrum/admin`, `security.ts`): `defineAdmin({ security: { twoFactor: { required?, assuranceTtlSeconds? } } })`. `required` defaults to `true`; `assuranceTtlSeconds` defaults to 43200 (12 hours) and must be an integer from 60 to 2592000 (30 days), validated even when 2FA is disabled. Unknown keys and non-plain objects are rejected with `ADMIN_CONFIG_INVALID`. The resolved policy is `AdminDefinition.security.twoFactor` and `Application.adminSecurity`, both available before startup.
-- **Clock seam.** `defineAuth({ twoFactor: { now } })` injects the clock used for TOTP steps, lockout, and assurance expiry; production uses `Date.now`.
+- **Plugin wiring** (`packages/auth/src/auth.ts`, `createAuthInstance`): `twoFactor({ issuer, twoFactorTable: 'TwoFactor', accountLockout })`. `defineAuth({ twoFactor: { issuer, maxFailedAttempts, lockoutSeconds } })` defaults to issuer "Nestrum", 10 failed attempts, and 900 s (the plugin's own defaults, validated). The auth route allowlist gains `POST /api/auth/two-factor/{enable, disable, verify-totp, verify-backup-code, generate-backup-codes}`; OTP-by-message, `get-totp-uri`, and trusted-device flows stay unexposed.
+- **Prebaked contract** (`packages/auth/src/contracts/contracts.ts`): `authContract(provider)` returns one of two fixed Prisma sources (PostgreSQL, MongoDB) for `User` (now with `twoFactorEnabled`), `Session`, `Account`, `Verification`, and `TwoFactor`. A test builds the real Better Auth instance and compares every model and field with both sources, so a Better Auth upgrade that changes the schema fails loudly. `defineAuth({ extend })`, `field`, and `AuthField` were **removed**: user extensions were the only reason the contract had to be assembled dynamically. Application-specific user data belongs in an application-owned model keyed by user id.
+- **Assurance rule** (`packages/admin/src/security.ts`, `sessionAssurance`): `setup-required` unless `user.twoFactorEnabled === true`; otherwise `challenge-required` if the session is older than `assuranceTtlSeconds`, if it was created before the user's last update (enabling 2FA updates the user, so a single-factor session that predates enrollment never satisfies admin), or if either timestamp is missing or unparsable; otherwise satisfied. The verified session Better Auth creates on activation has the same instant as the enrollment update, so the comparison is "not older".
+- **Configuration**: `defineAdmin({ security: { twoFactor: { required?, assuranceTtlSeconds? } } })`. `required` defaults to `true`; `assuranceTtlSeconds` defaults to 43200 and must be an integer from 60 to 2592000, validated even when 2FA is disabled. The resolved policy is `AdminDefinition.security.twoFactor` and `Application.adminSecurity`, known before startup.
 
 ## Public API
 
-`AssuranceLevel`, `AssuranceMethod`, `SessionAssurance`, `TwoFactorService`, `TwoFactorEnrollment`, `TwoFactorGrant`, `AdminTwoFactorPolicy`, `AdminTwoFactorRequiredError` (`@nestrum/core`); `defineAdmin({ security })`, `resolveTwoFactorPolicy`, `DEFAULT_ASSURANCE_TTL_SECONDS` (`@nestrum/admin`); `defineAuth({ twoFactor: { issuer, now } })`, `TWO_FACTOR_MODELS` (`@nestrum/auth`). The three new models are protected auth models and cannot be registered as resources.
+`defineAdmin({ security })`, `resolveTwoFactorPolicy`, `sessionAssurance`, `DEFAULT_ASSURANCE_TTL_SECONDS` (`@nestrum/admin`); `AdminTwoFactorPolicy`, `AdminTwoFactorRequiredError` (`@nestrum/core`); `defineAuth({ twoFactor })`, `authContract(provider)` (`@nestrum/auth`). Removed: `defineAuth({ extend })`, `field`, `AuthField`, and the `authContract` extension argument.
 
 ## Files / Packages Changed
 
-`packages/core` (auth types, admin types/errors, `Application.adminSecurity`), `packages/auth` (contract models, `two-factor/service.ts`, adapter helper), `packages/admin` (`security.ts`), tests, [architecture](../../architecture.md), [initiative index](README.md), and this record.
+`packages/auth` (plugin wiring, static contracts, drift test), `packages/admin` (`security.ts`), `packages/core` (admin policy/error types, `Application.adminSecurity`), tests, [architecture](../../architecture.md), [initiative index](README.md), and this record.
 
 ## Tests
 
-Cover current assurance reporting, configured-versus-satisfied distinction, independent expiry, valid/invalid TTL, default-required configuration, and opt-out diagnostics contract.
+Auth: the contract-drift test and plugin integration (`packages/auth/tests/two-factor.test.ts`). Admin: policy defaults, TTL validation, opt-out, and every branch of `sessionAssurance` (`packages/admin/tests/two-factor.test.ts`).
 
 ## Acceptance Criteria
 
-- [x] Current session exposes assurance state.
-- [x] Assurance is independent from simple authentication state.
-- [x] Assurance expires independently from the session.
-- [x] Default/opt-out configuration is validated and documented.
+- [x] Admin can tell whether the current session satisfied the second factor, separately from configured state.
+- [x] Assurance is derived from Better Auth's plugin, with no parallel TOTP implementation.
+- [ ] ~~Assurance expires independently from the session.~~ **Not met as written**: it is bounded by session age (see Architecture Decisions).
+- [x] Default and opt-out configuration are validated and documented.
 - [x] Tests pass.
 - [x] Docs updated.
 
 ## Validation
 
-`pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check` and `git diff --check`; targeted `packages/auth/tests/two-factor.test.ts` (assurance states, independent expiry, per-session isolation, contract shape) and `packages/admin/tests/two-factor.test.ts` (policy defaults, TTL validation, opt-out). The identity contract was generated, planned, applied, and status-checked against a local PostgreSQL 16 with `nestrum db`, and the resulting `AdminAssurance` table (unique `sessionId`, cascade to `Session`) was inspected.
+`pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, `git diff --check`. The static identity contract was generated, planned, applied, and status-checked with `nestrum db` on a local PostgreSQL 16 and the `TwoFactor` table was inspected.
 
 ## Known Limitations
 
-Existing applications must generate and apply a migration for the three new auth models before admin 2FA can work (nothing migrates automatically). The assurance TTL is stored per grant, so changing the configured TTL affects only later challenges.
+Existing applications must generate and apply a migration for `User.twoFactorEnabled` and the `TwoFactor` table (nothing migrates automatically). The 2FA challenge applies to every sign-in for a user who enables it, not only admin. Rotating `AUTH_SECRET` invalidates stored TOTP secrets (the plugin encrypts them with it). Removing `extend.user` is a breaking change to the Phase 10 auth API.
 
 ## Follow-Ups
 
-[PM2.2](phase-02-enrollment.md) uses the abstraction for TOTP setup and recovery.
+[PM2.2](phase-02-enrollment.md) covers enrollment and recovery through the plugin.
 
 ## Completion Notes
 
-PM2.1 is complete. One deliberate refinement of the README precedence: `admin.access` is decided before assurance is revealed, so a user who may not use administration learns nothing about their factor state. Both checks are always enforced; only which error is reported first differs. See PM2.3.
+PM2.1 is complete. An earlier iteration implemented TOTP, recovery codes, lockout, and a per-session assurance table in Nestrum; it was replaced by the plugin so the framework does not own security-sensitive factor code. `admin.access` is decided before assurance is disclosed, so users without admin access learn nothing about their factor state; both checks are always enforced.

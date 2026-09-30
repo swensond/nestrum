@@ -1,4 +1,4 @@
-import type { AdminTwoFactorPolicy } from '@nestrum/core';
+import type { AdminTwoFactorPolicy, AuthSession } from '@nestrum/core';
 import { AdminError } from '@nestrum/core';
 
 export const DEFAULT_ASSURANCE_TTL_SECONDS = 43_200;
@@ -9,7 +9,7 @@ export type AdminSecurityOptions = {
     readonly twoFactor?: {
         /** Require a second factor for admin UI and API access. Defaults to true. */
         readonly required?: boolean;
-        /** Lifetime of a successful challenge, independent of the login session. Defaults to 43200 (12 hours). */
+        /** Maximum age of a two-factor sign-in before admin requires signing in and verifying again. Defaults to 43200 (12 hours). */
         readonly assuranceTtlSeconds?: number;
     };
 };
@@ -61,4 +61,43 @@ export function resolveTwoFactorPolicy(security?: AdminSecurityOptions): AdminTw
     }
 
     return Object.freeze({ required, assuranceTtlSeconds });
+}
+
+function instant(value: unknown): number | undefined {
+    const time = value instanceof Date ? value.getTime() : typeof value === 'string' ? Date.parse(value) : undefined;
+
+    return time === undefined || Number.isNaN(time) ? undefined : time;
+}
+
+/**
+ * Better Auth's `twoFactor` plugin creates no session for an enrolled user until a code is verified, so a live
+ * session of such a user has passed the second factor. Admin adds two conservative rules on top:
+ *
+ * - the session must not be older than the user's last update (enabling 2FA updates the user; the plugin creates the
+ *   verified session in the same instant or later), so sessions that predate enrollment, such as a stolen
+ *   single-factor session, never satisfy admin; and
+ * - the session must be younger than `assuranceTtlSeconds`.
+ *
+ * Missing or unparsable timestamps fail closed. A stale session needs a new sign-in, which repeats the challenge.
+ */
+export function sessionAssurance(
+    session: AuthSession,
+    policy: AdminTwoFactorPolicy,
+    now = Date.now(),
+): 'satisfied' | 'setup-required' | 'challenge-required' {
+    if (session.user.twoFactorEnabled !== true) {
+        return 'setup-required';
+    }
+    const signedIn = instant(session.session.createdAt);
+    const userUpdated = instant(session.user.updatedAt);
+    if (
+        signedIn === undefined ||
+        userUpdated === undefined ||
+        signedIn < userUpdated ||
+        now - signedIn >= policy.assuranceTtlSeconds * 1000
+    ) {
+        return 'challenge-required';
+    }
+
+    return 'satisfied';
 }

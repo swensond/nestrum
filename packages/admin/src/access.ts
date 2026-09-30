@@ -4,12 +4,12 @@ import type {
     Application,
     AuthorizationEngine,
     AuthorizationEnvironment,
-    AuthSession,
     ModelIdentity,
     QueryOperation,
     Subject,
 } from '@nestrum/core';
 import { AdminError, AdminTwoFactorRequiredError, AppError, AuthorizationError } from '@nestrum/core';
+import { sessionAssurance } from './security.js';
 
 /** Capability identity and action evaluated for every admin request before data access. */
 export const ADMIN_ACCESS_IDENTITY = 'admin.access';
@@ -51,14 +51,6 @@ export type AdminAccess = {
     readonly subject: Subject;
     readonly environment: AuthorizationEnvironment;
 };
-/** The session stays outside `AdminAccess`, which is spread into policy bindings. */
-export type AdminAuthorization = { readonly access: AdminAccess; readonly session: AuthSession };
-
-/**
- * `full` additionally requires the current session's second-factor assurance (when the policy demands it).
- * `challenge` is reserved for the narrow set of routes that establish that assurance.
- */
-export type AdminAccessMode = 'full' | 'challenge';
 
 /**
  * A live Better Auth session, a default-deny `admin.access` grant and (unless disabled) current-session
@@ -73,8 +65,7 @@ export async function authorizeAccess(
     context: AdminRequestContext,
     allowedOrigins: readonly string[],
     policy: AdminTwoFactorPolicy,
-    mode: AdminAccessMode = 'full',
-): Promise<AdminAuthorization> {
+): Promise<AdminAccess> {
     assertSameOrigin(request, allowedOrigins);
     const authentication = application.auth;
     if (!authentication) {
@@ -93,14 +84,14 @@ export async function authorizeAccess(
     if (!decision.allowed) {
         throw new AuthorizationError(decision.reason);
     }
-    if (mode === 'full' && policy.required) {
-        const assurance = await authentication.twoFactor.assurance(session);
-        if (assurance.level !== 'two-factor') {
-            throw new AdminTwoFactorRequiredError(assurance.configured ? 'challenge-required' : 'setup-required');
+    if (policy.required) {
+        const assurance = sessionAssurance(session, policy);
+        if (assurance !== 'satisfied') {
+            throw new AdminTwoFactorRequiredError(assurance);
         }
     }
 
-    return { access: { subject: context.subject, environment: context.environment }, session };
+    return { subject: context.subject, environment: context.environment };
 }
 
 /** Probe one operation without a collection scope, so capability metadata never touches a database. */

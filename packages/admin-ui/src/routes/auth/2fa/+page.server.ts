@@ -1,7 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { safeReturnTo, withNext } from '$lib/return-to.js';
-import { submitChallenge } from '$lib/two-factor.server.js';
-import type { Actions, PageServerLoad } from './$types';
+import type { PageServerLoad } from './$types';
 
 export const load = (async ({ parent, url }) => {
     const { admin } = await parent();
@@ -15,5 +14,3 @@ export const load = (async ({ parent, url }) => {
 
     return { next };
 }) satisfies PageServerLoad;
-
-export const actions = { default: (event) => submitChallenge(event, 'totp') } satisfies Actions;

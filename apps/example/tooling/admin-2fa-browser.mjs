@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { defineAdmin } from '@nestrum/admin';
 import { createAdminShell } from '@nestrum/admin-ui/node';
-import { defineAuth, field, totpCode, totpStep } from '@nestrum/auth';
+import { defineAuth, totpCode, totpStep } from '@nestrum/auth';
 import { allow, defineApplication } from '@nestrum/core';
 import postgres from '@nestrum/example-postgres';
 import { createHonoRuntime } from '@nestrum/hono';
@@ -34,7 +34,6 @@ const application = defineApplication({
         baseURL: BASE,
         secret: 'local-verification-secret-with-at-least-32-chars',
         prisma: () => ({ database: 'identity', collections: client.orm.public }),
-        extend: { user: { staff: field.boolean().default(false) } },
     }),
     admin: defineAdmin({ security: { twoFactor: { assuranceTtlSeconds: 60 } } }),
     policies: [{ resource: 'admin.access', actions: { access: { authorize: () => allow() } } }],
@@ -66,47 +65,45 @@ const browser = await chromium.launch({
 });
 async function signIn(page, path) {
     await page.goto(`${BASE}${path}`);
+    await signInFrom(page);
+}
+async function signInFrom(page) {
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password').fill(PASSWORD);
     await page.getByRole('button', { name: 'Sign in' }).click();
 }
 try {
-    // 1. Enrollment: sign-in lands on setup with the intended URL preserved.
+    // 1. Enrollment: sign-in lands on setup with the intended URL preserved; the plugin asks for the password first.
     const c1 = await browser.newContext();
     const p1 = await c1.newPage();
     await signIn(p1, '/admin/somewhere');
     await p1.waitForURL(/\/admin\/auth\/2fa\/setup\?next=%2Fadmin%2Fsomewhere/);
+    await p1.getByLabel('Password').fill('wrong-password-123');
+    await p1.getByRole('button', { name: 'Begin setup' }).click();
+    await p1
+        .getByRole('alert')
+        .getByText(/password is not correct/)
+        .waitFor();
+    await p1.getByLabel('Password').fill(PASSWORD);
     await p1.getByRole('button', { name: 'Begin setup' }).click();
     await p1.getByText('Setup key:').waitFor();
-    const wrongKey = (await p1.locator('code').first().textContent()).trim();
+    const secret = (await p1.locator('code').first().textContent()).trim();
+    const codes = await p1.locator('ul[aria-label="Recovery codes"] code').allTextContents();
+    assert.ok(codes.length > 0);
     await p1.getByLabel('Verification code').fill('000000');
     await p1.getByRole('button', { name: 'Activate' }).click();
     await p1
         .getByRole('alert')
         .getByText(/not valid/)
         .waitFor();
-    assert.ok(!(await p1.content()).includes(wrongKey), 'A failed attempt never re-renders the key.');
-    await p1.getByRole('button', { name: 'Start over' }).click();
-    await p1.getByText('Setup key:').waitFor();
-    const secret = (await p1.locator('code').first().textContent()).trim();
-    assert.notEqual(secret, wrongKey);
     await p1.getByLabel('Verification code').fill(totpCode(secret, totpStep(Date.now())));
     await p1.getByRole('button', { name: 'Activate' }).click();
-    await p1.getByRole('heading', { name: 'Save your recovery codes' }).waitFor();
-    const codes = await p1.locator('ul[aria-label="Recovery codes"] code').allTextContents();
-    assert.equal(codes.length, 10);
-    assert.match(
-        await p1
-            .locator('meta[http-equiv], body')
-            .first()
-            .evaluate(() => document.title),
-        /two-factor/i,
-    );
+    await p1.getByText('Two-factor authentication is now active.').waitFor();
     await p1.getByRole('link', { name: /continue/ }).click();
     await p1.waitForURL(`${BASE}/admin/somewhere`);
-    console.log('browser enrollment ok');
     await p1.goto(`${BASE}/admin`);
     await p1.getByRole('heading', { name: 'Administration' }).waitFor();
+    console.log('browser enrollment ok (enrolling session stays verified)');
 
     // 2. Challenge in a fresh session returns to the intended route.
     const c2 = await browser.newContext();
@@ -119,7 +116,6 @@ try {
         .getByRole('alert')
         .getByText(/not valid/)
         .waitFor();
-    // The confirmation code's step is spent; the next step is inside the accepted window.
     await p2.getByLabel('Verification code').fill(totpCode(secret, totpStep(Date.now()) + 1));
     await p2.getByRole('button', { name: 'Verify' }).click();
     await p2.waitForURL(`${BASE}/admin/intended?limit=50`);
@@ -155,17 +151,24 @@ try {
     await p4.waitForURL(`${BASE}/admin/`);
     console.log('browser open-redirect fallback ok');
 
-    // 5. Assurance expiry (TTL 60s) forces a re-challenge while the login session survives.
-    console.log('waiting for assurance expiry (62s)...');
+    // 5. A two-factor session older than the 60s limit needs a fresh sign-in, while the login session survives.
+    console.log('waiting for the admin session limit (62s)...');
     await new Promise((resolve) => setTimeout(resolve, 62_000));
     await p2.goto(`${BASE}/admin/intended`);
     await p2.waitForURL(/\/admin\/auth\/2fa\?next=%2Fadmin%2Fintended/);
-    assert.equal((await c2.request.get(`${BASE}/api/auth/get-session`)).status(), 200);
+    await p2.getByRole('button', { name: 'Sign in again' }).waitFor();
     const api = await c2.request.get(`${BASE}/__admin/resources`);
     assert.equal(api.status(), 403);
     assert.equal((await api.json()).error.reason, 'challenge-required');
     assert.match(api.headers()['content-type'], /json/);
-    console.log('browser expiry re-challenge ok');
+    await p2.getByRole('button', { name: 'Sign in again' }).click();
+    await p2.waitForURL(`${BASE}/admin/intended`);
+    await signInFrom(p2);
+    await p2.waitForURL(/\/admin\/auth\/2fa\?next=%2Fadmin%2Fintended/);
+    await p2.getByLabel('Verification code').fill(totpCode(secret, totpStep(Date.now()) + 1));
+    await p2.getByRole('button', { name: 'Verify' }).click();
+    await p2.waitForURL(`${BASE}/admin/intended`);
+    console.log('browser session-limit re-challenge ok');
     console.log('ALL BROWSER CHECKS PASSED');
 } finally {
     await browser.close();

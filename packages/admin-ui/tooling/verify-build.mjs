@@ -27,39 +27,30 @@ const auth = {
     initialize: async () => ({
         basePath: '/api/auth',
         handle: async () => new Response(null, { status: 404 }),
-        twoFactor: {
-            // `session=staff-setup` has no factor; `session=staff-challenge` has one but has not verified this session.
-            assurance: async (session) =>
-                session.session.id === 'setup'
-                    ? { level: 'single-factor', configured: false }
-                    : session.session.id === 'challenge'
-                      ? { level: 'single-factor', configured: true }
-                      : { level: 'two-factor', configured: true },
-            beginEnrollment: async () => ({
-                secret: 'JBSWY3DPEHPK3PXP',
-                otpauthUri: 'otpauth://totp/x?secret=JBSWY3DPEHPK3PXP',
-            }),
-            confirmEnrollment: async () => ({ assurance: { level: 'two-factor', configured: true } }),
-            verifyTotp: async () => ({ assurance: { level: 'two-factor', configured: true } }),
-            verifyRecovery: async () => ({ assurance: { level: 'two-factor', configured: true } }),
-            regenerateRecoveryCodes: async () => [],
+        getSession: async (request) => {
+            const cookie = request.headers.get('cookie');
+            if (
+                !['session=staff', 'session=member', 'session=staff-setup', 'session=staff-challenge'].includes(cookie)
+            ) {
+                return null;
+            }
+            const now = Date.now();
+
+            return {
+                // `staff-setup` has no factor; `staff-challenge` has one but its session predates the last user update.
+                user: {
+                    id: 'test-user',
+                    twoFactorEnabled: cookie !== 'session=staff-setup',
+                    updatedAt: new Date(cookie === 'session=staff-challenge' ? now : now - 3_600_000),
+                },
+                session: {
+                    id: 'session',
+                    userId: 'test-user',
+                    createdAt: new Date(cookie === 'session=staff-challenge' ? now - 60_000 : now - 1_000),
+                    expiresAt: new Date(now + 60_000),
+                },
+            };
         },
-        getSession: async (request) =>
-            ['session=staff', 'session=member', 'session=staff-setup', 'session=staff-challenge'].includes(
-                request.headers.get('cookie'),
-            )
-                ? {
-                      user: { id: 'test-user' },
-                      session: {
-                          id:
-                              { 'session=staff-setup': 'setup', 'session=staff-challenge': 'challenge' }[
-                                  request.headers.get('cookie')
-                              ] ?? 'session',
-                          userId: 'test-user',
-                          expiresAt: new Date(Date.now() + 60_000),
-                      },
-                  }
-                : null,
         resolveSubject: async (request) => ({
             id: 'test-user',
             staff: ['session=staff', 'session=staff-setup', 'session=staff-challenge'].includes(
@@ -305,29 +296,12 @@ try {
     assert.equal(challengePage.status, 200);
     assert.equal(challengePage.headers.get('cache-control'), 'private, no-store');
     const challengeHtml = await challengePage.text();
-    assert.ok(challengeHtml.includes('autocomplete="one-time-code"'));
-    assert.ok(challengeHtml.includes('name="next" value="/admin/projects"'));
+    assert.ok(challengeHtml.includes('Sign in again'));
+    assert.ok(!challengeHtml.includes('one-time-code'));
     assert.ok(!challengeHtml.includes('href="/admin/projects"'));
     const setupPage = await (await request('/admin/auth/2fa/setup', 'session=staff-setup')).text();
     assert.ok(setupPage.includes('Begin setup'));
-    const started = await runtime.fetch(
-        new Request('http://localhost:3000/admin/auth/2fa/setup?/start', {
-            method: 'POST',
-            headers: { cookie: 'session=staff-setup', origin: 'http://localhost:3000', accept: 'text/html' },
-            body: new URLSearchParams({ next: '/admin/projects' }),
-        }),
-    );
-    assert.equal(started.status, 200);
-    assert.ok((await started.text()).includes('JBSWY3DPEHPK3PXP'));
-    const challenged = await runtime.fetch(
-        new Request('http://localhost:3000/admin/auth/2fa', {
-            method: 'POST',
-            headers: { cookie: 'session=staff-challenge', origin: 'http://localhost:3000', accept: 'text/html' },
-            body: new URLSearchParams({ code: '123456', next: 'https://evil.example/' }),
-        }),
-    );
-    assert.equal(challenged.status, 303);
-    assert.equal(challenged.headers.get('location'), '/admin');
+    assert.ok(setupPage.includes('type="password"'));
     const denied = await (await request('/admin', 'session=member')).text();
     assert.ok(denied.includes('Access denied'));
     assert.ok(!denied.includes('href="/admin/projects"'));

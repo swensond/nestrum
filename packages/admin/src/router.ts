@@ -1,4 +1,4 @@
-import type { AdminRequestContext, AdminTwoFactorPolicy, Application, AuthSession, QuerySet } from '@nestrum/core';
+import type { AdminRequestContext, AdminTwoFactorPolicy, Application, QuerySet } from '@nestrum/core';
 import { AdminError, AppError, AuthorizationError, QuerySetError, snapshotQueryValue } from '@nestrum/core';
 import type { ScalarTransport } from '@nestrum/hono';
 import {
@@ -20,13 +20,9 @@ import { assertSameOrigin, authorizeAccess, permits } from '#admin/access';
 import type { AdminResourceMetadata } from '#admin/metadata';
 import { resourceMetadata } from '#admin/metadata';
 import type { AdminEntry, AdminOptions } from '#admin/registry';
-import { CHALLENGE_ROUTES, registerTwoFactorRoutes } from '#admin/two-factor-routes';
 
 export const ADMIN_BASE_PATH = '/__admin';
-type Env = {
-    Bindings: { readonly requestContext: AdminRequestContext };
-    Variables: { access: AdminAccess; session: AuthSession };
-};
+type Env = { Bindings: { readonly requestContext: AdminRequestContext }; Variables: { access: AdminAccess } };
 
 function json(value: unknown, status = 200): Response {
     return Response.json(encodeResponse(value), {
@@ -90,24 +86,19 @@ export function createAdminRouter(
         }),
     );
     router.use('*', async (context, next) => {
-        // Exact method + path only: any other spelling (trailing slash, casing) fails closed to full assurance.
-        const mode = CHALLENGE_ROUTES.has(`${context.req.method} ${new URL(context.req.url).pathname}`)
-            ? 'challenge'
-            : 'full';
-        const authorization = await authorizeAccess(
-            application,
-            context.req.raw,
-            context.env.requestContext,
-            options.allowedOrigins ?? [],
-            twoFactor,
-            mode,
+        context.set(
+            'access',
+            await authorizeAccess(
+                application,
+                context.req.raw,
+                context.env.requestContext,
+                options.allowedOrigins ?? [],
+                twoFactor,
+            ),
         );
-        context.set('access', authorization.access);
-        context.set('session', authorization.session);
 
         await next();
     });
-    registerTwoFactorRoutes(router, application, twoFactor);
 
     function entry(slug: string): AdminEntry {
         const found = bySlug.get(slug);

@@ -14,4 +14,4 @@ export type { AdminActionMetadata, AdminFieldMetadata, AdminResourceMetadata } f
 export type { AdminOptions } from './registry.js';
 export { ADMIN_BASE_PATH } from './router.js';
 export type { AdminSecurityOptions } from './security.js';
-export { DEFAULT_ASSURANCE_TTL_SECONDS, resolveTwoFactorPolicy } from './security.js';
+export { DEFAULT_ASSURANCE_TTL_SECONDS, resolveTwoFactorPolicy, sessionAssurance } from './security.js';

@@ -93,8 +93,13 @@ function fixture(
     const getSession = vi.fn(async (request: Request) =>
         request.headers.get('cookie') === 'session=valid'
             ? {
-                  user: { id: 'alice' },
-                  session: { id: 'session', userId: 'alice', expiresAt: new Date(Date.now() + 60_000) },
+                  user: { id: 'alice', twoFactorEnabled: true, updatedAt: new Date(0) },
+                  session: {
+                      id: 'session',
+                      userId: 'alice',
+                      createdAt: new Date(),
+                      expiresAt: new Date(Date.now() + 60_000),
+                  },
               }
             : null,
     );
@@ -106,14 +111,6 @@ function fixture(
         initialize: async () => ({
             basePath: '/api/auth',
             handle: async () => new Response(null, { status: 404 }),
-            twoFactor: {
-                assurance: async () => ({ level: 'two-factor', configured: true }),
-                beginEnrollment: async () => ({ secret: 'unused', otpauthUri: 'otpauth://unused' }),
-                confirmEnrollment: async () => ({ assurance: { level: 'two-factor', configured: true } }),
-                verifyTotp: async () => ({ assurance: { level: 'two-factor', configured: true } }),
-                verifyRecovery: async () => ({ assurance: { level: 'two-factor', configured: true } }),
-                regenerateRecoveryCodes: async () => [],
-            },
             getSession,
             resolveSubject: async (request) =>
                 (await getSession(request)) ? { id: 'alice', anonymous: false } : { anonymous: true },

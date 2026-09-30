@@ -1,28 +1,38 @@
-import type { Authentication, AuthSession } from '@nestrum/core';
 import { defineApplication } from '@nestrum/core';
 import { createHonoRuntime } from '@nestrum/hono';
 import { describe, expect, it } from 'vitest';
+import { createAuthInstance } from '../src/auth.js';
 import {
     authContract,
+    createPrismaAuthAdapter,
     defineAuth,
-    LOCKOUT_SECONDS,
-    MAX_FAILED_ATTEMPTS,
-    RECOVERY_CODE_COUNT,
-    TOTP_PERIOD_SECONDS,
     totpCode,
+    totpSecretFromUri,
     totpStep,
 } from '../src/index.js';
-import { createTwoFactorKeys, generateRecoveryCode } from '../src/two-factor/crypto.js';
-import { base32Decode, base32Encode, matchTotp } from '../src/two-factor/totp.js';
 import { storage } from './fixtures.js';
 
 const BASE_URL = 'http://localhost:3000';
 const SECRET = 'nestrum-test-secret-longer-than-thirty-two-characters';
-const TTL = 3600;
+const PASSWORD = 'a-valid-password-123';
 
-async function setup(email = 'a@example.test') {
+function post(path: string, body: object, cookie?: string) {
+    return new Request(`${BASE_URL}${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: BASE_URL, ...(cookie ? { cookie } : {}) },
+        body: JSON.stringify(body),
+    });
+}
+function cookies(response: Response): string {
+    return response.headers
+        .getSetCookie()
+        .filter((value) => !/=;|Max-Age=0/i.test(value))
+        .map((value) => value.split(';')[0])
+        .join('; ');
+}
+
+async function setup(twoFactor: { maxFailedAttempts?: number } = {}) {
     const memory = storage();
-    const clock = { now: Date.UTC(2026, 0, 1, 12, 0, 0) };
     const application = defineApplication({
         apps: [],
         databases: {
@@ -34,264 +44,197 @@ async function setup(email = 'a@example.test') {
             baseURL: BASE_URL,
             secret: SECRET,
             prisma: () => memory.binding,
-            twoFactor: { issuer: 'Example', now: () => clock.now },
+            twoFactor: { issuer: 'Example', ...twoFactor },
         }),
     });
-    const runtime = createHonoRuntime({ application });
+    const runtime = createHonoRuntime({ application, onError: () => {} });
     await runtime.start();
-    const signup = await runtime.fetch(
-        new Request(`${BASE_URL}/api/auth/sign-up/email`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json', origin: BASE_URL },
-            body: JSON.stringify({ email, password: 'correct horse battery', name: 'A' }),
-        }),
-    );
-    const cookie = signup.headers
-        .getSetCookie()
-        .map((value) => value.split(';')[0])
-        .join('; ');
-    const auth = application.auth as Authentication;
-    const session = (await auth.getSession(new Request(BASE_URL, { headers: { cookie } }))) as AuthSession;
+    const call = (request: Request) => runtime.fetch(request);
+    const signUp = async (email = 'a@example.test') => {
+        const response = await call(post('/api/auth/sign-up/email', { name: 'A', email, password: PASSWORD }));
+        expect(response.status).toBe(200);
 
-    return { auth, memory, clock, session, twoFactor: auth.twoFactor };
+        return cookies(response);
+    };
+    /** Enables and verifies TOTP on the given session; returns the secret and backup codes. */
+    const enroll = async (cookie: string) => {
+        const enabled = await call(post('/api/auth/two-factor/enable', { password: PASSWORD }, cookie));
+        expect(enabled.status).toBe(200);
+        const { totpURI, backupCodes } = (await enabled.json()) as { totpURI: string; backupCodes: string[] };
+        const secret = totpSecretFromUri(totpURI);
+        const verified = await call(
+            post('/api/auth/two-factor/verify-totp', { code: totpCode(secret, totpStep(Date.now())) }, cookie),
+        );
+        expect(verified.status).toBe(200);
+
+        // Verification replaces the enrolling session with a verified one; the browser keeps the new cookie.
+        return { secret, backupCodes, totpURI, cookie: cookies(verified) };
+    };
+    const signIn = (email = 'a@example.test') => call(post('/api/auth/sign-in/email', { email, password: PASSWORD }));
+
+    return { application, runtime, memory, call, signUp, enroll, signIn };
 }
 
-describe('TOTP primitives', () => {
-    it('matches RFC 6238 vectors and rejects malformed or out-of-window codes', () => {
-        const secret = base32Encode(Buffer.from('12345678901234567890'));
-        expect(base32Decode(secret).toString()).toBe('12345678901234567890');
-        expect(totpCode(secret, totpStep(59_000)).endsWith('287082')).toBe(true);
-        expect(totpCode(secret, totpStep(1_111_111_109_000)).endsWith('081804')).toBe(true);
-        const now = 1_111_111_109_000;
-        expect(matchTotp(secret, '081804', now)).toBe(totpStep(now));
-        expect(matchTotp(secret, '081804', now + TOTP_PERIOD_SECONDS * 3000)).toBeUndefined();
-        expect(matchTotp(secret, '08180', now)).toBeUndefined();
-        expect(matchTotp(secret, 'abcdef', now)).toBeUndefined();
-    });
-
-    it('seals secrets and hashes recovery codes without exposing plaintext', () => {
-        const keys = createTwoFactorKeys(SECRET);
-        const sealed = keys.encrypt('JBSWY3DPEHPK3PXP');
-        expect(sealed).not.toContain('JBSWY3DPEHPK3PXP');
-        expect(keys.decrypt(sealed)).toBe('JBSWY3DPEHPK3PXP');
-        expect(() => keys.decrypt(`${sealed.slice(0, -2)}AA`)).toThrow();
-        expect(() => createTwoFactorKeys(`${SECRET}x`).decrypt(sealed)).toThrow();
-        const code = generateRecoveryCode();
-        expect(code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
-        expect(keys.hashRecoveryCode(code)).toBe(keys.hashRecoveryCode(code.toLowerCase().replaceAll('-', ' ')));
-        expect(keys.hashRecoveryCode(code)).not.toContain(code.replaceAll('-', ''));
-    });
-});
-
-describe('Two-factor contract', () => {
-    it('adds framework-owned models with a session cascade only where relations exist', () => {
-        const postgres = authContract('postgresql', {});
-        expect(postgres).toContain('model AdminAssurance');
-        expect(postgres).toContain('session Session @relation(fields: [sessionId]');
-        expect(postgres).toContain('model TwoFactorFactor');
-        expect(postgres).toContain('model TwoFactorRecoveryCode');
-        expect(authContract('mongodb', {})).not.toContain('session Session @relation');
-    });
-});
-
-describe('Session assurance', () => {
-    it('reports unconfigured, configured-but-unverified, verified and expired states independently of login', async () => {
-        const { twoFactor, session, clock } = await setup();
-        expect(await twoFactor.assurance(session)).toEqual({ level: 'single-factor', configured: false });
-        const enrollment = await twoFactor.beginEnrollment(session);
-        // A generated but unconfirmed secret is never configuration or assurance.
-        expect(await twoFactor.assurance(session)).toEqual({ level: 'single-factor', configured: false });
-        const grant = await twoFactor.confirmEnrollment(session, totpCode(enrollment.secret, totpStep(clock.now)), TTL);
-        expect(grant.assurance).toMatchObject({ level: 'two-factor', configured: true, method: 'totp' });
-        expect(grant.assurance.expiresAt?.getTime()).toBe(clock.now + TTL * 1000);
-        expect((await twoFactor.assurance(session)).level).toBe('two-factor');
-        clock.now += TTL * 1000 - 1;
-        expect((await twoFactor.assurance(session)).level).toBe('two-factor');
-        clock.now += 1;
-        // Expiry is exclusive: the session is still valid but assurance is not, and the factor stays configured.
-        expect(await twoFactor.assurance(session)).toEqual({ level: 'single-factor', configured: true });
-    });
-
-    it('does not carry assurance to another session of the same user', async () => {
-        const { twoFactor, session, clock, auth } = await setup();
-        const enrollment = await twoFactor.beginEnrollment(session);
-        await twoFactor.confirmEnrollment(session, totpCode(enrollment.secret, totpStep(clock.now)), TTL);
-        const other: AuthSession = { user: session.user, session: { ...session.session, id: 'another-session' } };
-        expect(await auth.twoFactor.assurance(other)).toEqual({ level: 'single-factor', configured: true });
-    });
-});
-
-describe('Enrollment', () => {
-    it('stores only an encrypted secret, activates after a valid code and issues hashed one-time recovery codes', async () => {
-        const { twoFactor, session, clock, memory } = await setup();
-        const enrollment = await twoFactor.beginEnrollment(session);
-        expect(enrollment.otpauthUri).toContain('otpauth://totp/Example:a%40example.test');
-        expect(enrollment.otpauthUri).toContain(`secret=${enrollment.secret}`);
-        const [row] = memory.records.TwoFactorFactor;
-        expect(row?.confirmedAt).toBeNull();
-        expect(JSON.stringify(row)).not.toContain(enrollment.secret);
-
-        await expect(twoFactor.confirmEnrollment(session, '000000', TTL)).rejects.toMatchObject({
-            code: 'TWO_FACTOR_INVALID_CODE',
-            status: 400,
+describe('Better Auth twoFactor plugin integration', () => {
+    it('keeps the prebaked contracts in step with Better Auth’s own schema', async () => {
+        const memory = storage();
+        const instance = createAuthInstance({
+            baseURL: BASE_URL,
+            secret: SECRET,
+            trustedOrigins: [],
+            database: createPrismaAuthAdapter(memory.binding, 'postgresql'),
+            issuer: 'Example',
+            maxFailedAttempts: 10,
+            lockoutSeconds: 900,
         });
-        expect(memory.records.TwoFactorFactor[0]?.confirmedAt).toBeNull();
-        expect(memory.records.AdminAssurance).toHaveLength(0);
-
-        const grant = await twoFactor.confirmEnrollment(session, totpCode(enrollment.secret, totpStep(clock.now)), TTL);
-        expect(memory.records.TwoFactorFactor[0]?.confirmedAt).not.toBeNull();
-        expect(grant.recoveryCodes).toHaveLength(RECOVERY_CODE_COUNT);
-        const stored = JSON.stringify(memory.records.TwoFactorRecoveryCode);
-        for (const code of grant.recoveryCodes ?? []) {
-            expect(stored).not.toContain(code);
-            expect(stored).not.toContain(code.replaceAll('-', ''));
+        const tables = (await instance.$context).tables as Record<
+            string,
+            { modelName: string; fields: Record<string, { fieldName?: string }> }
+        >;
+        const expected = Object.values(tables)
+            .map(
+                (table) =>
+                    [
+                        table.modelName,
+                        ['id', ...Object.entries(table.fields).map(([key, f]) => f.fieldName ?? key)],
+                    ] as const,
+            )
+            .sort(([left], [right]) => left.localeCompare(right));
+        for (const provider of ['postgresql', 'mongodb'] as const) {
+            const source = authContract(provider);
+            const actual = [...source.matchAll(/^model (\w+) \{\n([\s\S]*?)^\}/gm)]
+                .map(
+                    ([, name, body]) =>
+                        [
+                            name,
+                            (body ?? '')
+                                .split('\n')
+                                .map((line) => line.trim())
+                                .filter((line) => line && !line.startsWith('@@') && !line.includes('@relation'))
+                                .map((line) => line.split(/\s+/)[0]),
+                        ] as const,
+                )
+                .sort(([left], [right]) => (left ?? '').localeCompare(right ?? ''));
+            expect(actual.map(([name]) => name)).toEqual(expected.map(([name]) => name));
+            for (const [index, [name, fields]] of actual.entries()) {
+                expect([...(fields ?? [])].sort(), name).toEqual([...(expected[index]?.[1] ?? [])].sort());
+            }
         }
-        await expect(twoFactor.beginEnrollment(session)).rejects.toMatchObject({
-            code: 'TWO_FACTOR_ALREADY_CONFIGURED',
-        });
     });
 
-    it('requires an enrollment before confirmation and replaces an abandoned pending secret', async () => {
-        const { twoFactor, session, clock } = await setup();
-        await expect(twoFactor.confirmEnrollment(session, '123456', TTL)).rejects.toMatchObject({
-            code: 'TWO_FACTOR_ENROLLMENT_NOT_STARTED',
-        });
-        const first = await twoFactor.beginEnrollment(session);
-        const second = await twoFactor.beginEnrollment(session);
-        expect(second.secret).not.toBe(first.secret);
-        await expect(
-            twoFactor.confirmEnrollment(session, totpCode(first.secret, totpStep(clock.now)), TTL),
-        ).rejects.toMatchObject({ code: 'TWO_FACTOR_INVALID_CODE' });
-        await expect(
-            twoFactor.confirmEnrollment(session, totpCode(second.secret, totpStep(clock.now)), TTL),
-        ).resolves.toBeDefined();
-    });
-});
+    it('starts users without a factor, keeps enrollment inactive until a valid code, then requires a code at sign-in', async () => {
+        const { call, signUp, signIn, enroll, memory } = await setup();
+        const cookie = await signUp();
+        const enabled = await call(post('/api/auth/two-factor/enable', { password: PASSWORD }, cookie));
+        expect(enabled.status).toBe(200);
+        const body = (await enabled.json()) as { totpURI: string; backupCodes: string[] };
+        expect(body.totpURI).toContain('otpauth://totp/Example');
+        expect(body.backupCodes.length).toBeGreaterThan(0);
+        const session = async () =>
+            (await call(new Request(`${BASE_URL}/api/auth/get-session`, { headers: { cookie } }))).json();
+        expect(((await session()) as { user: { twoFactorEnabled: boolean } }).user.twoFactorEnabled).toBe(false);
+        // A wrong code activates nothing.
+        expect((await call(post('/api/auth/two-factor/verify-totp', { code: '000000' }, cookie))).status).toBe(401);
+        expect(((await session()) as { user: { twoFactorEnabled: boolean } }).user.twoFactorEnabled).toBe(false);
+        // The secret is stored protected, never as the value shown to the user.
+        expect(JSON.stringify(memory.records.TwoFactor)).not.toContain(totpSecretFromUri(body.totpURI));
 
-async function enrolled() {
-    const context = await setup();
-    const enrollment = await context.twoFactor.beginEnrollment(context.session);
-    const grant = await context.twoFactor.confirmEnrollment(
-        context.session,
-        totpCode(enrollment.secret, totpStep(context.clock.now)),
-        TTL,
-    );
-
-    return { ...context, secret: enrollment.secret, codes: grant.recoveryCodes ?? [] };
-}
-
-describe('Challenge', () => {
-    it('accepts a valid TOTP, rejects invalid ones and rejects replay of a used time step', async () => {
-        const { twoFactor, session, clock, secret } = await enrolled();
-        clock.now += TOTP_PERIOD_SECONDS * 2000;
-        await expect(twoFactor.verifyTotp(session, '000000', TTL)).rejects.toMatchObject({
-            code: 'TWO_FACTOR_INVALID_CODE',
-        });
-        const code = totpCode(secret, totpStep(clock.now));
-        expect((await twoFactor.verifyTotp(session, code, TTL)).assurance.level).toBe('two-factor');
-        await expect(twoFactor.verifyTotp(session, code, TTL)).rejects.toMatchObject({
-            code: 'TWO_FACTOR_INVALID_CODE',
-        });
-    });
-
-    it('rejects the code used to confirm enrollment when replayed as the first challenge', async () => {
-        const { twoFactor, session, clock, secret } = await enrolled();
-        await expect(twoFactor.verifyTotp(session, totpCode(secret, totpStep(clock.now)), TTL)).rejects.toMatchObject({
-            code: 'TWO_FACTOR_INVALID_CODE',
-        });
+        const enrolled = await enroll(cookie);
+        const { secret } = enrolled;
+        const verifiedSession = (await (
+            await call(new Request(`${BASE_URL}/api/auth/get-session`, { headers: { cookie: enrolled.cookie } }))
+        ).json()) as { user: { twoFactorEnabled: boolean; updatedAt: string }; session: { createdAt: string } };
+        expect(verifiedSession.user.twoFactorEnabled).toBe(true);
+        expect(Date.parse(verifiedSession.session.createdAt)).toBeGreaterThanOrEqual(
+            Date.parse(verifiedSession.user.updatedAt),
+        );
+        const login = await signIn();
+        expect(await login.json()).toMatchObject({ twoFactorRedirect: true });
+        // No session exists until the second factor is verified.
+        const pending = cookies(login);
+        expect(
+            await (
+                await call(new Request(`${BASE_URL}/api/auth/get-session`, { headers: { cookie: pending } }))
+            ).json(),
+        ).toBeNull();
+        const verified = await call(
+            post('/api/auth/two-factor/verify-totp', { code: totpCode(secret, totpStep(Date.now())) }, pending),
+        );
+        expect(verified.status).toBe(200);
+        const full = cookies(verified);
+        const active = (await (
+            await call(new Request(`${BASE_URL}/api/auth/get-session`, { headers: { cookie: full } }))
+        ).json()) as { user: { twoFactorEnabled: boolean; updatedAt: string }; session: { createdAt: string } };
+        expect(active.user.twoFactorEnabled).toBe(true);
+        // The signals admin relies on: the verified session is newer than the enrollment.
+        expect(Date.parse(active.session.createdAt)).toBeGreaterThanOrEqual(Date.parse(active.user.updatedAt));
     });
 
-    it('refuses challenges without a configured factor', async () => {
-        const { twoFactor, session } = await setup();
-        await expect(twoFactor.verifyTotp(session, '123456', TTL)).rejects.toMatchObject({
-            code: 'TWO_FACTOR_NOT_CONFIGURED',
-        });
-        await twoFactor.beginEnrollment(session);
-        await expect(twoFactor.verifyRecovery(session, 'AAAA-AAAA-AAAA', TTL)).rejects.toMatchObject({
-            code: 'TWO_FACTOR_NOT_CONFIGURED',
-        });
-    });
-
-    it('locks after repeated failures, reports it before evaluating codes, and recovers after the lockout', async () => {
-        const { twoFactor, session, clock, secret } = await enrolled();
-        clock.now += TOTP_PERIOD_SECONDS * 2000;
-        for (let attempt = 1; attempt < MAX_FAILED_ATTEMPTS; attempt += 1) {
-            await expect(twoFactor.verifyTotp(session, '000000', TTL)).rejects.toMatchObject({ status: 400 });
-        }
-        await expect(twoFactor.verifyTotp(session, '000000', TTL)).rejects.toMatchObject({
-            code: 'TWO_FACTOR_LOCKED',
-            status: 429,
-        });
-        // Even the correct code and a recovery attempt are refused while locked.
-        const valid = totpCode(secret, totpStep(clock.now));
-        await expect(twoFactor.verifyTotp(session, valid, TTL)).rejects.toMatchObject({ code: 'TWO_FACTOR_LOCKED' });
-        await expect(twoFactor.verifyRecovery(session, 'AAAA-AAAA-AAAA', TTL)).rejects.toMatchObject({
-            code: 'TWO_FACTOR_LOCKED',
-        });
-        clock.now += LOCKOUT_SECONDS * 1000;
-        expect((await twoFactor.verifyTotp(session, totpCode(secret, totpStep(clock.now)), TTL)).assurance.level).toBe(
-            'two-factor',
+    it('leaves sessions that predate enrollment older than the user’s last update, and replaces the enrolling one', async () => {
+        const { call, signUp, signIn, enroll } = await setup();
+        const enrolling = await signUp();
+        const other = cookies(await signIn());
+        const { cookie } = await enroll(enrolling);
+        const read = async (value: string) =>
+            (await (
+                await call(new Request(`${BASE_URL}/api/auth/get-session`, { headers: { cookie: value } }))
+            ).json()) as {
+                user: { updatedAt: string };
+                session: { createdAt: string };
+            } | null;
+        const stale = await read(other);
+        expect(stale).not.toBeNull();
+        expect(Date.parse(stale?.session.createdAt ?? '')).toBeLessThan(Date.parse(stale?.user.updatedAt ?? ''));
+        const fresh = await read(cookie);
+        expect(Date.parse(fresh?.session.createdAt ?? '')).toBeGreaterThanOrEqual(
+            Date.parse(fresh?.user.updatedAt ?? ''),
         );
     });
 
-    it('resets the failure counter after a success', async () => {
-        const { twoFactor, session, clock, secret } = await enrolled();
-        clock.now += TOTP_PERIOD_SECONDS * 2000;
-        for (let attempt = 1; attempt < MAX_FAILED_ATTEMPTS; attempt += 1) {
-            await expect(twoFactor.verifyTotp(session, '000000', TTL)).rejects.toMatchObject({ status: 400 });
+    it('accepts a backup code once and rejects a reused or invalid one', async () => {
+        const { call, signIn, signUp, enroll } = await setup();
+        const cookie = await signUp();
+        const { backupCodes } = await enroll(cookie);
+        const first = cookies(await signIn());
+        const used = await call(post('/api/auth/two-factor/verify-backup-code', { code: backupCodes[0] }, first));
+        expect(used.status).toBe(200);
+        const second = cookies(await signIn());
+        expect(
+            (await call(post('/api/auth/two-factor/verify-backup-code', { code: backupCodes[0] }, second))).status,
+        ).toBe(401);
+        expect(
+            (await call(post('/api/auth/two-factor/verify-backup-code', { code: 'nope-nope' }, second))).status,
+        ).toBe(401);
+    });
+
+    it('locks the account after the configured number of failures, even for a correct code', async () => {
+        const { call, signIn, signUp, enroll } = await setup({ maxFailedAttempts: 3 });
+        const cookie = await signUp();
+        const { secret } = await enroll(cookie);
+        const pending = cookies(await signIn());
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            expect(
+                (await call(post('/api/auth/two-factor/verify-totp', { code: '000000' }, pending))).status,
+            ).toBeGreaterThanOrEqual(400);
         }
-        await twoFactor.verifyTotp(session, totpCode(secret, totpStep(clock.now)), TTL);
-        await expect(twoFactor.verifyTotp(session, '000000', TTL)).rejects.toMatchObject({ status: 400 });
-    });
-});
-
-describe('Recovery codes', () => {
-    it('accepts each code once, tolerates formatting, and reports remaining codes', async () => {
-        const { twoFactor, session, codes, memory } = await enrolled();
-        const [code, second] = codes as [string, string];
-        const grant = await twoFactor.verifyRecovery(session, code.toLowerCase().replaceAll('-', ' '), TTL);
-        expect(grant.assurance).toMatchObject({ level: 'two-factor', method: 'recovery' });
-        expect(grant.recoveryCodesRemaining).toBe(RECOVERY_CODE_COUNT - 1);
-        expect(memory.records.TwoFactorRecoveryCode.filter((row) => row.usedAt !== null)).toHaveLength(1);
-        await expect(twoFactor.verifyRecovery(session, code, TTL)).rejects.toMatchObject({
-            code: 'TWO_FACTOR_INVALID_CODE',
-        });
-        await expect(twoFactor.verifyRecovery(session, second, TTL)).resolves.toBeDefined();
-        await expect(twoFactor.verifyRecovery(session, 'not-a-code', TTL)).rejects.toMatchObject({ status: 400 });
-    });
-
-    it('does not accept another user’s recovery code', async () => {
-        const first = await enrolled();
-        const other = await setup('b@example.test');
-        const enrollment = await other.twoFactor.beginEnrollment(other.session);
-        await other.twoFactor.confirmEnrollment(
-            other.session,
-            totpCode(enrollment.secret, totpStep(other.clock.now)),
-            TTL,
+        const locked = await call(
+            post('/api/auth/two-factor/verify-totp', { code: totpCode(secret, totpStep(Date.now())) }, pending),
         );
-        await expect(
-            other.twoFactor.verifyRecovery(other.session, first.codes[0] as string, TTL),
-        ).rejects.toMatchObject({ code: 'TWO_FACTOR_INVALID_CODE' });
+        expect(locked.status).toBe(429);
     });
 
-    it('regeneration invalidates the previous set and stores only hashes', async () => {
-        const { twoFactor, session, codes, memory } = await enrolled();
-        const regenerated = await twoFactor.regenerateRecoveryCodes(session);
-        expect(regenerated).toHaveLength(RECOVERY_CODE_COUNT);
-        expect(memory.records.TwoFactorRecoveryCode).toHaveLength(RECOVERY_CODE_COUNT);
-        await expect(twoFactor.verifyRecovery(session, codes[0] as string, TTL)).rejects.toMatchObject({
-            code: 'TWO_FACTOR_INVALID_CODE',
-        });
-        await expect(twoFactor.verifyRecovery(session, regenerated[0] as string, TTL)).resolves.toBeDefined();
-        expect(JSON.stringify(memory.records.TwoFactorRecoveryCode)).not.toContain(
-            (regenerated[1] as string).replaceAll('-', ''),
+    it('exposes only the sanctioned two-factor endpoints', async () => {
+        const { call, signUp } = await setup();
+        const cookie = await signUp();
+        for (const path of [
+            '/api/auth/two-factor/send-otp',
+            '/api/auth/two-factor/verify-otp',
+            '/api/auth/two-factor/get-totp-uri',
+        ]) {
+            expect((await call(post(path, {}, cookie))).status).toBe(404);
+        }
+        expect((await call(post('/api/auth/two-factor/enable', { password: 'wrong-password' }, cookie))).status).toBe(
+            400,
         );
-    });
-
-    it('requires a configured factor to regenerate', async () => {
-        const { twoFactor, session } = await setup();
-        await expect(twoFactor.regenerateRecoveryCodes(session)).rejects.toMatchObject({
-            code: 'TWO_FACTOR_NOT_CONFIGURED',
-        });
     });
 });

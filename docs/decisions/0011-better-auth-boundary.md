@@ -12,7 +12,7 @@ Better Auth is a foundational Nestrum dependency. Its current adapter contract i
 
 `defineAuth` creates a framework-owned `nestrum.auth` app and contributes User, Session, Account, and Verification fragments inline to the selected database. `ApplicationConfig.auth` validates that database and those identities before startup. Auth models cannot be registered as ordinary resources. The app's adapter is supplied a binding of Prisma 8 collections and Mongo count callbacks, then translates Better Auth where clauses into QuerySpecs. Unsupported predicates and unscoped mutations fail closed. The adapter declares sequential transactions until client/transaction ownership is integrated.
 
-The auth user exposes the Better Auth core fields. User extensions use Nestrum `AuthField` descriptors translated into Better Auth `additionalFields`; reserved names and invalid required server-owned fields are rejected. Core user/profile separation remains the convention.
+The auth user exposes the Better Auth core fields. The user is not extensible: the auth contract is prebaked per provider (plus the `twoFactor` plugin's `twoFactorEnabled` and `TwoFactor` table) and verified against Better Auth's schema by a test. The earlier `AuthField` extension mechanism was removed. Core user/profile separation is the rule; application data is keyed by user id in application-owned models.
 
 Better Auth owns the email/password and session endpoint semantics. Nestrum mounts GET/POST `/api/auth/*`, checks Origin against the configured base/trusted origins, and maps validated sessions through SubjectFactory. No identity is inferred from headers. Invalid, missing, or expired sessions become anonymous; an explicit runtime subject resolver takes precedence.
 

@@ -1,65 +1,101 @@
 <script lang="ts">
+import { TwoFactorClient } from '$lib/two-factor-client.js';
 import type { PageProps } from './$types';
 
-type Shown = {
-    step?: 'confirm' | 'retry' | 'done';
-    next?: string;
-    secret?: string;
-    otpauthUri?: string;
-    recoveryCodes?: readonly string[];
-    message?: string;
-};
+let { data }: PageProps = $props();
+let message = $state('');
+let pending = $state(false);
+let enrollment = $state<{ totpURI: string; secret: string; backupCodes: string[] } | undefined>();
+let activated = $state(false);
+const client = new TwoFactorClient();
 
-let { data, form }: PageProps = $props();
-// Action results are a union of success and failure payloads; read them through one optional-field view.
-const shown = $derived((form ?? {}) as Shown);
-const next = $derived(shown.next ?? data.next);
+async function begin(event: SubmitEvent) {
+    event.preventDefault();
+    if (!(event.currentTarget instanceof HTMLFormElement) || pending) {
+        return;
+    }
+    const password = new FormData(event.currentTarget).get('password');
+    if (typeof password !== 'string' || !password) {
+        return;
+    }
+    pending = true;
+    message = '';
+    const result = await client.enable(password);
+    if (result.ok) {
+        enrollment = result.value;
+    } else {
+        message = result.message;
+    }
+    pending = false;
+}
+
+async function activate(event: SubmitEvent) {
+    event.preventDefault();
+    if (!(event.currentTarget instanceof HTMLFormElement) || pending) {
+        return;
+    }
+    const code = new FormData(event.currentTarget).get('code');
+    if (typeof code !== 'string' || !code.trim()) {
+        return;
+    }
+    pending = true;
+    message = '';
+    const result = await client.verifyTotp(code);
+    if (result.ok) {
+        // Activation replaces the session with a verified one; the codes stay on screen until the user continues.
+        activated = true;
+    } else {
+        message = result.message;
+    }
+    pending = false;
+}
 </script>
 
 <svelte:head><title>Set up two-factor authentication</title></svelte:head>
 <h1>Set up two-factor authentication</h1>
-{#if shown.message}<p role="alert">{shown.message}</p>{/if}
-{#if data.admin.status !== 'two-factor' && shown.step !== 'done'}
-    {#if data.admin.status === 'ready'}
-        <p>Two-factor authentication is active for this session.</p>
-        <p><a href={data.next}>Continue to administration</a></p>
-    {:else}
-        <p>Sign in to continue.</p>
-    {/if}
-{:else if shown.step === 'done'}
-    <h2>Save your recovery codes</h2>
-    <p>Each code works once if you lose access to your authenticator. They are shown only now and cannot be retrieved later.</p>
+{#if message}<p role="alert">{message}</p>{/if}
+{#if data.admin.status === 'sign-in'}
+    <p><a href="/admin">Sign in</a> to set up two-factor authentication.</p>
+{:else if activated && enrollment}
+    <p>Two-factor authentication is now active.</p>
+    <h2>Your recovery codes</h2>
+    <p>Each code works once if you lose access to your authenticator. They are shown only on this page and cannot be retrieved later.</p>
     <ul aria-label="Recovery codes">
-        {#each shown.recoveryCodes ?? [] as code (code)}
+        {#each enrollment.backupCodes as code (code)}
             <li><code>{code}</code></li>
         {/each}
     </ul>
-    <p><a href={next}>I have saved these codes — continue</a></p>
-{:else if shown.step === 'confirm' || shown.step === 'retry'}
-    {#if shown.step === 'confirm'}
-        <p>
-            Add this account to your authenticator app using the key below, or
-            <a href={shown.otpauthUri}>open it in an authenticator app</a>.
-        </p>
-        <p>Setup key: <code>{shown.secret}</code></p>
-    {:else}
-        <form method="POST" action="?/start">
-            <input type="hidden" name="next" value={next} />
-            <button type="submit">Start over with a new key</button>
-        </form>
-    {/if}
-    <form method="POST" action="?/confirm">
-        <input type="hidden" name="next" value={next} />
+    <p><a href={data.next} data-sveltekit-reload>I have saved these codes — continue</a></p>
+{:else if data.admin.status === 'ready'}
+    <p>Two-factor authentication is active for this session.</p>
+    <p><a href={data.next}>Continue to administration</a></p>
+{:else if enrollment}
+    <p>
+        Add this account to your authenticator app using the key below, or
+        <a href={enrollment.totpURI}>open it in an authenticator app</a>.
+    </p>
+    <p>Setup key: <code>{enrollment.secret}</code></p>
+    <h2>Recovery codes</h2>
+    <p>Save these now. They become valid when you activate two-factor authentication and are not shown again.</p>
+    <ul aria-label="Recovery codes">
+        {#each enrollment.backupCodes as code (code)}
+            <li><code>{code}</code></li>
+        {/each}
+    </ul>
+    <form method="POST" onsubmit={activate}>
         <label>
             Verification code
-            <input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="16" required />
+            <input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="16" required disabled={pending} />
         </label>
-        <button type="submit">Activate two-factor authentication</button>
+        <button type="submit" disabled={pending}>Activate two-factor authentication</button>
     </form>
 {:else}
-    <p>Administration requires two-factor authentication. Set it up with an authenticator app.</p>
-    <form method="POST" action="?/start">
-        <input type="hidden" name="next" value={data.next} />
-        <button type="submit">Begin setup</button>
+    <p>Administration requires two-factor authentication. Set it up with an authenticator app. Confirm your password to begin.</p>
+    <form method="POST" onsubmit={begin}>
+        <label>
+            Password
+            <input name="password" type="password" autocomplete="current-password" required disabled={pending} />
+        </label>
+        <button type="submit" disabled={pending}>Begin setup</button>
     </form>
 {/if}

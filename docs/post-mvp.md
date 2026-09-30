@@ -53,7 +53,7 @@ PM3.0 documentation is complete. PM3.1–PM3.5 are Not Started; API keys are not
 
 The [admin 2FA initiative](post-mvp/admin-2fa/README.md) is the second post-MVP initiative and is implemented. It adds a framework-owned current-session assurance layer to the existing Better Auth session + `admin.access` ABAC + same-origin admin boundary.
 
-PM2.0–PM2.5 are complete: admin 2FA is enforced by default on the admin UI and the private admin API. TOTP is the factor, with hashed one-time recovery codes, independently expiring per-session assurance (default 12 hours), structured `ADMIN_2FA_REQUIRED` API errors, attempt lockout, and framework-owned Svelte setup/challenge/recovery pages. Existing applications must migrate the three new auth models (`AdminAssurance`, `TwoFactorFactor`, `TwoFactorRecoveryCode`). The Docker integration run of the example, which now performs a real 2FA flow, is owned by the project owner and was not executed during implementation. The remaining MVP atomic object-policy write gate stays open independently.
+PM2.0–PM2.5 are complete: admin 2FA is enforced by default on the admin UI and the private admin API, using Better Auth's `twoFactor` plugin (TOTP, one-time backup codes, account lockout) and framework-owned Svelte setup/challenge/recovery pages. Admin access requires a session that passed the second factor, was created after the user's last update, and is younger than `assuranceTtlSeconds` (default 12 hours); an older session gets `ADMIN_2FA_REQUIRED` (`challenge-required`) and must sign in again. This replaces the plan's independently expiring assurance, because the plugin only verifies at sign-in. The auth contract is now prebaked per provider (`defineAuth({ extend })` was removed), and existing applications must migrate `User.twoFactorEnabled` and the `TwoFactor` table. The Docker integration run of the example, which now performs a real 2FA flow, is owned by the project owner and was not executed during implementation. The remaining MVP atomic object-policy write gate stays open independently.
 
 | Phase | Goal | Status |
 | --- | --- | --- |
@@ -112,7 +112,7 @@ Node-specific listener APIs stay in the Node adapter, outside core and CLI. Prod
 - Provider-specific optimizations outside Node.
 - GraphQL, advanced relationship expansion, generated external SDKs, and public arbitrary Prisma expressions.
 - Field-level ABAC is excluded from the MVP; any later adoption requires revisiting stable response and admin contracts.
-- Social auth providers, non-admin MFA, passkeys/WebAuthn, QR-image enrollment, configurable lockout policy, factor reset/recovery-code UI, email verification delivery, account linking, and broader Better Auth plugin coverage. (Admin TOTP 2FA shipped in [Plan 02](post-mvp/admin-2fa/README.md).)
+- Social auth providers, non-admin MFA, passkeys/WebAuthn, QR-image enrollment, factor reset and backup-code/disable UI, independently expiring admin assurance, email verification delivery, account linking, and broader Better Auth plugin coverage. (Admin TOTP 2FA shipped in [Plan 02](post-mvp/admin-2fa/README.md).)
 
 ## Implementation follow-ups
 

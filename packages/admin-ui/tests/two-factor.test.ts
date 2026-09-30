@@ -2,7 +2,7 @@ import { render } from 'svelte/server';
 import { describe, expect, it, vi } from 'vitest';
 import { AdminMetadataClient, loadAdminState } from '../src/lib/metadata.js';
 import { isAuthPath, safeReturnTo, twoFactorHref, withNext } from '../src/lib/return-to.js';
-import { confirmEnrollment, startEnrollment, submitChallenge, TwoFactorClient } from '../src/lib/two-factor.server.js';
+import { TwoFactorClient } from '../src/lib/two-factor-client.js';
 import { load as loadLayout } from '../src/routes/+layout.server.js';
 import { load as loadChallenge } from '../src/routes/auth/2fa/+page.server.js';
 import ChallengePage from '../src/routes/auth/2fa/+page.svelte';
@@ -144,6 +144,18 @@ describe('Two-factor shell state', () => {
     });
 });
 
+describe('Shell on framework auth pages', () => {
+    it('shows framework pages, not the sign-in form, to a pending second-factor sign-in only on auth paths', async () => {
+        const state = { status: 'sign-in', message: 'Sign in to open administration.' } as const;
+        const onAuth = await render(ShellFixture, { props: { state, activePath: '/admin/auth/2fa' } });
+        expect(onAuth.body).toContain('Protected workspace content');
+        expect(onAuth.body).not.toContain('name="password"');
+        const elsewhere = await render(ShellFixture, { props: { state, activePath: '/admin/projects' } });
+        expect(elsewhere.body).toContain('name="password"');
+        expect(elsewhere.body).not.toContain('Protected workspace content');
+    });
+});
+
 describe('Two-factor page loads', () => {
     const parent = (admin: unknown) => vi.fn(async () => ({ admin, path: '' })) as never;
     const url = (path: string) => new URL(`http://localhost${path}`);
@@ -216,183 +228,103 @@ describe('Two-factor page loads', () => {
     });
 });
 
-describe('Two-factor form handling', () => {
-    it('posts a challenge as credentialed, uncached JSON and returns to the intended route', async () => {
-        const fetch = vi.fn(async () => Response.json({ assurance: { level: 'two-factor' } }));
-        const result = await redirected(
-            submitChallenge({ fetch, request: form({ code: ' 123456 ', next: '/admin/projects?limit=50' }) }, 'totp'),
-        );
-        expect(result).toMatchObject({ status: 303, location: '/admin/projects?limit=50' });
-        expect(fetch).toHaveBeenCalledWith('/__admin/auth/2fa/challenge', {
+describe('Two-factor browser client', () => {
+    const ok = (body: unknown = {}) =>
+        vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => Response.json(body));
+
+    it('posts credentialed, uncached JSON to the Better Auth two-factor endpoints', async () => {
+        const fetch = ok({ status: true });
+        expect(await new TwoFactorClient(fetch).verifyTotp(' 123 456 ')).toEqual({ ok: true, value: undefined });
+        expect(fetch).toHaveBeenCalledWith('/api/auth/two-factor/verify-totp', {
             method: 'POST',
             credentials: 'same-origin',
             cache: 'no-store',
             headers: { accept: 'application/json', 'content-type': 'application/json' },
             body: JSON.stringify({ code: '123456' }),
         });
+        const backup = ok();
+        await new TwoFactorClient(backup).verifyBackupCode(' ABCDE-12345 ');
+        expect(backup.mock.calls[0]?.[0]).toBe('/api/auth/two-factor/verify-backup-code');
+        expect(JSON.parse(String(backup.mock.calls[0]?.[1]?.body))).toEqual({ code: 'ABCDE-12345' });
     });
 
-    it('uses the recovery endpoint for recovery codes and never redirects to an unsafe target', async () => {
-        const fetch = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
-            Response.json({ assurance: {} }),
-        );
-        const result = await redirected(
-            submitChallenge(
-                { fetch, request: form({ code: 'ABCD-EFGH-JKLM', next: 'https://evil.example' }) },
-                'recovery',
-            ),
-        );
-        expect(result).toMatchObject({ location: '/admin' });
-        expect(fetch.mock.calls[0]?.[0]).toBe('/__admin/auth/2fa/recovery/verify');
+    it('enables enrollment and returns the key and backup codes from that one response', async () => {
+        const uri = 'otpauth://totp/Nestrum:a%40example.test?secret=JBSWY3DPEHPK3PXP&issuer=Nestrum';
+        const result = await new TwoFactorClient(ok({ totpURI: uri, backupCodes: ['aaaaa-bbbbb'] })).enable('pw');
+        expect(result).toEqual({
+            ok: true,
+            value: { totpURI: uri, secret: 'JBSWY3DPEHPK3PXP', backupCodes: ['aaaaa-bbbbb'] },
+        });
+        const invalid = await new TwoFactorClient(
+            ok({ totpURI: 'https://evil.example/?secret=x', backupCodes: [] }),
+        ).enable('pw');
+        expect(invalid).toMatchObject({ ok: false, message: expect.stringMatching(/Unable to complete/) });
     });
 
     it.each([
-        [400, { error: { code: 'TWO_FACTOR_INVALID_CODE', message: 'Private backend details' } }, /not valid/],
-        [429, { error: { code: 'TWO_FACTOR_LOCKED' } }, /Too many attempts/],
-        [401, { error: { code: 'ADMIN_AUTHENTICATION_REQUIRED' } }, /expired/],
-        [500, { error: { code: 'INTERNAL_SERVER_ERROR', message: 'stack trace' } }, /Unable to complete/],
-    ])('maps a %s backend response to a safe message', async (status, body, expected) => {
+        [401, { code: 'INVALID_TWO_FACTOR_COOKIE', message: 'Private backend details' }, /sign-in expired/],
+        [400, { code: 'INVALID_CODE' }, /not valid/],
+        [401, { code: 'INVALID_BACKUP_CODE' }, /not valid/],
+        [429, { code: 'ACCOUNT_TEMPORARILY_LOCKED' }, /Too many attempts/],
+        [401, { code: 'INVALID_PASSWORD' }, /password is not correct/],
+        [500, { message: 'stack trace' }, /Unable to complete/],
+    ])('maps a %s response to a safe message', async (status, body, expected) => {
         const fetch = vi.fn(async () => Response.json(body, { status }));
-        const result = (await submitChallenge(
-            { fetch, request: form({ code: '123456', next: '/admin/x' }) },
-            'totp',
-        )) as {
-            status: number;
-            data: { message: string; next: string };
-        };
-        expect(result.status).toBe(status);
-        expect(result.data.message).toMatch(expected);
-        expect(JSON.stringify(result.data)).not.toMatch(/Private backend|stack trace/);
-        expect(result.data.next).toBe('/admin/x');
+        const result = await new TwoFactorClient(fetch).verifyTotp('123456');
+        expect(result).toMatchObject({ ok: false, message: expect.stringMatching(expected) });
+        expect(JSON.stringify(result)).not.toMatch(/Private backend|stack trace/);
     });
 
-    it('survives network failure and rejects malformed forms before calling the API', async () => {
-        const failing = vi.fn(async () => {
+    it('survives network failure and reports sign-out success', async () => {
+        const offline = vi.fn(async () => {
             throw new Error('offline');
         });
-        expect(
-            (
-                (await submitChallenge({ fetch: failing, request: form({ code: '123456' }) }, 'totp')) as {
-                    status: number;
-                }
-            ).status,
-        ).toBe(503);
-        const fetch = vi.fn();
-        for (const request of [
-            form({}),
-            form({ code: '   ' }),
-            form({ code: ['1', '2'] }),
-            form({ code: '123456', admin: 'true' }),
-            form({ code: 'x'.repeat(65) }),
-        ]) {
-            expect(((await submitChallenge({ fetch, request }, 'totp')) as { status: number }).status).toBe(400);
-        }
-        expect(fetch).not.toHaveBeenCalled();
-    });
-
-    it('starts enrollment and returns the key only in that action result', async () => {
-        const fetch = vi.fn(async () =>
-            Response.json(
-                { secret: 'JBSWY3DPEHPK3PXP', otpauthUri: 'otpauth://totp/Nestrum:a?secret=JBSWY3DPEHPK3PXP' },
-                { status: 201 },
-            ),
-        );
-        expect(await startEnrollment({ fetch, request: form({ next: '/admin/x' }) })).toEqual({
-            step: 'confirm',
-            next: '/admin/x',
-            secret: 'JBSWY3DPEHPK3PXP',
-            otpauthUri: 'otpauth://totp/Nestrum:a?secret=JBSWY3DPEHPK3PXP',
-        });
-        const invalid = vi.fn(async () => Response.json({ secret: 'x', otpauthUri: 'https://evil.example' }));
-        expect(((await startEnrollment({ fetch: invalid, request: form({}) })) as { status: number }).status).toBe(502);
-    });
-
-    it('confirms enrollment with one-time recovery codes and lets a failed attempt retry', async () => {
-        const codes = ['AAAA-BBBB-CCCC', 'DDDD-EEEE-FFFF'];
-        const ok = vi.fn(async () => Response.json({ assurance: {}, recoveryCodes: codes }));
-        expect(await confirmEnrollment({ fetch: ok, request: form({ code: '123456', next: '/admin/x' }) })).toEqual({
-            step: 'done',
-            next: '/admin/x',
-            recoveryCodes: codes,
-        });
-        const bad = vi.fn(async () => Response.json({ error: { code: 'TWO_FACTOR_INVALID_CODE' } }, { status: 400 }));
-        const result = (await confirmEnrollment({ fetch: bad, request: form({ code: '000000' }) })) as unknown as {
-            status: number;
-            data: { step: string; message: string };
-        };
-        expect(result.status).toBe(400);
-        expect(result.data).toMatchObject({ step: 'retry', message: expect.stringMatching(/not valid/) });
-    });
-
-    it('exposes the client for direct use with no retained state', async () => {
-        const fetch = vi.fn(async () => Response.json({}));
-        await new TwoFactorClient(fetch).recover('ABCD');
-        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(await new TwoFactorClient(offline).verifyTotp('123456')).toMatchObject({ ok: false });
+        expect(await new TwoFactorClient(offline).signOut()).toBe(false);
+        expect(await new TwoFactorClient(ok()).signOut()).toBe(true);
     });
 });
 
 describe('Framework-owned pages', () => {
-    const admin = { status: 'two-factor', reason: 'challenge-required', message: '' };
+    const pending = { status: 'two-factor', reason: 'challenge-required', message: '' };
+    const signIn = { status: 'sign-in', message: '' };
 
-    it('renders an accessible challenge form with a recovery alternative and a safe next value', async () => {
-        const output = await render(ChallengePage, {
-            props: {
-                data: { admin, path: '/admin/auth/2fa', next: '/admin/projects' },
-                form: { message: 'That code is not valid.' },
-            } as never,
+    it('renders the code form for a pending sign-in and a sign-in-again prompt for a stale session', async () => {
+        const form = await render(ChallengePage, {
+            props: { data: { admin: signIn, path: '/admin/auth/2fa', next: '/admin/projects' } } as never,
         });
-        expect(output.body).toContain('autocomplete="one-time-code"');
-        expect(output.body).toContain('inputmode="numeric"');
-        expect(output.body).toContain('role="alert"');
-        expect(output.body).toContain('name="next" value="/admin/projects"');
-        expect(output.body).toContain('href="/admin/auth/recovery?next=%2Fadmin%2Fprojects"');
-        expect(output.body).not.toMatch(/<script/i);
+        expect(form.body).toContain('autocomplete="one-time-code"');
+        expect(form.body).toContain('inputmode="numeric"');
+        expect(form.body).toContain('href="/admin/auth/recovery?next=%2Fadmin%2Fprojects"');
+        expect(form.body).not.toMatch(/<script/i);
+        const stale = await render(ChallengePage, {
+            props: { data: { admin: pending, path: '', next: '/admin/projects' } } as never,
+        });
+        expect(stale.body).toContain('Sign in again');
+        expect(stale.body).not.toContain('one-time-code');
     });
 
     it('renders the recovery form', async () => {
         const output = await render(RecoveryPage, {
-            props: { data: { admin, path: '', next: '/admin' }, form: null } as never,
+            props: { data: { admin: signIn, path: '', next: '/admin' } } as never,
         });
         expect(output.body).toContain('Recovery code');
         expect(output.body).toContain('autocomplete="off"');
+        expect(output.body).toContain('href="/admin/auth/2fa"');
     });
 
-    it('walks setup: begin, key display, activation form, then one-time recovery codes', async () => {
-        const data = { admin: { ...admin, reason: 'setup-required' }, path: '', next: '/admin' };
-        const begin = await render(SetupPage, { props: { data, form: null } as never });
-        expect(begin.body).toContain('action="?/start"');
-        const confirm = await render(SetupPage, {
-            props: {
-                data,
-                form: {
-                    step: 'confirm',
-                    next: '/admin',
-                    secret: 'JBSWY3DPEHPK3PXP',
-                    otpauthUri: 'otpauth://totp/x?secret=JBSWY3DPEHPK3PXP',
-                },
-            } as never,
+    it('starts setup with a password confirmation and points signed-out or verified users elsewhere', async () => {
+        const setup = { status: 'two-factor', reason: 'setup-required', message: '' };
+        const begin = await render(SetupPage, { props: { data: { admin: setup, path: '', next: '/admin' } } as never });
+        expect(begin.body).toContain('type="password"');
+        expect(begin.body).toContain('Begin setup');
+        expect(begin.body).not.toContain('Recovery codes');
+        const out = await render(SetupPage, { props: { data: { admin: signIn, path: '', next: '/admin' } } as never });
+        expect(out.body).toContain('href="/admin"');
+        expect(out.body).not.toContain('type="password"');
+        const ready = await render(SetupPage, {
+            props: { data: { admin: { status: 'ready', resources: [] }, path: '', next: '/admin/x' } } as never,
         });
-        expect(confirm.body).toContain('JBSWY3DPEHPK3PXP');
-        expect(confirm.body).toContain('href="otpauth://totp/x?secret=JBSWY3DPEHPK3PXP"');
-        expect(confirm.body).toContain('action="?/confirm"');
-        const retry = await render(SetupPage, {
-            props: { data, form: { step: 'retry', next: '/admin', message: 'That code is not valid.' } } as never,
-        });
-        expect(retry.body).toContain('action="?/start"');
-        expect(retry.body).toContain('action="?/confirm"');
-        expect(retry.body).not.toContain('Setup key');
-        const done = await render(SetupPage, {
-            props: {
-                data: { ...data, admin: { status: 'ready', resources: [] } },
-                form: { step: 'done', next: '/admin', recoveryCodes: ['AAAA-BBBB-CCCC'] },
-            } as never,
-        });
-        expect(done.body).toContain('AAAA-BBBB-CCCC');
-        expect(done.body).toContain('cannot be retrieved later');
-        const later = await render(SetupPage, {
-            props: { data: { ...data, admin: { status: 'ready', resources: [] } }, form: null } as never,
-        });
-        expect(later.body).not.toContain('AAAA-BBBB-CCCC');
-        expect(later.body).toContain('active for this session');
+        expect(ready.body).toContain('active for this session');
     });
 });

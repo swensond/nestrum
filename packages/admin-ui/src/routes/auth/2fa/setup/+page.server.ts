@@ -1,11 +1,10 @@
 import { redirect } from '@sveltejs/kit';
 import { safeReturnTo, withNext } from '$lib/return-to.js';
-import { confirmEnrollment, startEnrollment } from '$lib/two-factor.server.js';
-import type { Actions, PageServerLoad } from './$types';
+import type { PageServerLoad } from './$types';
 
 /**
- * Unlike the challenge pages this one never redirects away on success: the confirmation response is the only
- * place recovery codes are ever shown, and the reload after it already reports a verified session.
+ * Unlike the challenge pages this one never redirects away for a verified session: the enable response is the only
+ * place backup codes are ever shown, and activation replaces the session, so the page must keep its own state.
  */
 export const load = (async ({ parent, url }) => {
     const { admin } = await parent();
@@ -16,5 +15,3 @@ export const load = (async ({ parent, url }) => {
 
     return { next };
 }) satisfies PageServerLoad;
-
-export const actions = { start: startEnrollment, confirm: confirmEnrollment } satisfies Actions;

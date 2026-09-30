@@ -6,67 +6,62 @@ Complete
 
 ## Goal
 
-Implement framework-owned TOTP setup/confirmation and secure recovery codes.
+Enroll TOTP and issue recovery (backup) codes through Better Auth's `twoFactor` plugin, with framework-owned pages driving it.
 
 ## Scope
 
-- Generate TOTP secrets and QR/`otpauth` enrollment information.
-- Require a valid TOTP before marking 2FA configured/active.
-- Generate cryptographically secure recovery codes, hash them at rest, and show plaintext only once.
-- Support one-time recovery use and regeneration that invalidates the previous set.
-- Provide private status/start/confirm and recovery endpoints for the later UI.
+- Expose the plugin's `enable`, `verify-totp`, `verify-backup-code`, `generate-backup-codes`, and `disable` endpoints under `/api/auth/two-factor/*`.
+- Enrollment is inactive until a valid TOTP is verified; backup codes are one-time.
+- Nestrum adds no factor storage, cryptography, or endpoints of its own.
 
 ## Out of Scope
 
-Admin-wide challenge enforcement, Svelte pages, WebAuthn/passkeys, recovery plaintext retrieval, automatic migrations, and final expiry hardening.
+Admin-wide enforcement (PM2.3), Svelte pages (PM2.4), WebAuthn/passkeys, OTP by email/SMS, trusted devices, and any bespoke crypto.
 
 ## Architecture Decisions
 
-Depends on [PM2.1](phase-01-assurance.md). Enrollment belongs to the framework and is available only after authentication and appropriate admin authorization. Secret and recovery-code handling must use cryptographically secure generation and protected storage; plaintext recovery codes are response-only issuance data. Activation is transactional from the user's perspective: an unverified secret cannot satisfy assurance.
+Depends on [PM2.1](phase-01-assurance.md). The plugin owns secrets (encrypted with the auth secret), backup codes (stored encrypted as one column and consumed on use), TOTP verification, and account lockout. Enrollment needs an authenticated session and the user's password (`allowPasswordless` is not enabled). The plugin's private-route plan (`/__admin/auth/2fa/*`) was dropped: the browser talks to Better Auth's same-origin endpoints directly, which keeps a single implementation and one origin/cookie policy.
 
 ## Implementation
 
-- **TOTP.** RFC 6238 (HMAC-SHA1, 30 s period, 6 digits, ±1 step window) implemented on `node:crypto` in `packages/auth/src/two-factor/totp.ts` and verified against the RFC vectors; the 20-byte secret is CSPRNG-generated and shown base32. No third-party TOTP dependency was added. Each accepted time step is single-use (`lastUsedStep`), so a code cannot be replayed, including the code used to confirm enrollment.
-- **Persistence** (three auth-owned models, added to the identity database contract): `TwoFactorFactor` (one per user: encrypted `secret`, `confirmedAt` — `null` while pending — `lastUsedStep`, `failedAttempts`, `lockedUntil`), `TwoFactorRecoveryCode` (`codeHash`, `usedAt`), and `AdminAssurance` (PM2.1).
-- **Secret protection.** The TOTP secret is stored as AES-256-GCM (`v1.<iv>.<ciphertext>.<tag>`), with a key derived by HKDF-SHA-256 from the auth secret and a purpose label. Rotating `AUTH_SECRET` therefore invalidates stored TOTP secrets (users re-enroll or use recovery codes handled by an operator); this is documented behavior.
-- **Recovery codes.** Ten codes of 60 random bits (`XXXX-XXXX-XXXX`, unambiguous alphabet, `crypto.randomInt`), stored only as HMAC-SHA-256 hashes (separately derived key). Codes are case-, space-, and dash-insensitive. A code is claimed with a compare-and-set on `usedAt`, so concurrent use of one code succeeds once. Regeneration deletes the whole previous set first and then issues a new one (a failure part-way leaves fewer codes, never a still-valid old set).
-- **Enrollment.** `beginEnrollment` refuses when a factor is already confirmed, replaces any abandoned pending secret, and returns the base32 secret and `otpauth://` URI (issuer from `defineAuth({ twoFactor: { issuer } })`, default "Nestrum"). Nothing is configured or asserted until `confirmEnrollment` verifies a TOTP; confirmation then activates the factor, issues recovery codes, and grants assurance to the confirming session.
-- **Private API** (`packages/admin/src/two-factor-routes.ts`, all `Cache-Control: no-store`, JSON bodies of exactly `{ "code": string }`): `GET /__admin/auth/2fa/status`, `POST .../enroll/start` (201), `.../enroll/confirm`, `.../challenge`, `.../recovery/verify`, `.../recovery/regenerate`. Secret and recovery-code material appears only in the single response that issues it.
+- **Flow.** `POST /api/auth/two-factor/enable {password}` returns `{ totpURI, backupCodes }` and leaves `twoFactorEnabled` false; `POST .../verify-totp {code}` activates the factor, sets `twoFactorEnabled`, and replaces the enrolling session with a verified one (the browser keeps the new cookie). A wrong code returns 401 and activates nothing; calling `enable` again replaces an unfinished secret.
+- **Sign-in.** For an enrolled user, `POST /api/auth/sign-in/email` returns `{ twoFactorRedirect: true }` and sets a short-lived signed cookie but no session. `verify-totp` or `verify-backup-code` with that cookie creates the session. A backup code works once.
+- **Lockout.** The plugin counts consecutive failures per account (10 attempts, 900 s by default; `defineAuth({ twoFactor: { maxFailedAttempts, lockoutSeconds } })`) and answers `429` while locked, even for a correct code.
+- **Backup codes** are returned by `enable` (before activation) and are not retrievable afterwards; `generate-backup-codes` (needs a verified session and the password) replaces the set.
 
 ## Public API
 
-`TwoFactorService` methods `beginEnrollment`, `confirmEnrollment`, `verifyTotp`, `verifyRecovery`, `regenerateRecoveryCodes`; error codes `TWO_FACTOR_INVALID_CODE` (400), `TWO_FACTOR_LOCKED` (429), `TWO_FACTOR_NOT_CONFIGURED`, `TWO_FACTOR_ALREADY_CONFIGURED`, `TWO_FACTOR_ENROLLMENT_NOT_STARTED` (409); exported helpers `totpCode`, `totpStep`, `TOTP_PERIOD_SECONDS`, `RECOVERY_CODE_COUNT`, `MAX_FAILED_ATTEMPTS`, `LOCKOUT_SECONDS`. Response shapes: status `{ required, level, configured, method?, expiresAt? }`; confirm `{ assurance, recoveryCodes }`; challenge `{ assurance }`; recovery verify `{ assurance, recoveryCodesRemaining }`; regenerate `{ recoveryCodes }`.
+Better Auth endpoints `POST /api/auth/two-factor/{enable, disable, verify-totp, verify-backup-code, generate-backup-codes}` and the `twoFactorRedirect` sign-in response. Responses never contain the stored (encrypted) secret; `enable` returns the secret only inside the `otpauth://` URI, once.
 
 ## Files / Packages Changed
 
-`packages/auth` (`two-factor/{totp,crypto,service}.ts`, contract, adapter helper, tests and fixtures, `tsconfig` Node types), `packages/admin` (`two-factor-routes.ts`), `packages/core` types, [architecture](../../architecture.md), [initiative index](README.md), and this record.
+`packages/auth` (allowlist, plugin options, test helper `totpCode`/`totpStep`/`totpSecretFromUri` in `testing.ts` — a test/tooling aid only, not used in production paths), tests, [architecture](../../architecture.md), [initiative index](README.md), and this record.
 
 ## Tests
 
-Cover setup generation, invalid confirmation, valid confirmation, activation only after verification, recovery generation/hash-at-rest inspection, one-time use, reuse rejection, regeneration invalidation, and authorization/origin checks.
+`packages/auth/tests/two-factor.test.ts`: enrollment inactive until verified, protected secret storage, sign-in yields no session until verified, backup-code single use, lockout after the configured failures (correct code refused), and that unsanctioned two-factor endpoints return 404. `packages/admin/tests/two-factor.test.ts` repeats the flows through the admin boundary.
 
 ## Acceptance Criteria
 
 - [x] Setup is inactive until verified.
-- [x] Recovery codes are cryptographically generated.
 - [x] Recovery codes are one-time use.
-- [x] Plaintext recovery codes are not persisted.
-- [x] Regeneration invalidates the previous set.
-- [x] Private enrollment/recovery API works.
+- [x] Plaintext recovery codes are not persisted (the plugin stores them encrypted).
+- [x] Enrollment/recovery endpoints work.
+- [ ] ~~Regeneration invalidates the previous set.~~ Provided by the plugin's `generate-backup-codes`; exposed but not covered by a Nestrum test or UI.
 - [x] Docs updated.
 
 ## Validation
 
-Targeted auth and admin suites (`two-factor.test.ts`): RFC vectors, encryption round trip and tamper rejection, unconfirmed secrets granting nothing, recovery hash-at-rest inspection, one-time use, cross-user rejection, regeneration invalidation, and origin/authorization checks; then `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`. The full enrollment, challenge, replay-rejection, recovery-single-use, lockout, and expiry sequence was also executed through the real HTTP runtime against a local PostgreSQL 16 database migrated with `nestrum db`.
+`pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`; the full flow was also run against a local PostgreSQL 16 database migrated with `nestrum db`, driven by Chromium (see PM2.5).
 
 ## Known Limitations
 
-Enrollment shows the `otpauth://` link and manual key, not a rendered QR image (no QR dependency was added). Recovery-code regeneration is the only recovery-code management; there is no factor removal or reset flow (an operator clears the factor row). Compare-and-set is used instead of database transactions because the auth adapter is not transactional.
+No rendered QR image (the `otpauth://` link and the key are shown). No UI for regenerating backup codes or disabling 2FA. No factor reset for another user. Recovery-code regeneration relies on the plugin and is untested here.
 
 ## Follow-Ups
 
-[PM2.3](phase-03-challenge.md) enforces challenge completion and structured API errors.
+[PM2.3](phase-03-challenge.md) enforces assurance on admin.
 
 ## Completion Notes
 
-PM2.2 is complete. Choosing our own TOTP over Better Auth's `twoFactor` plugin kept the auth route allowlist unchanged, keeps assurance per-session rather than per-cookie, and avoids a new dependency; the trade-off is that the framework owns the (small) RFC 6238 implementation and its tests.
+PM2.2 is complete. Replacing the earlier bespoke TOTP with the plugin removed roughly 500 lines of security-sensitive code and their tests.

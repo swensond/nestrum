@@ -27,17 +27,7 @@ export type {
     ApplicationState,
     DatabaseLifecycle,
 } from './application/application.types.js';
-export type {
-    AssuranceLevel,
-    AssuranceMethod,
-    Authentication,
-    AuthenticationDefinition,
-    AuthSession,
-    SessionAssurance,
-    TwoFactorEnrollment,
-    TwoFactorGrant,
-    TwoFactorService,
-} from './auth/auth.types.js';
+export type { Authentication, AuthenticationDefinition, AuthSession } from './auth/auth.types.js';
 export { AuthorizationError, PolicyError } from './authorization/authorization.errors.js';
 export type { PreparedAuthorization } from './authorization/authorization.js';
 export { AuthorizationEngine, allow, definePolicy, deny } from './authorization/authorization.js';

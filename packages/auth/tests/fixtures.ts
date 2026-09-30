@@ -1,5 +1,5 @@
-import type { AuthStorageModel as AuthModel } from '../src/contracts/contracts.js';
-import { AUTH_MODELS, TWO_FACTOR_MODELS } from '../src/contracts/contracts.js';
+import type { AuthModel } from '../src/contracts/contracts.js';
+import { AUTH_MODELS } from '../src/contracts/contracts.js';
 
 type Row = Record<string, unknown>;
 type Predicate = {
@@ -50,15 +50,7 @@ function expression(kind: string, field?: string, value?: unknown): Predicate {
 }
 
 export function storage(database = 'identity') {
-    const records: Record<AuthModel, Row[]> = {
-        User: [],
-        Account: [],
-        Session: [],
-        Verification: [],
-        AdminAssurance: [],
-        TwoFactorFactor: [],
-        TwoFactorRecoveryCode: [],
-    };
+    const records: Record<AuthModel, Row[]> = { User: [], Account: [], Session: [], Verification: [], TwoFactor: [] };
     const operations: { model: AuthModel; operation: string }[] = [];
     const collection = (model: AuthModel, filters: Predicate[] = [], limit?: number, orders: Predicate[] = []) => {
         const fields = new Proxy(
@@ -118,10 +110,7 @@ export function storage(database = 'identity') {
                             (model === 'Session' && existing.token === row.token) ||
                             (model === 'Account' &&
                                 existing.providerId === row.providerId &&
-                                existing.accountId === row.accountId) ||
-                            (model === 'AdminAssurance' && existing.sessionId === row.sessionId) ||
-                            (model === 'TwoFactorFactor' && existing.userId === row.userId) ||
-                            (model === 'TwoFactorRecoveryCode' && existing.codeHash === row.codeHash),
+                                existing.accountId === row.accountId),
                     )
                 ) {
                     throw new Error('Unique constraint');
@@ -151,9 +140,10 @@ export function storage(database = 'identity') {
             },
         };
     };
-    const collections = Object.fromEntries(
-        [...AUTH_MODELS, ...TWO_FACTOR_MODELS].map((model) => [model, collection(model)]),
-    ) as Record<AuthModel, ReturnType<typeof collection>>;
+    const collections = Object.fromEntries(AUTH_MODELS.map((model) => [model, collection(model)])) as Record<
+        AuthModel,
+        ReturnType<typeof collection>
+    >;
 
     return { binding: { database, collections }, records, operations };
 }

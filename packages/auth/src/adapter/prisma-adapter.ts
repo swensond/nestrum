@@ -4,34 +4,14 @@ import type { PrismaQueryBackendOptions } from '@nestrum/prisma/querysets';
 import { createPrismaQueryBackend } from '@nestrum/prisma/querysets';
 import type { CleanedWhere, CustomAdapter, DBAdapterInstance } from 'better-auth/adapters';
 import { createAdapterFactory } from 'better-auth/adapters';
-import type { AuthModel, AuthStorageModel } from '#auth/contracts/contracts';
+import type { AuthModel } from '#auth/contracts/contracts';
 import { AUTH_MODELS } from '#auth/contracts/contracts';
 
 export type AuthPrismaBinding = {
     readonly database: string;
-    readonly collections: Readonly<Record<AuthStorageModel, Parameters<typeof createPrismaQueryBackend>[0]>>;
-    readonly counts?: Readonly<
-        Record<AuthStorageModel, Extract<PrismaQueryBackendOptions, { provider: 'mongodb' }>['count']>
-    >;
+    readonly collections: Readonly<Record<AuthModel, Parameters<typeof createPrismaQueryBackend>[0]>>;
+    readonly counts?: Readonly<Record<AuthModel, Extract<PrismaQueryBackendOptions, { provider: 'mongodb' }>['count']>>;
 };
-
-export function authQueryBackend(
-    binding: AuthPrismaBinding,
-    provider: PrismaProvider,
-    model: AuthStorageModel,
-): QueryBackend {
-    const collection = binding.collections[model];
-    if (!collection) {
-        throw new AppError('AUTH_MODEL_MISSING', `Prisma auth collection ${model} is missing.`);
-    }
-
-    return createPrismaQueryBackend(
-        collection,
-        provider === 'postgresql'
-            ? { provider }
-            : { provider, count: binding.counts?.[model] as NonNullable<AuthPrismaBinding['counts']>[AuthModel] },
-    );
-}
 
 const OPERATORS = {
     eq: 'equals',
@@ -65,7 +45,16 @@ export function authWhere(where: readonly CleanedWhere[] = []): object {
 export function createPrismaAuthAdapter(binding: AuthPrismaBinding, provider: PrismaProvider): DBAdapterInstance {
     const backends: Record<string, QueryBackend> = Object.create(null) as Record<string, QueryBackend>;
     for (const model of AUTH_MODELS) {
-        backends[model] = authQueryBackend(binding, provider, model);
+        const collection = binding.collections[model];
+        if (!collection) {
+            throw new AppError('AUTH_MODEL_MISSING', `Prisma auth collection ${model} is missing.`);
+        }
+        backends[model] = createPrismaQueryBackend(
+            collection,
+            provider === 'postgresql'
+                ? { provider }
+                : { provider, count: binding.counts?.[model] as NonNullable<AuthPrismaBinding['counts']>[AuthModel] },
+        );
     }
 
     return createAdapterFactory({
