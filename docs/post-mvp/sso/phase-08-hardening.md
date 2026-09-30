@@ -56,7 +56,7 @@ Run targeted SSO integration, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm
 
 ## Known Limitations
 
-The Docker + MongoDB `pnpm test:integration` run was not repeated for SSO (no Docker services were available); MongoDB contract emission is covered by the contract tests only. SAML sign-ins use signed fixtures, not a live IdP. Single logout, `private_key_jwt`, upstream-MFA trust, organization-plugin integration, a non-password admin assurance path for SSO-only administrators and audit history remain future work.
+The Docker + MongoDB `pnpm test:integration` run with SSO enabled in the example was run by the project owner and passes; it was not run in the authoring session (no Docker services were available there). SAML sign-ins use signed fixtures, not a live IdP. Single logout, `private_key_jwt`, upstream-MFA trust, organization-plugin integration, a non-password admin assurance path for SSO-only administrators and audit history remain future work.
 
 ## Follow-Ups
 
