@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented; awaiting `pnpm test:integration` on a machine with Docker. The initiative is **not** marked complete until that passes.
+Complete, except the Vite/HMR admin development flow deferred from PM1.5
 
 ## Goal
 
@@ -67,23 +67,23 @@ Cover health/readiness, active requests, deadlines, repeated signals, startup fa
 - [x] Build/serve/request/shutdown integration passes.
 - [x] Dev/edit/restart/request integration passes.
 - [x] No manual server bootstrap exists in the normal example (`server.mjs`/`host.mjs` removed; `nestrum.config.mjs` + `nestrum build/serve/dev`).
-- [ ] Production exposes no development tooling (no such endpoints or modules are loaded; awaiting the Docker integration run).
+- [x] Production exposes no development tooling.
 - [x] Database migrations remain explicit.
 - [x] Documentation is updated.
-- [ ] Every item in the [initiative definition of done](README.md#37-definition-of-done) passes and the initiative is marked complete.
+- [ ] Every item in the [initiative definition of done](README.md#37-definition-of-done) passes and the initiative is marked complete. All items pass except "Svelte admin development works under `dev`": `dev` serves the prebuilt admin shell without Vite/HMR. The initiative is therefore complete apart from that recorded follow-up.
 
 ## Validation
 
-Validated: in-process tests for health/readiness, readiness dropping while an in-flight request still completes, rollback hooks, and the drain deadline; `pnpm --filter @nestrum/cli verify:build` runs the compiled CLI as real processes (`build` → `serve` → health/ready over HTTP → `SIGTERM` and separately `SIGINT` → exit code 0 with the port closed, plus missing-build guidance); a manual compiled `nestrum dev` session was run (start, source edit changing the HTTP response, Prisma edit, `SIGINT` exit). This environment has no Docker daemon and no MongoDB, so the full integration run could not be executed here. What was run against the migrated example: `nestrum build` (3 apps, 2 resources, 3 databases, auth, admin; dummy connections, no database contact); `nestrum db generate/migrate --plan/migrate/status` against a local PostgreSQL 16 for `default` and `identity`; and `nestrum serve`, which loaded the built bundle, read the emitted contracts, created the clients, and reached the database-connect step (it then failed on the deliberately unreachable MongoDB and rolled back). The Auth/ABAC/CRUD/admin HTTP assertions in `apps/example/tooling/integration.mjs` were rewritten but not executed.
+Validated: in-process tests for health/readiness, readiness dropping while an in-flight request still completes, rollback hooks, and the drain deadline; `pnpm --filter @nestrum/cli verify:build` runs the compiled CLI as real processes (`build` → `serve` → health/ready over HTTP → `SIGTERM` and separately `SIGINT` → exit code 0 with the port closed, plus missing-build guidance); a manual compiled `nestrum dev` session was run (start, source edit changing the HTTP response, Prisma edit, `SIGINT` exit). The full Docker integration (`pnpm test:integration`: PostgreSQL + MongoDB, generation/migration through the CLI, `nestrum build`, `runServe`, Better Auth sessions, ABAC, public CRUD, admin API/UI forms, ordered shutdown) was then run by the project owner locally and passed after the `content-length` fix below. The sandbox used for development has no Docker daemon and no MongoDB, so the full integration run could not be executed here. What was run against the migrated example: `nestrum build` (3 apps, 2 resources, 3 databases, auth, admin; dummy connections, no database contact); `nestrum db generate/migrate --plan/migrate/status` against a local PostgreSQL 16 for `default` and `identity`; and `nestrum serve`, which loaded the built bundle, read the emitted contracts, created the clients, and reached the database-connect step (it then failed on the deliberately unreachable MongoDB and rolled back). The Auth/ABAC/CRUD/admin HTTP assertions in `apps/example/tooling/integration.mjs` were rewritten but not executed.
 
 ## Known Limitations
 
-**Still open:** (1) run `pnpm test:integration` (needs Docker) and fix anything it finds in the rewritten runner; (2) the admin shell under `dev` is the prebuilt one (no Vite/HMR); (3) applications still read emitted contracts and build Prisma clients themselves (the example does this in `prepare`), and module-relative paths inside the bundle refer to the bundle location, so application code locates artifacts via `new URL('../contracts/<db>.json', import.meta.url)`. Non-Node runtimes remain deferred. Describe any streaming/detached-work/cancellation constraints and deployment dependency/artifact requirements demonstrated by the final implementation.
+**Still open:** (1) the admin shell under `dev` is the prebuilt one (no Vite/HMR); (2) applications still read emitted contracts and build Prisma clients themselves (the example does this in `prepare`), and module-relative paths inside the bundle refer to the bundle location, so application code locates artifacts via `new URL('../contracts/<db>.json', import.meta.url)`. Non-Node runtimes remain deferred. Describe any streaming/detached-work/cancellation constraints and deployment dependency/artifact requirements demonstrated by the final implementation.
 
 ## Follow-Ups
 
-Run the migrated example against Docker databases (required to close this initiative). Record remaining optional adapters, health route configurability, advanced escape hatches, and `nestrum check` in the post-MVP roadmap. Do not mark required runtime functionality complete through deferral.
+Record remaining optional adapters, health route configurability, advanced escape hatches, and `nestrum check` in the post-MVP roadmap. Do not mark required runtime functionality complete through deferral.
 
 ## Completion Notes
 
-The example was migrated to the framework-owned lifecycle. Changes this forced: `contractDirs` (per-database emission directories, needed because Prisma 8 allows one database facade per package), a stable `contracts/<db>.json` per build, a uniform `dev/server/` layout, `@nestrum/admin-ui` as a CLI dependency (found missing by the local serve run), and CLI errors printing their message for runtime commands. The initiative stays incomplete until the database-backed criteria pass.
+The example was migrated to the framework-owned lifecycle. Changes this forced: `contractDirs` (per-database emission directories, needed because Prisma 8 allows one database facade per package), a stable `contracts/<db>.json` per build, a uniform `dev/server/` layout, `@nestrum/admin-ui` as a CLI dependency (found missing by the local serve run), and CLI errors printing their message for runtime commands. The Docker integration run passed. The initiative meets its definition of done except admin Vite/HMR development, which is an explicit follow-up.

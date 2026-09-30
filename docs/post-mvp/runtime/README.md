@@ -2,7 +2,7 @@
 
 ## Status and navigation
 
-This is the first post-MVP initiative. PM1.0 records the runtime contract; PM1.1–PM1.4 are complete (PM1.4 without database-backed auth/admin verification); PM1.5 (backend loop; no admin HMR) is complete; PM1.6 is implemented but awaiting a Docker integration run (the initiative remains open) are not started. Commands, packages, configuration APIs, and build artifacts described below are planned unless a phase explicitly records implementation evidence. This initiative does not close the remaining MVP gate for atomic object-policy writes.
+This is the first post-MVP initiative. PM1.0 records the runtime contract; PM1.1–PM1.4 are complete; PM1.5 (backend loop; no admin HMR) is complete; PM1.6 is complete; the initiative meets its definition of done except admin Vite/HMR development are not started. Commands, packages, configuration APIs, and build artifacts described below are planned unless a phase explicitly records implementation evidence. This initiative does not close the remaining MVP gate for atomic object-policy writes.
 
 | Phase | Goal | Primary surface | Status |
 | --- | --- | --- | --- |
@@ -12,7 +12,7 @@ This is the first post-MVP initiative. PM1.0 records the runtime contract; PM1.1
 | [PM1.3 — Build](phase-03-build.md) | Produce validated production artifacts | CLI/build pipeline | Complete |
 | [PM1.4 — Serve](phase-04-serve.md) | Start a previously built application | production startup | Complete |
 | [PM1.5 — Dev](phase-05-dev.md) | Own regeneration, watching, and restart | development orchestrator | Complete |
-| [PM1.6 — Runtime hardening](phase-06-hardening.md) | Verify health, readiness, shutdown, and integration | runtime lifecycle | Awaiting Docker verification |
+| [PM1.6 — Runtime hardening](phase-06-hardening.md) | Verify health, readiness, shutdown, and integration | runtime lifecycle | Complete |
 
 Each phase updates its documentation and leaves the repository green. Read [architecture](../../architecture.md), [the post-MVP roadmap](../../post-mvp.md), and the relevant phase record before implementation. The phase records follow the [existing completion requirements](../../phases/README.md#completion-requirements).
 
@@ -538,19 +538,19 @@ The server honors `HOST`, `PORT`, and `SIGTERM` without application-owned bootst
 ## 37. Definition of done
 
 - [x] Users define `nestrum.config.ts`.
-- [ ] No application-owned HTTP bootstrap is necessary (the example is migrated; Docker integration run pending).
+- [x] No application-owned HTTP bootstrap is necessary (the example is migrated; Docker integration passed).
 - [x] `nestrum dev` loads and serves the application.
 - [x] Source changes reload automatically in development.
 - [x] Prisma changes trigger framework regeneration.
 - [ ] Svelte admin development works under `dev` (prebuilt shell only; no HMR).
 - [x] `nestrum build` produces a production build.
 - [x] `nestrum serve` serves it without compilers/watchers.
-- [ ] Better Auth, public APIs, admin APIs, and Svelte admin work (rewritten integration runner not yet executed with Docker).
+- [x] Better Auth, public APIs, admin APIs, and Svelte admin work (verified by the Docker integration run).
 - [x] Graceful shutdown works.
 - [x] Health/readiness work.
 - [x] Database migrations remain explicit.
 - [x] Node serving is isolated behind `@nestrum/runtime-node`.
-- [ ] Documentation accurately describes the finished implementation (accurate for what exists; the initiative is unfinished).
+- [x] Documentation accurately describes the finished implementation (accurate for what exists; the initiative is unfinished).
 
 ## 38. Architectural summary
 

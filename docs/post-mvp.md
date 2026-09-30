@@ -68,7 +68,7 @@ PM2.0 documentation is complete. PM2.1–PM2.5 are Not Started; admin 2FA is not
 
 The [self-serving runtime initiative](post-mvp/runtime/README.md) is the first planned post-MVP initiative. Users define `nestrum.config.ts` and explicit apps; Nestrum owns development, production builds, HTTP startup, admin serving, and shutdown through `nestrum dev`, `nestrum build`, and `nestrum serve`.
 
-PM1.0 documentation and PM1.1 (`@nestrum/runtime` adapter contracts), PM1.2 (`@nestrum/runtime-node`), PM1.3 (`nestrum build`), and PM1.4 (`nestrum serve`, without database-backed auth/admin verification) are complete. PM1.5 (`nestrum dev`, without admin HMR) is complete. PM1.6 (health/readiness, signals, drain deadline, process-level verification) is implemented and the example application now uses the framework-owned lifecycle, but its Docker integration run (`pnpm test:integration`) has not been executed, so the initiative remains open. `nestrum dev`, `build`, and `serve` are implemented in `@nestrum/cli`. The remaining MVP atomic object-policy write gate stays open independently.
+PM1.0 documentation and PM1.1 (`@nestrum/runtime` adapter contracts), PM1.2 (`@nestrum/runtime-node`), PM1.3 (`nestrum build`), and PM1.4 (`nestrum serve`) are complete. PM1.5 (`nestrum dev`, without admin HMR) is complete. PM1.6 (health/readiness, signals, drain deadline, process-level verification) is complete: the example application uses the framework-owned lifecycle and its Docker integration run passes. Plan 01 meets its definition of done except admin Vite/HMR development (the admin shell under `dev` is the prebuilt one), which remains a follow-up. `nestrum dev`, `build`, and `serve` are implemented in `@nestrum/cli`. The remaining MVP atomic object-policy write gate stays open independently.
 
 | Phase | Goal | Status |
 | --- | --- | --- |
@@ -78,7 +78,7 @@ PM1.0 documentation and PM1.1 (`@nestrum/runtime` adapter contracts), PM1.2 (`@n
 | [PM1.3](post-mvp/runtime/phase-03-build.md) | Validated production build and manifest | Complete |
 | [PM1.4](post-mvp/runtime/phase-04-serve.md) | Production startup from a prior build | Complete |
 | [PM1.5](post-mvp/runtime/phase-05-dev.md) | Generation, watching, restart, and admin development | Complete (no admin HMR) |
-| [PM1.6](post-mvp/runtime/phase-06-hardening.md) | Shutdown, health/readiness, and lifecycle integration | Awaiting Docker verification |
+| [PM1.6](post-mvp/runtime/phase-06-hardening.md) | Shutdown, health/readiness, and lifecycle integration | Complete |
 
 Node-specific listener APIs stay in the Node adapter, outside core and CLI. Production never silently builds, regenerates schemas, watches, or migrates; development may regenerate and restart but migrations remain explicit. Every phase updates its documentation and leaves the repository green.
 
@@ -96,6 +96,7 @@ Node-specific listener APIs stay in the Node adapter, outside core and CLI. Prod
 - Event bus, jobs, queues, outbox, sagas, caching, and feature flags.
 - Soft delete framework and automatic audit history.
 - Full plugin ecosystem, code generators, and publishing automation.
+- Vite/HMR development serving for the Svelte admin (and rebuilding the admin shell with application component registries) under `nestrum dev`; see [Plan 01](post-mvp/runtime/README.md).
 - CLI scaffolding remains deferred. Framework-owned development/build/serve commands are scheduled in [Plan 01](post-mvp/runtime/README.md) beyond the MVP database commands.
 
 ## Admin

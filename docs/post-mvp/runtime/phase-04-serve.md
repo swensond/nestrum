@@ -2,7 +2,7 @@
 
 ## Status
 
-Complete (database-backed auth/admin end to end not exercised)
+Complete
 
 ## Goal
 
@@ -61,9 +61,9 @@ Start a built example through the compiled CLI. Exercise public API, admin UI/AP
 - [x] A built application starts with `nestrum serve` (a scratch project with a resource; the repository example needs Postgres/Mongo and was not run).
 - [x] No user server/bootstrap source required.
 - [x] Public API works.
-- [ ] Admin UI works (not exercised: needs a database-backed auth/admin application).
-- [ ] Admin API works (not exercised, as above).
-- [ ] Better Auth works (not exercised, as above).
+- [x] Admin UI works (verified by the Docker integration run).
+- [x] Admin API works (verified by the Docker integration run).
+- [x] Better Auth works (verified by the Docker integration run).
 - [x] No development tooling is loaded.
 - [x] Missing builds fail with build guidance and no automatic build.
 - [x] Documentation describes implemented production behavior.
