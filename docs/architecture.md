@@ -179,7 +179,7 @@ Keys are random, hashed at rest, revealed once, owner-bound, expirable, revocabl
 
 ## Post-MVP hosted consumer UI
 
-The fourth post-MVP initiative is documented in the [hosted consumer UI plan](post-mvp/consumer-ui/README.md). It is implemented (PM4.0–PM4.5) except for browser-level Playwright coverage, `basePath`, and SSR.
+The fourth post-MVP initiative is documented in the [hosted consumer UI plan](post-mvp/consumer-ui/README.md). It is implemented (PM4.0–PM4.5) except for `basePath` and SSR; browser coverage is in the example integration suite.
 
 The consuming project owns its Svelte product UI, pages, layouts, components, styles, UX, and branding. The `@nestrum/web` integration (server hosting plus `@nestrum/web/client` helpers) extends PM1's `dev`, `build`, and `serve` lifecycle. Production builds to `.nestrum/web/*` and serves ordinary consumer routes alongside `/api/*`, `/admin/*`, `/__admin/*`, and `/__nestrum/*`. Development coordinates backend, consumer Vite/Svelte, and admin development servers behind one command.
 

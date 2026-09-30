@@ -45,10 +45,10 @@ Vitest covers collision, fallback, config filtering, helper boundaries, and asse
 
 - [x] Framework routes cannot be shadowed.
 - [x] Server secrets never reach client config.
-- [x] Production consumer UI works end to end (HTTP-level; no Playwright).
+- [x] Production consumer UI works end to end (Playwright coverage added; see notes).
 - [x] Admin remains separate and protected.
 - [x] Docs updated.
-- [x] Initiative definition of done passes for the implemented scope; browser E2E is a recorded follow-up.
+- [x] Initiative definition of done passes for the implemented scope.
 
 ## Validation
 
@@ -64,6 +64,6 @@ Record SSR, additional frontend runtimes, CDN/deployment adapters, and advanced 
 
 ## Completion Notes
 
-Implemented, with one gap. Delivered: namespace collision rejection at build/dev, fallback restricted to ordinary GET/HEAD HTML routes, allowlist-only `publicEnv` (validated string records, HTML-escaped), build-time secret scan, no source maps, asset/cache policy above, and a final route/precedence design (`webUi` only after all framework routes). Only the root base path `/` is supported; `basePath` is not implemented. **Not delivered:** Playwright browser coverage (consumer load/login/admin separation) was not written or run; equivalent HTTP-level assertions live in the CLI serve/dev tests, and the Docker + MongoDB `pnpm test:integration` was run by the project owner after this change and passes (with the consumer UI enabled in the example). PM4 is therefore marked complete for its implemented scope with this browser E2E recorded as the open follow-up.
+Implemented, with one gap. Delivered: namespace collision rejection at build/dev, fallback restricted to ordinary GET/HEAD HTML routes, allowlist-only `publicEnv` (validated string records, HTML-escaped), build-time secret scan, no source maps, asset/cache policy above, and a final route/precedence design (`webUi` only after all framework routes). Only the root base path `/` is supported; `basePath` is not implemented. Playwright coverage lives in `apps/example/tooling/consumer-browser.mjs` (`pnpm --filter @nestrum/example e2e:consumer` against a running server, and called from `pnpm test:integration` after the API/admin checks): consumer load and public config, deep links, immutable assets, framework namespaces returning JSON 404s for browser navigations, the public API client, admin separation, and Better Auth sign-in (including a failed attempt), reload persistence, and sign-out from the Svelte helpers. Verification status: steps 1–5 were run in real Chromium against the built example UI hosted by a database-free runtime (with the OpenAPI and admin 401 responses stubbed); the sign-in/sign-out step and the integration wiring need the Docker suite and were **not run** here. The Docker + MongoDB `pnpm test:integration` was run by the project owner before this browser step was added, so it must be re-run. PM4 is complete for its implemented scope; `basePath` and SSR remain deferred.
 
 Validated: `pnpm test` (658 passing), `pnpm typecheck`, `pnpm build`, `verify:build`, and a real `nestrum build` of the example application including its Svelte UI.
