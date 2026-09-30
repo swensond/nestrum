@@ -1,0 +1,179 @@
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import type { DevSession } from '../src/index.js';
+import { classifyChange, runDev } from '../src/index.js';
+
+const roots: string[] = [];
+const sessions: DevSession[] = [];
+
+const config = (root: string, port: number) => `import { defineApplication, defineResource } from '@nestrum/core';
+import { defineConfig } from '@nestrum/cli';
+import { readFileSync } from 'node:fs';
+import { generateModelSchemas } from '@nestrum/zod';
+import { list } from './src/flags';
+export default defineConfig({
+    server: { port: ${port} },
+    application: defineApplication({
+        databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://u:p@127.0.0.1:1/x' } },
+        apps: [{ name: 'models', prisma: { default: ['./models.prisma'] }, resources: [defineResource({ model: 'Project', api: { list } })] }],
+        resourceModels: () => JSON.parse(readFileSync(${JSON.stringify(join(root, '.nestrum/dev/generated/models/default.json'))}, 'utf8')).map(generateModelSchemas),
+    }),
+    timeoutMs: 60000
+});
+`;
+const MODEL = (extra = '') => `model Project {\n id Int @id\n name String\n${extra}}\n`;
+
+async function scaffold(port = 0) {
+    const root = await mkdtemp(join(import.meta.dirname, '..', '.tmp-dev-'));
+    roots.push(root);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'nestrum.config.ts'), config(root, port));
+    await writeFile(join(root, 'src/flags.ts'), 'export const list = true;\n');
+    await writeFile(join(root, 'models.prisma'), MODEL());
+
+    return root;
+}
+async function start(root: string) {
+    const lines: string[] = [];
+    const session = await runDev({ cwd: root, env: {}, log: (line) => lines.push(line), watch: false, debounceMs: 5 });
+    sessions.push(session);
+
+    return { session, lines };
+}
+const paths = async (session: DevSession) =>
+    Object.keys((await (await fetch(`${session.url()}/api/openapi.json`)).json()).paths ?? {});
+
+afterEach(async () => {
+    await Promise.all(sessions.splice(0).map((session) => session.close()));
+    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+describe('classifyChange', () => {
+    it('classifies sources and ignores generated output', () => {
+        expect(classifyChange('/p', '/p/nestrum.config.ts')).toBe('config');
+        expect(classifyChange('/p', '/p/src/nestrum.config.ts')).toBe('app');
+        expect(classifyChange('/p', '/p/src/a.ts')).toBe('app');
+        expect(classifyChange('/p', '/p/models.prisma')).toBe('prisma');
+        expect(classifyChange('/p', '/p/src/Widget.svelte')).toBe('frontend');
+        expect(classifyChange('/p', '/p/.nestrum/dev/server-1.mjs')).toBeUndefined();
+        expect(classifyChange('/p', '/p/node_modules/x/index.js')).toBeUndefined();
+        expect(classifyChange('/p', '/p/README.md')).toBeUndefined();
+        expect(classifyChange('/p', '/other/a.ts')).toBeUndefined();
+    });
+});
+
+describe('nestrum dev', () => {
+    it('starts from one call and reports framework diagnostics', async () => {
+        const { session, lines } = await start(await scaffold());
+
+        expect(session.url()).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+        expect(await paths(session)).toEqual(expect.arrayContaining([expect.stringContaining('project')]));
+        const banner = lines.join('\n');
+        expect(banner).toContain('(development)');
+        expect(banner).toMatch(/Apps\s+1/);
+        expect(banner).toContain('/api/openapi.json');
+        expect(banner).toContain('Watching for changes...');
+    });
+
+    it('restarts on application source changes and picks up new behavior', async () => {
+        const root = await scaffold();
+        const { session, lines } = await start(root);
+        expect((await paths(session)).length).toBeGreaterThan(0);
+
+        await writeFile(join(root, 'src/flags.ts'), 'export const list = false;\n');
+        session.changed(join(root, 'src/flags.ts'));
+        await session.idle();
+
+        expect(await paths(session)).toEqual([]);
+        expect(lines.some((line) => line.includes('Change detected (app)'))).toBe(true);
+        expect(lines.some((line) => line.includes('may require migration'))).toBe(false);
+        expect(await readdir(join(root, '.nestrum/dev'))).toEqual(expect.arrayContaining(['generated', 'contracts']));
+    });
+
+    it('regenerates on Prisma changes, reports migration guidance, and never migrates', async () => {
+        const root = await scaffold();
+        const { session, lines } = await start(root);
+
+        await writeFile(join(root, 'models.prisma'), MODEL(' note String?\n'));
+        session.changed(join(root, 'models.prisma'));
+        await session.idle();
+
+        const output = lines.join('\n');
+        expect(output).toContain('Database "default" may require migration.');
+        expect(output).toContain('nestrum db migrate --database default');
+        expect(session.url()).toBeDefined();
+    });
+
+    it('restarts fully on configuration changes', async () => {
+        const root = await scaffold();
+        const { session } = await start(root);
+        const before = session.url();
+
+        await writeFile(
+            join(root, 'nestrum.config.ts'),
+            config(root, 0).replace('port: 0', 'host: "localhost", port: 0'),
+        );
+        session.changed(join(root, 'nestrum.config.ts'));
+        await session.idle();
+
+        expect(before).toBeDefined();
+        expect(session.url()).toMatch(/^http:\/\/localhost:\d+$/);
+    });
+
+    it('reports errors with framework identity and recovers on the next edit', async () => {
+        const root = await scaffold();
+        const { session, lines } = await start(root);
+
+        await writeFile(join(root, 'src/flags.ts'), 'export const list = ;\n');
+        session.changed(join(root, 'src/flags.ts'));
+        await session.idle();
+        expect(session.url()).toBeUndefined();
+        expect(lines.join('\n')).toContain('BUILD_BUNDLE_FAILED');
+
+        await writeFile(join(root, 'src/flags.ts'), 'export const list = true;\n');
+        session.changed(join(root, 'src/flags.ts'));
+        await session.idle();
+        expect(session.url()).toBeDefined();
+        expect((await paths(session)).length).toBeGreaterThan(0);
+    });
+
+    it('coalesces bursts of edits and ignores generated output', async () => {
+        const root = await scaffold();
+        const { session, lines } = await start(root);
+
+        for (let index = 0; index < 5; index++) {
+            session.changed(join(root, 'src/flags.ts'));
+        }
+        session.changed(join(root, '.nestrum/dev/server-1.mjs'));
+        await session.idle();
+
+        expect(lines.filter((line) => line.startsWith('Change detected'))).toHaveLength(1);
+    });
+
+    it('restarts from real filesystem events', async () => {
+        const root = await scaffold();
+        const lines: string[] = [];
+        const session = await runDev({ cwd: root, env: {}, log: (line) => lines.push(line), debounceMs: 50 });
+        sessions.push(session);
+
+        await writeFile(join(root, 'src/flags.ts'), 'export const list = false;\n');
+        for (let attempt = 0; attempt < 100; attempt++) {
+            if (lines.filter((line) => line.includes('Watching')).length > 1) {
+                break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        await session.idle();
+
+        expect(await paths(session)).toEqual([]);
+    });
+
+    it('refuses a conflicting NESTRUM_ENV', async () => {
+        const root = await scaffold();
+
+        await expect(runDev({ cwd: root, env: { NESTRUM_ENV: 'production' }, watch: false })).rejects.toMatchObject({
+            code: 'CLI_ENVIRONMENT_CONFLICT',
+        });
+    });
+});

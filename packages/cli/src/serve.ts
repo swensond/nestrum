@@ -32,7 +32,7 @@ export type RunningServer = {
 type AdminModule = { createAdminShell(): Promise<NonNullable<Parameters<typeof createHonoRuntime>[0]['adminUi']>> };
 
 export async function loadAdminShell(
-    manifest: BuildManifest,
+    manifest: Pick<BuildManifest, 'admin'>,
 ): Promise<AdminModule['createAdminShell'] extends () => Promise<infer Shell> ? Shell | undefined : never> {
     if (!manifest.admin) {
         return undefined;

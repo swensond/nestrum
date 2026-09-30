@@ -5,6 +5,7 @@ import { runBuild } from './build.js';
 import { CliError } from './cli.errors.js';
 import { loadCliConfig } from './config.js';
 import { runDatabaseCommand } from './database-command.js';
+import { runDev } from './dev.js';
 import { parseRuntimeArguments, RUNTIME_COMMANDS, RUNTIME_HELP } from './runtime-arguments.js';
 import { runServe } from './serve.js';
 import { installShutdownSignals } from './signals.js';
@@ -32,6 +33,15 @@ try {
             });
             process.stdout.write(`Nestrum listening on http://${server.host}:${server.port}\n`);
             installShutdownSignals(server);
+        } else {
+            const session = await runDev({
+                ...(parsed.config === undefined ? {} : { config: parsed.config }),
+                flags: {
+                    ...(parsed.host === undefined ? {} : { host: parsed.host }),
+                    ...(parsed.port === undefined ? {} : { port: parsed.port }),
+                },
+            });
+            installShutdownSignals({ shutdown: () => session.close() });
         }
     } else {
         const parsed = parseCliArguments(args);

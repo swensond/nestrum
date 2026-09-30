@@ -6,6 +6,8 @@ export type { CliArguments, CliConfig, DatabaseCommand, ServerConfig } from './c
 export { CONFIG_CANDIDATES, defineCliConfig, defineConfig, discoverConfig, loadCliConfig } from './config.js';
 export type { DatabaseCommandDependencies } from './database-command.js';
 export { runDatabaseCommand } from './database-command.js';
+export type { ChangeKind, DevOptions, DevSession } from './dev.js';
+export { classifyChange, runDev } from './dev.js';
 export type { BuildManifest } from './manifest.js';
 export { MANIFEST_VERSION, readManifest } from './manifest.js';
 export type { RuntimeArguments, RuntimeCommand } from './runtime-arguments.js';

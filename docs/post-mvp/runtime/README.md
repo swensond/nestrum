@@ -2,7 +2,7 @@
 
 ## Status and navigation
 
-This is the first post-MVP initiative. PM1.0 records the runtime contract; PM1.1–PM1.4 are complete (PM1.4 without database-backed auth/admin verification); PM1.5–PM1.6 are not started. Commands, packages, configuration APIs, and build artifacts described below are planned unless a phase explicitly records implementation evidence. This initiative does not close the remaining MVP gate for atomic object-policy writes.
+This is the first post-MVP initiative. PM1.0 records the runtime contract; PM1.1–PM1.4 are complete (PM1.4 without database-backed auth/admin verification); PM1.5 (backend loop; no admin HMR) is complete; PM1.6 are not started. Commands, packages, configuration APIs, and build artifacts described below are planned unless a phase explicitly records implementation evidence. This initiative does not close the remaining MVP gate for atomic object-policy writes.
 
 | Phase | Goal | Primary surface | Status |
 | --- | --- | --- | --- |
@@ -11,7 +11,7 @@ This is the first post-MVP initiative. PM1.0 records the runtime contract; PM1.1
 | [PM1.2 — Node production runtime](phase-02-node-runtime.md) | Implement the first HTTP adapter | `@nestrum/runtime-node` | Complete |
 | [PM1.3 — Build](phase-03-build.md) | Produce validated production artifacts | CLI/build pipeline | Complete |
 | [PM1.4 — Serve](phase-04-serve.md) | Start a previously built application | production startup | Complete |
-| [PM1.5 — Dev](phase-05-dev.md) | Own regeneration, watching, and restart | development orchestrator | Not Started |
+| [PM1.5 — Dev](phase-05-dev.md) | Own regeneration, watching, and restart | development orchestrator | Complete |
 | [PM1.6 — Runtime hardening](phase-06-hardening.md) | Verify health, readiness, shutdown, and integration | runtime lifecycle | Not Started |
 
 Each phase updates its documentation and leaves the repository green. Read [architecture](../../architecture.md), [the post-MVP roadmap](../../post-mvp.md), and the relevant phase record before implementation. The phase records follow the [existing completion requirements](../../phases/README.md#completion-requirements).

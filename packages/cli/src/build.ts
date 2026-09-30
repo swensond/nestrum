@@ -1,5 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
+import type { Application, ModelMetadata } from '@nestrum/core';
 import { compileModelMetadata } from '@nestrum/prisma';
 import { generatePrismaContracts } from '@nestrum/prisma/node';
 import { generateModelSchemas } from '@nestrum/zod';
@@ -90,14 +91,21 @@ export async function loadBuiltConfig(entry: string, configDir: string): Promise
     }
 }
 
-async function validateAndGenerate(config: CliConfig, directory: string, entry: string): Promise<BuildManifest> {
+export type GeneratedArtifacts = {
+    readonly databases: BuildManifest['databases'];
+    readonly models: readonly ModelMetadata[];
+};
+
+/** Emit per-database contracts and compiled model metadata beneath `directory`. No database is contacted. */
+export async function generateArtifacts(config: CliConfig, directory: string): Promise<GeneratedArtifacts> {
     const application = config.application;
     const rootDir = resolve(config.rootDir ?? '.');
     const contractsDir = join(directory, 'contracts');
     const generatedDir = join(directory, 'generated', 'models');
+    await rm(contractsDir, { recursive: true, force: true });
     await mkdir(generatedDir, { recursive: true });
     const databases: BuildManifest['databases'][number][] = [];
-    const models = [];
+    const models: ModelMetadata[] = [];
     for (const name of application.databases.names()) {
         const generated = await generatePrismaContracts(application, {
             rootDir,
@@ -127,14 +135,28 @@ async function validateAndGenerate(config: CliConfig, directory: string, entry: 
             metadata: relative(directory, metadataPath),
         });
     }
+
+    return { databases, models };
+}
+
+/**
+ * Check resource-to-model references and schema composition against compiled metadata. This initializes the
+ * application's resource registry, so it must run on an application instance that will not be started.
+ */
+export function validateResources(application: Application, models: readonly ModelMetadata[]): void {
     try {
-        // Schema families come from compiled metadata; resource-to-model references are checked without live services.
         application.resources.initialize(models.map((metadata) => generateModelSchemas(metadata)));
     } catch (cause) {
         throw new CliError('BUILD_VALIDATION_FAILED', `Resource validation failed: ${(cause as Error).message}`, 1, {
             cause,
         });
     }
+}
+
+async function validateAndGenerate(config: CliConfig, directory: string, entry: string): Promise<BuildManifest> {
+    const application = config.application;
+    const { databases, models } = await generateArtifacts(config, directory);
+    validateResources(application, models);
     const built = await readFile(entry);
 
     return {
