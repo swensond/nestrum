@@ -30,7 +30,7 @@ Use the official InferDI Hono adapter for per-request creation/setup/disposal ra
 
 createHonoRuntime returns a HonoRuntime with hono, fetch, state, start, and shutdown. Configure custom routes before start. start awaits application.start; before readiness and after shutdown begins requests receive HTTP_RUNTIME_NOT_READY/503. Already started/stopped calls are idempotent; overlapping lifecycle transitions and restart attempts fail with HTTP_RUNTIME_STATE_INVALID. Startup errors preserve their original cause and clean up the default root.
 
-Shutdown gates new requests and waits for active bounded pipelines, including async error reporting and disposal. It then invokes application.shutdown and disposes the owned root, attempting both even if one fails. Errors aggregate as HTTP_RUNTIME_SHUTDOWN_FAILED and state becomes stopped. A supplied root is never disposed automatically. The listener/host must be stopped separately; the runtime gates requests rather than closing sockets.
+Shutdown gates new requests and waits for bounded pipelines, including async reporting/disposal. Phase 15 adds stopTraffic before draining, explicit di.dispose opt-in for supplied roots, and managed database disconnect after reverse app/DI cleanup. Errors aggregate and all eligible cleanup continues. The host still owns sockets; stopTraffic integrates its listener shutdown. See [Phase 15](phase-15-cli-lifecycle.md).
 
 createRuntimeContainer registers application, databases, resources, and authorization as externally owned values and declares request, subject, and environment scope inputs. Each ready request opens one real child scope through @inferdi/hono. Concrete service keys and readiness checks survive custom factory inference. Scope inputs become resolvable only after being supplied; framework values are not accidentally disposed by DI.
 
@@ -135,11 +135,11 @@ pnpm check passed: 223 tests in eleven files, root type checking, and all four p
 
 No TCP listener, signal integration, generated resource APIs, OpenAPI, session authentication, or admin API exists yet. Database definitions are supplied values, not connected clients. Supplied roots, their singleton resources, static values, and transient instances remain caller-owned.
 
-Disposal/draining covers the bounded awaited route pipeline, not streamed response consumption, waitUntil work, or detached background tasks. Request-scoped services must not outlive that boundary. Do not use skipInferdiDispose to extend scopes under this runtime: detached scope ownership is not tracked. Unfinished handlers/disposers can keep shutdown waiting; timeout/cancellation hardening remains Phase 15. Formal Bun/Deno/Cloudflare support remains post-MVP.
+Disposal/draining covers bounded awaited routes, not streaming consumption, waitUntil work, or detached tasks. Scoped services must not outlive it; skipInferdiDispose does not transfer tracked ownership. Phase 15 adds optional drainTimeoutMs: timeout keeps traffic gated and resources open until requests finish/cancel and shutdown is retried. Host-owned abort controllers/socket cancellation remain explicit. Formal Bun/Deno/Cloudflare support remains post-MVP.
 
 ## Follow-Ups
 
-Phase 9 now integrates generated public CRUD/OpenAPI with these contexts and errors; QuerySet Read failures are internal QUERY_RESULT_INVALID AppErrors. Runtime options and startup rollback are extended as documented in [Phase 9](phase-09-public-api.md). Phase 10 owns session subject resolution. Phase 15 owns CLI/server listener/signal wiring, full bootstrap ordering, cancellation/drain hardening, and connected-database cleanup. Atomic object-policy mutations from Phase 7 remain an MVP follow-up. No post-MVP subsystem was implemented.
+Phase 9 integrates public CRUD/OpenAPI; QuerySet Read failures remain internal QUERY_RESULT_INVALID errors. Phase 10 adds session subjects. Phase 15 implements database CLI, pre-ready route barriers, host/signal/drain seams, and app/DI/database cleanup ordering. Phase 16 proves live integration. Atomic object-policy mutation remains an MVP follow-up; no post-MVP subsystem was implemented.
 
 ## Completion Notes
 

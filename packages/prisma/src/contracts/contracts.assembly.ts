@@ -47,6 +47,12 @@ export async function assemblePrismaContracts(
 ): Promise<readonly PrismaContract[]> {
     const fragments = new Map<string, PrismaFragment[]>();
     const owners = new Map<string, PrismaFragment>();
+    if (options.extensions !== undefined && !Array.isArray(options.extensions)) {
+        throw new PrismaContractError('PRISMA_EXTENSION_INVALID', 'Provider extensions must be an explicit array.');
+    }
+    if (options.database !== undefined && !application.databases.has(options.database)) {
+        throw new PrismaContractError('PRISMA_DATABASE_UNKNOWN', 'Selected database is not registered.');
+    }
 
     for (const app of application.apps.all()) {
         for (const [database, content] of Object.entries(app.prismaSource ?? {}).sort(([left], [right]) =>
@@ -58,6 +64,9 @@ export async function assemblePrismaContracts(
                     `App "${app.name}" contributes inline fragments to an unregistered database.`,
                 );
             }
+            if (options.database !== undefined && database !== options.database) {
+                continue;
+            }
             const group = fragments.get(database) ?? [];
             group.push(Object.freeze({ app: app.name, path: `${app.name}:inline:${database}`, content }));
             fragments.set(database, group);
@@ -68,6 +77,9 @@ export async function assemblePrismaContracts(
                     'PRISMA_DATABASE_UNKNOWN',
                     `App "${app.name}" contributes Prisma fragments to unregistered database "${database}".`,
                 );
+            }
+            if (options.database !== undefined && database !== options.database) {
+                continue;
             }
 
             for (const input of app.prisma?.[database] ?? []) {
@@ -118,6 +130,54 @@ export async function assemblePrismaContracts(
                 }
             }
         }
+    }
+
+    const extensions = new Set<string>();
+    for (const extension of options.extensions ?? []) {
+        if (
+            !extension ||
+            typeof extension.owner !== 'string' ||
+            !extension.owner.trim() ||
+            typeof extension.name !== 'string' ||
+            !/^[A-Za-z][A-Za-z0-9_.-]*$/.test(extension.name) ||
+            !application.databases.has(extension.database) ||
+            application.databases.get(extension.database).provider !== extension.provider ||
+            (extension.contribute !== undefined && typeof extension.contribute !== 'function') ||
+            (extension.controlModule !== undefined &&
+                (typeof extension.controlModule !== 'string' || !extension.controlModule.trim())) ||
+            (extension.contribute === undefined && extension.controlModule === undefined) ||
+            extensions.has(`${extension.database}:${extension.name}`)
+        ) {
+            throw new PrismaContractError(
+                'PRISMA_EXTENSION_INVALID',
+                'Provider extensions require an owner, unique name, matching database/provider, and contributor.',
+            );
+        }
+        extensions.add(`${extension.database}:${extension.name}`);
+    }
+    for (const extension of options.extensions ?? []) {
+        if (options.database !== undefined && extension.database !== options.database) {
+            continue;
+        }
+        if (!extension.contribute) {
+            continue;
+        }
+        let content: string;
+        try {
+            content = await extension.contribute();
+            if (typeof content !== 'string' || !content.trim()) {
+                throw new Error('Extension contributions must be nonempty Prisma source.');
+            }
+        } catch (cause) {
+            throw new PrismaContractError(
+                'PRISMA_EXTENSION_INVALID',
+                `Provider extension ${extension.name} failed validation/contribution.`,
+                { cause },
+            );
+        }
+        const group = fragments.get(extension.database) ?? [];
+        group.push(Object.freeze({ app: extension.owner, path: `extension:${extension.name}`, content }));
+        fragments.set(extension.database, group);
     }
 
     return Object.freeze(

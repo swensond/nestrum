@@ -169,6 +169,9 @@ importers:
       '@biomejs/biome':
         specifier: 2.5.14
         version: 2.5.14
+      '@nestrum/cli':
+        specifier: workspace:*
+        version: link:packages/cli
       '@types/node':
         specifier: 26.6.3
         version: 26.6.3
@@ -250,6 +253,15 @@ importers:
       '@nestrum/hono':
         specifier: workspace:*
         version: link:../hono
+
+  packages/cli:
+    dependencies:
+      '@nestrum/core':
+        specifier: workspace:*
+        version: link:../core
+      '@nestrum/prisma':
+        specifier: workspace:*
+        version: link:../prisma
 
   packages/core:
     dependencies:

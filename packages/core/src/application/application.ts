@@ -13,6 +13,7 @@ import type {
     AppDefinition,
     AppHookName,
     ApplicationConfig,
+    ApplicationLifecycle,
     ApplicationState,
 } from './application.types.js';
 
@@ -26,12 +27,45 @@ export class Application {
     readonly resources: ResourceRegistry;
     readonly authorization: AuthorizationEngine;
     private readonly resourceModels: ApplicationConfig['resourceModels'];
+    private readonly prepare: ApplicationConfig['prepare'];
+    private readonly databaseLifecycle: NonNullable<ApplicationConfig['databaseLifecycle']>;
+    private connectedDatabases: string[] = [];
+    private lifecycle: ApplicationLifecycle = {};
     private currentState: ApplicationState = 'created';
     private startedApps: AppDefinition[] = [];
     private readonly context: AppContext;
 
     constructor(config: ApplicationConfig) {
         this.databases = new DatabaseRegistry(config.databases);
+        this.prepare = config.prepare;
+        if (config.prepare !== undefined && typeof config.prepare !== 'function') {
+            throw new AppError('APPLICATION_CONFIG_INVALID', 'Application prepare must be callable.');
+        }
+        if (
+            config.databaseLifecycle !== undefined &&
+            (!config.databaseLifecycle ||
+                typeof config.databaseLifecycle !== 'object' ||
+                Array.isArray(config.databaseLifecycle))
+        ) {
+            throw new AppError('DATABASE_LIFECYCLE_INVALID', 'Database lifecycle must be a named record.');
+        }
+        const databaseLifecycle: Record<string, NonNullable<ApplicationConfig['databaseLifecycle']>[string]> =
+            Object.create(null);
+        for (const [name, lifecycle] of Object.entries(config.databaseLifecycle ?? {})) {
+            if (
+                !this.databases.has(name) ||
+                !lifecycle ||
+                typeof lifecycle.connect !== 'function' ||
+                typeof lifecycle.disconnect !== 'function'
+            ) {
+                throw new AppError(
+                    'DATABASE_LIFECYCLE_INVALID',
+                    'Managed databases require a registered name and connect/disconnect callbacks.',
+                );
+            }
+            databaseLifecycle[name] = Object.freeze({ ...lifecycle });
+        }
+        this.databaseLifecycle = Object.freeze(databaseLifecycle);
         this.authDefinition = config.auth;
         this.adminDefinition = config.admin;
         if (
@@ -114,7 +148,7 @@ export class Application {
         return this.adminApi;
     }
 
-    async start(): Promise<void> {
+    async start(lifecycle: ApplicationLifecycle = {}): Promise<void> {
         if (this.currentState === 'ready') {
             return;
         }
@@ -124,8 +158,19 @@ export class Application {
         }
 
         this.currentState = 'starting';
+        this.lifecycle = Object.freeze({ ...lifecycle });
 
         try {
+            if (this.prepare) {
+                await this.prepare(this);
+            }
+            for (const name of this.databases.names()) {
+                const managed = this.databaseLifecycle[name];
+                if (managed) {
+                    this.connectedDatabases.push(name);
+                    await managed.connect();
+                }
+            }
             let models: readonly ResourceModel[];
             if (typeof this.resourceModels === 'function') {
                 try {
@@ -153,13 +198,15 @@ export class Application {
                 this.adminApi = await this.adminDefinition.initialize(this);
             }
 
+            await this.lifecycle.beforeReady?.();
+
             for (const app of this.apps.all()) {
                 await this.runHook(app, 'ready');
             }
 
             this.currentState = 'ready';
         } catch (error) {
-            const cleanupErrors = await this.stopApps();
+            const cleanupErrors = await this.cleanup();
             this.currentState = 'failed';
 
             if (cleanupErrors.length > 0) {
@@ -182,7 +229,7 @@ export class Application {
         }
 
         this.currentState = 'stopping';
-        const errors = await this.stopApps();
+        const errors = await this.cleanup();
         this.currentState = 'stopped';
 
         if (errors.length > 0) {
@@ -219,6 +266,28 @@ export class Application {
                 errors.push(
                     error instanceof AppLifecycleError ? error : new AppLifecycleError(app.name, 'shutdown', error),
                 );
+            }
+        }
+
+        return errors;
+    }
+
+    private async cleanup(): Promise<unknown[]> {
+        const errors: unknown[] = await this.stopApps();
+        const afterApps = this.lifecycle.afterApps;
+        this.lifecycle = {};
+        try {
+            await afterApps?.();
+        } catch (error) {
+            errors.push(error);
+        }
+        const databases = this.connectedDatabases;
+        this.connectedDatabases = [];
+        for (const name of databases.reverse()) {
+            try {
+                await this.databaseLifecycle[name]?.disconnect();
+            } catch (error) {
+                errors.push(error);
             }
         }
 

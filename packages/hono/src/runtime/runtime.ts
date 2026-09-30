@@ -31,9 +31,17 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
     private activeRequests = 0;
     private drain: (() => void) | undefined;
     private readonly disposeRoot: (() => Promise<void>) | undefined;
+    private rootDisposed = false;
+    private hostStopped = false;
     private readonly frameworkRouteCount: number;
 
     constructor(private readonly options: RuntimeOptions<Scope>) {
+        if (
+            options.drainTimeoutMs !== undefined &&
+            (!Number.isFinite(options.drainTimeoutMs) || options.drainTimeoutMs <= 0)
+        ) {
+            throw new AppError('HTTP_RUNTIME_CONFIG_INVALID', 'Drain timeout must be a positive finite number.');
+        }
         options = Object.freeze({
             ...options,
             ...(options.di === undefined ? {} : { di: Object.freeze({ ...options.di }) }),
@@ -51,7 +59,12 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
         this.options = options;
         const root = createRuntimeContainer(options.application);
         const configured = options.di;
-        this.disposeRoot = configured === undefined ? () => root.dispose() : undefined;
+        this.disposeRoot =
+            configured === undefined
+                ? () => root.dispose()
+                : configured.dispose
+                  ? async () => configured.dispose?.()
+                  : undefined;
         this.hono = new OpenAPIHono<RuntimeEnv<Scope>>();
         this.hono.notFound((context) =>
             context.json({ error: { code: 'NOT_FOUND', message: 'Route not found.' } }, 404),
@@ -146,88 +159,22 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
         }
         this.currentState = 'starting';
         try {
-            await this.options.application.start();
-            const admin = this.options.application.admin;
-            if (admin) {
-                if (
-                    this.hono.routes
-                        .slice(this.frameworkRouteCount)
-                        .some((route) => pathsOverlap(route.path, `${admin.basePath}/*`))
-                ) {
-                    throw new AppError('ADMIN_ROUTE_CONFLICT', 'Admin routes overlap an existing route.');
-                }
-                const handle = (context: Context<RuntimeEnv<Scope>>) => {
-                    const { subject, environment } = context.get('nestrum');
-
-                    return admin.handle(context.req.raw, {
-                        subject,
-                        environment,
-                        reportError: (error) =>
-                            this.reportError(error, {
-                                phase: 'request',
-                                request: context.req.raw,
-                                context: context.get('nestrum'),
-                            }),
-                    });
-                };
-                this.hono.all(admin.basePath, handle);
-                this.hono.all(`${admin.basePath}/*`, handle);
+            if (this.options.application.state !== 'created') {
+                throw new AppError(
+                    'HTTP_APPLICATION_STATE_INVALID',
+                    'Runtime startup requires an unstarted application.',
+                );
             }
-            const auth = this.options.application.auth;
-            const adminUi = this.options.adminUi;
-            if (adminUi) {
-                if (!admin || adminUi.basePath !== '/admin' || typeof adminUi.handle !== 'function') {
-                    throw new AppError(
-                        'ADMIN_UI_CONFIG_INVALID',
-                        'Admin UI requires configured admin and a /admin Fetch handler.',
-                    );
-                }
-                if (
-                    this.hono.routes
-                        .slice(this.frameworkRouteCount)
-                        .some((route) => pathsOverlap(route.path, `${adminUi.basePath}/*`))
-                ) {
-                    throw new AppError('ADMIN_UI_ROUTE_CONFLICT', 'Admin UI routes overlap an existing route.');
-                }
-                const handle = (context: Context<RuntimeEnv<Scope>>) =>
-                    adminUi.handle(context.req.raw, {
-                        fetch: (request) => Promise.resolve(this.fetch(request, context.env)),
-                    });
-                this.hono.all(adminUi.basePath, handle);
-                this.hono.all(`${adminUi.basePath}/*`, handle);
-            }
-            if (auth) {
-                if (
-                    this.hono.routes.some(
-                        (route) =>
-                            route.method !== 'ALL' &&
-                            (route.path.startsWith(auth.basePath) ||
-                                route.path.startsWith('/api/:') ||
-                                route.path === '/api/*'),
-                    )
-                ) {
-                    throw new AppError('HTTP_AUTH_ROUTE_CONFLICT', 'Authentication routes overlap an existing route.');
-                }
-                this.hono.on(['GET', 'POST'], `${auth.basePath}/*`, (context) => auth.handle(context.req.raw));
-            }
-            this.publicDocument = registerPublicApi(
-                this.hono,
-                this.options.application.resources.all(),
-                this.options.publicApi,
-            );
+            await this.options.application.start({
+                beforeReady: () => this.registerRoutes(),
+                afterApps: () => this.disposeContainer(),
+            });
             this.currentState = 'ready';
         } catch (error) {
             this.currentState = 'failed';
             const errors: unknown[] = [error];
-            if (this.options.application.state === 'ready') {
-                try {
-                    await this.options.application.shutdown();
-                } catch (cleanupError) {
-                    errors.push(cleanupError);
-                }
-            }
             try {
-                await this.disposeRoot?.();
+                await this.disposeContainer();
             } catch (cleanupError) {
                 errors.push(cleanupError);
             }
@@ -240,6 +187,85 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
         }
     }
 
+    private registerRoutes(): void {
+        const admin = this.options.application.admin;
+        if (admin) {
+            if (
+                this.hono.routes
+                    .slice(this.frameworkRouteCount)
+                    .some((route) => pathsOverlap(route.path, `${admin.basePath}/*`))
+            ) {
+                throw new AppError('ADMIN_ROUTE_CONFLICT', 'Admin routes overlap an existing route.');
+            }
+            const handle = (context: Context<RuntimeEnv<Scope>>) => {
+                const { subject, environment } = context.get('nestrum');
+
+                return admin.handle(context.req.raw, {
+                    subject,
+                    environment,
+                    reportError: (error) =>
+                        this.reportError(error, {
+                            phase: 'request',
+                            request: context.req.raw,
+                            context: context.get('nestrum'),
+                        }),
+                });
+            };
+            this.hono.all(admin.basePath, handle);
+            this.hono.all(`${admin.basePath}/*`, handle);
+        }
+        const auth = this.options.application.auth;
+        const adminUi = this.options.adminUi;
+        if (adminUi) {
+            if (!admin || adminUi.basePath !== '/admin' || typeof adminUi.handle !== 'function') {
+                throw new AppError(
+                    'ADMIN_UI_CONFIG_INVALID',
+                    'Admin UI requires configured admin and a /admin Fetch handler.',
+                );
+            }
+            if (
+                this.hono.routes
+                    .slice(this.frameworkRouteCount)
+                    .some((route) => pathsOverlap(route.path, `${adminUi.basePath}/*`))
+            ) {
+                throw new AppError('ADMIN_UI_ROUTE_CONFLICT', 'Admin UI routes overlap an existing route.');
+            }
+            const handle = (context: Context<RuntimeEnv<Scope>>) =>
+                adminUi.handle(context.req.raw, {
+                    fetch: (request) => Promise.resolve(this.fetch(request, context.env)),
+                });
+            this.hono.all(adminUi.basePath, handle);
+            this.hono.all(`${adminUi.basePath}/*`, handle);
+        }
+        if (auth) {
+            if (
+                this.hono.routes.some(
+                    (route) =>
+                        route.method !== 'ALL' &&
+                        (route.path.startsWith(auth.basePath) ||
+                            route.path.startsWith('/api/:') ||
+                            route.path === '/api/*'),
+                )
+            ) {
+                throw new AppError('HTTP_AUTH_ROUTE_CONFLICT', 'Authentication routes overlap an existing route.');
+            }
+            this.hono.on(['GET', 'POST'], `${auth.basePath}/*`, (context) => auth.handle(context.req.raw));
+        }
+        this.publicDocument = registerPublicApi(
+            this.hono,
+            this.options.application.resources.all(),
+            this.options.publicApi,
+        );
+    }
+
+    private async disposeContainer(): Promise<void> {
+        if (this.rootDisposed) {
+            return;
+        }
+        this.rootDisposed = true;
+        await this.disposeRoot?.();
+    }
+
     async shutdown(): Promise<void> {
         if (this.currentState === 'stopped') {
             return;
@@ -248,19 +274,56 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
             throw this.invalidState('shutdown');
         }
         this.currentState = 'stopping';
-        if (this.activeRequests > 0) {
-            await new Promise<void>((resolve) => {
-                this.drain = resolve;
-            });
-        }
         const errors: unknown[] = [];
+        if (!this.hostStopped) {
+            this.hostStopped = true;
+            try {
+                await this.options.stopTraffic?.();
+            } catch (error) {
+                errors.push(error);
+            }
+        }
+        if (this.activeRequests > 0) {
+            try {
+                await new Promise<void>((resolve, reject) => {
+                    const timer =
+                        this.options.drainTimeoutMs === undefined
+                            ? undefined
+                            : setTimeout(() => {
+                                  this.drain = undefined;
+                                  reject(
+                                      new AppError(
+                                          'HTTP_RUNTIME_DRAIN_TIMEOUT',
+                                          'Active requests did not drain; resources remain open for a later shutdown retry.',
+                                      ),
+                                  );
+                              }, this.options.drainTimeoutMs);
+                    this.drain = () => {
+                        if (timer !== undefined) {
+                            clearTimeout(timer);
+                        }
+                        resolve();
+                    };
+                });
+            } catch (error) {
+                this.currentState = 'failed';
+                throw errors.length
+                    ? new AppError(
+                          'HTTP_RUNTIME_DRAIN_TIMEOUT',
+                          'Traffic stop and drain failed; resources remain open.',
+                          500,
+                          { cause: new AggregateError([...errors, error]) },
+                      )
+                    : error;
+            }
+        }
         try {
             await this.options.application.shutdown();
         } catch (error) {
             errors.push(error);
         }
         try {
-            await this.disposeRoot?.();
+            await this.disposeContainer();
         } catch (error) {
             errors.push(error);
         }

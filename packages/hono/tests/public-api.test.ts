@@ -573,13 +573,13 @@ describe('Generated OpenAPI and bootstrap', () => {
         await runtime.shutdown();
     });
 
-    it('fails unsupported primary keys before traffic and cleans up already-ready apps', async () => {
+    it('fails unsupported primary keys before ready hooks or traffic and rolls back configured apps', async () => {
         const { runtime, app, shutdown } = fixture({
             fields: FIELDS.map((candidate) => ({ ...candidate, primaryKey: false })),
         });
         await expect(runtime.start()).rejects.toMatchObject({ code: 'HTTP_API_PRIMARY_KEY_INVALID' });
         expect(runtime.state).toBe('failed');
-        expect(app.state).toBe('stopped');
+        expect(app.state).toBe('failed');
         expect(shutdown).toHaveBeenCalledOnce();
         expect((await runtime.hono.request('/api/projects')).status).toBe(503);
         await runtime.shutdown();
@@ -685,7 +685,7 @@ describe('Generated OpenAPI and bootstrap', () => {
             throw new Error('private cleanup failure');
         });
         await expect(runtime.start()).rejects.toMatchObject({
-            code: 'HTTP_RUNTIME_START_FAILED',
+            code: 'APPLICATION_START_FAILED',
             cause: expect.any(AggregateError),
         });
         expect(runtime.state).toBe('failed');

@@ -35,6 +35,8 @@ export type AppDefinition = {
 export type ApplicationConfig = {
     readonly apps: readonly AppDefinition[];
     readonly databases: DatabaseConfig;
+    readonly prepare?: (application: Application) => void | Promise<void>;
+    readonly databaseLifecycle?: Readonly<Record<string, DatabaseLifecycle>>;
     readonly auth?: AuthenticationDefinition;
     readonly admin?: AdminDefinition;
     readonly resources?: readonly ResourceDefinition[];
@@ -42,6 +44,15 @@ export type ApplicationConfig = {
     readonly resourceModels?:
         | readonly ResourceModel[]
         | ((application: Application) => readonly ResourceModel[] | Promise<readonly ResourceModel[]>);
+};
+
+export type DatabaseLifecycle = {
+    readonly connect: () => void | Promise<void>;
+    readonly disconnect: () => void | Promise<void>;
+};
+export type ApplicationLifecycle = {
+    readonly beforeReady?: () => void | Promise<void>;
+    readonly afterApps?: () => void | Promise<void>;
 };
 
 export type ApplicationState = 'created' | 'starting' | 'ready' | 'stopping' | 'stopped' | 'failed';

@@ -1,6 +1,6 @@
 # Nestrum
 
-A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–14 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, default-deny ABAC, a Hono/InferDI runtime, opt-in public CRUD with OpenAPI, framework-owned Better Auth, a private session/ABAC-protected admin backend, and a prebuilt metadata-driven admin shell with generic CRUD, custom widgets, and authorized per-record actions.
+A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–15 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, default-deny ABAC, a Hono/InferDI runtime, opt-in public CRUD with OpenAPI, framework-owned Better Auth, a private session/ABAC-protected admin backend, and a prebuilt metadata-driven admin shell with generic CRUD, custom widgets, and authorized per-record actions.
 
 ## Development
 
@@ -190,7 +190,20 @@ await runtime.shutdown();
 
 Requests are gated until startup completes. Each request has an InferDI scope on context.var.di and a frozen framework context on context.var.nestrum. Auth sessions become subjects when configured; otherwise subjects are anonymous, and headers do not authenticate requests. Scopes dispose after the awaited route pipeline, including error paths. Shutdown rejects new requests and drains active pipelines before app shutdown and disposal of the owned root.
 
-Use createRuntimeContainer(application) to register typed services and provide a di.container/createScope pair; a supplied root remains application-owned. The runtime exposes a Fetch handler; the application owns its TCP listener. See [Phase 8](docs/phases/phase-08-hono-runtime.md) for service registration, error contracts, and scope ownership.
+Use createRuntimeContainer(application) to register typed services and provide a di.container/createScope pair; a supplied root remains application-owned unless di.dispose opts into lifecycle cleanup. The runtime exposes a Fetch handler; the application owns its TCP listener and can provide stopTraffic to close it before draining. Managed databaseLifecycle callbacks disconnect after app/DI cleanup. See [database workflow](docs/database-workflow.md) for preparation, shutdown, signal, and timeout ownership.
+
+## Database CLI
+
+Export defineCliConfig({ application }) from nestrum.config.ts, then build and use the workspace executable:
+
+```bash
+pnpm exec nestrum db generate --database documents
+pnpm exec nestrum db migrate --plan --name initial
+pnpm exec nestrum db migrate
+pnpm exec nestrum db status
+```
+
+Generation and migration planning are offline; migration application/status use the selected database connection. Review and commit prisma/migrations/<database> before applying. Config loading, named targeting, native Prisma delegation, provider extensions, and ownership are documented in [database workflow](docs/database-workflow.md).
 
 ## Public API
 

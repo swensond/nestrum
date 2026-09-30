@@ -1,6 +1,6 @@
 # Nestrum documentation
 
-This documentation is the durable project memory for future implementation sessions. **Phases 0–14 are complete; Phases 15–16 are not started.** Phase 14's implementation and validation are recorded in its phase document. APIs in later phase records remain design targets.
+This documentation is the durable project memory for future implementation sessions. **Phases 0–15 are complete; Phase 16 is not started.** Phase 15's implementation and validation are recorded in its phase document. APIs in later phase records remain design targets.
 
 - [Architecture](architecture.md): locked framework contracts and actual implementation boundaries.
 - [MVP](mvp.md): frozen scope and definition of done.
@@ -8,7 +8,8 @@ This documentation is the durable project memory for future implementation sessi
 - [Phases](phases/README.md): bounded implementation tasks and validation records.
 - [Decisions](decisions/README.md): rationale for decisions that need to survive future sessions.
 - [Admin extensions](admin-extensions.md): custom action handlers, field overrides, and compiled widget registration.
-- [Extension seams](extension-seams.md): contribution ownership, conflicts, and planned CLI/database boundaries.
+- [Database workflow](database-workflow.md): commands, provider extensions, and lifecycle ownership.
+- [Extension seams](extension-seams.md): contribution ownership, conflicts, and CLI/database extension boundaries.
 - [Domain glossary](../CONTEXT.md): database definition, database name, default database, and model identity.
 
 Begin each session by reading `architecture.md`, `mvp.md`, and the relevant phase document. Read `post-mvp.md` and relevant decisions when scope or tradeoffs matter.

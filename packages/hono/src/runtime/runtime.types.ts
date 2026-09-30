@@ -33,6 +33,7 @@ export type RuntimeOptions<Scope extends InferdiScope = RequestScope> = {
     readonly di?: {
         readonly container: InferdiRoot;
         readonly createScope: (inputs: RequestInputs) => Scope | Promise<Scope>;
+        readonly dispose?: () => void | Promise<void>;
     };
     readonly resolveSubject?: (
         request: Request,
@@ -44,4 +45,6 @@ export type RuntimeOptions<Scope extends InferdiScope = RequestScope> = {
     ) => AuthorizationEnvironment | Promise<AuthorizationEnvironment>;
     readonly setupScope?: (scope: Scope, context: RequestContext) => void | Promise<void>;
     readonly onError?: (error: unknown, event: RuntimeErrorEvent) => void | Promise<void>;
+    readonly stopTraffic?: () => void | Promise<void>;
+    readonly drainTimeoutMs?: number;
 };

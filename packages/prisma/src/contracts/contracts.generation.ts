@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { assemblePrismaContracts } from './contracts.assembly.js';
 import { PrismaContractError } from './contracts.errors.js';
@@ -74,10 +74,24 @@ export async function generatePrismaContracts(
             const contractExpression = legacy
                 ? `prisma7Schema(${JSON.stringify(sourcePath)})`
                 : JSON.stringify(sourcePath);
+            const controlModules = (options.extensions ?? []).filter(
+                (extension) => extension.database === contract.database && extension.controlModule !== undefined,
+            );
+            const extensionImports = controlModules
+                .map(
+                    (extension, index) =>
+                        `import extension${index} from ${JSON.stringify(pathToFileURL(resolve(options.rootDir, extension.controlModule ?? '')).href)};\n`,
+                )
+                .join('');
+            const extensionConfig = controlModules.length
+                ? `, extensions: [${controlModules.map((_, index) => `extension${index}`).join(', ')}]`
+                : '';
             const config =
                 `import { definePrismaConfig } from ${JSON.stringify(import.meta.resolve('prisma/config'))};\n` +
                 `import { defineConfig${legacy ? ', prisma7Schema' : ''} } from ${JSON.stringify(import.meta.resolve(providerConfig))};\n` +
-                `export default definePrismaConfig({ orm: defineConfig({ contract: ${contractExpression} }) });\n`;
+                extensionImports +
+                `export const ormOptions = { contract: ${contractExpression}${extensionConfig} };\n` +
+                'export default definePrismaConfig({ orm: defineConfig(ormOptions) });\n';
             await writeFile(configPath, config, 'utf8');
             const cli = fileURLToPath(new URL('./dist/prisma.js', import.meta.resolve('prisma/package.json')));
 

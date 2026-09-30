@@ -32,7 +32,7 @@ GET uses read, POST create, PATCH update, and DELETE delete. PATCH/DELETE return
 
 ## Implementation
 
-runtime.hono is now OpenAPIHono. Runtime start awaits application.start, plans enabled routes, checks conflicts, compiles OpenAPI, mounts routes, then accepts traffic. API bootstrap failure shuts down already-ready apps and disposes the owned InferDI root. Cleanup failures aggregate; shutdown hooks are not repeated. The final configure/routes/ready barrier remains Phase 15 work.
+runtime.hono is OpenAPIHono. Phase 15 moves route planning/conflicts/OpenAPI/mounting to the application pre-ready barrier after configure. API bootstrap failure rolls back configured apps, disposes owned/opted-in DI, and disconnects managed databases before any ready hook or traffic. Cleanup failures aggregate; hooks are not repeated. See [Phase 15](phase-15-cli-lifecycle.md).
 
 One route definition drives Hono registration and the OpenAPI registry. Handlers explicitly decode boundary values; QuerySets validate composed Create/Update schemas once against native values. Relation fields cannot be added to public write schemas. Read schema failures throw QUERY_RESULT_INVALID (500), retaining the original cause for server observers. Serialization failures use HTTP_RESPONSE_INVALID (500). Both redact internal details.
 

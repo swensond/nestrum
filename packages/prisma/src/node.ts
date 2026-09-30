@@ -9,4 +9,6 @@ export type {
     PrismaContract,
     PrismaFragment,
     PrismaGeneration,
+    PrismaProviderExtension,
 } from './contracts/contracts.types.js';
+export { PrismaCommandError, runPrismaCommand, writePrismaWorkflowConfig } from './contracts/prisma-command.js';

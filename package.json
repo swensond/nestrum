@@ -14,10 +14,11 @@
         "typecheck": "tsc --noEmit -p tsconfig.json && pnpm --filter @nestrum/admin-ui check",
         "lint": "biome check .",
         "lint:fix": "biome check --write .",
-        "check": "pnpm test && pnpm typecheck && pnpm build && pnpm --filter @nestrum/admin-ui verify:build"
+        "check": "pnpm test && pnpm typecheck && pnpm build && pnpm --filter @nestrum/admin-ui verify:build && pnpm --filter @nestrum/cli verify:build"
     },
     "devDependencies": {
         "@biomejs/biome": "2.5.14",
+        "@nestrum/cli": "workspace:*",
         "@types/node": "26.6.3",
         "typescript": "7.0.2",
         "vitest": "5.0.2"

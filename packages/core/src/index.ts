@@ -22,7 +22,9 @@ export type {
     AppHook,
     AppHookName,
     ApplicationConfig,
+    ApplicationLifecycle,
     ApplicationState,
+    DatabaseLifecycle,
 } from './application/application.types.js';
 export type { Authentication, AuthenticationDefinition, AuthSession } from './auth/auth.types.js';
 export { AuthorizationError, PolicyError } from './authorization/authorization.errors.js';

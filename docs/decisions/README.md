@@ -22,3 +22,5 @@ Use ADR-style records when future sessions need the reasoning for a durable deci
 - [0011 — Framework-owned Better Auth boundary](0011-better-auth-boundary.md): selected-database contracts, adapter ownership, protected models, and session subjects.
 
 - [0012 — Admin extension boundaries](0012-admin-extension-boundaries.md): ordinary ABAC action handlers and build-time widget registration shared by SSR/client.
+
+- [0013 — Database workflow and lifecycle ownership](0013-database-workflow-and-lifecycle.md): named Prisma 8 command delegation, stable migrations, provider seams, and app/DI/database cleanup barriers.

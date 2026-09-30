@@ -17,6 +17,17 @@ export type PrismaContract = {
 
 export type AssemblePrismaOptions = {
     readonly rootDir: string;
+    readonly database?: string;
+    readonly extensions?: readonly PrismaProviderExtension[];
+};
+
+export type PrismaProviderExtension = {
+    readonly owner: string;
+    readonly name: string;
+    readonly database: string;
+    readonly provider: PrismaProvider;
+    readonly contribute?: () => string | Promise<string>;
+    readonly controlModule?: string;
 };
 
 export type GeneratePrismaOptions = AssemblePrismaOptions & {
