@@ -48,9 +48,9 @@ await application.shutdown();
 
 The database configuration and app graph validate when the application is defined. All apps configure in dependency order before any ready hook runs; shutdown reverses that order. See [Phase 1](docs/phases/phase-01-application.md) for lifecycle states and failure behavior.
 
-Every application has exactly one PostgreSQL database ([decision 0018](docs/decisions/0018-postgresql-single-database.md)): read it from application.database, and hooks receive the same definition. A model's identity is its name: modelIdentity('Project') returns 'Project'.
+Every application has exactly one PostgreSQL database ([decision 0018](docs/decisions/0018-postgresql-single-database.md); [migration guide](docs/migration-single-postgres.md)): read it from application.database, and hooks receive the same definition. A model's identity is its name: modelIdentity('Project') returns 'Project'.
 
-Phase 2 registers immutable settings without creating Prisma clients or connecting to the database. See [Phase 2](docs/phases/phase-02-databases.md) for configuration rules.
+Phase 2 registers immutable settings without creating Prisma clients or connecting to the database. See [database workflow](docs/database-workflow.md) for current configuration rules.
 
 ## Prisma contracts
 
@@ -59,16 +59,16 @@ Apps explicitly contribute files or recursively discovered directories to the da
 ```ts
 const projects = defineApp({
     name: 'projects',
-    prisma: { default: ['src/apps/projects/prisma'] }
+    prisma: ['src/apps/projects/prisma']
 });
 ```
 
 For an application containing these apps, generate before starting it:
 
 ```ts
-import { generatePrismaContracts } from '@nestrum/prisma/node';
+import { generatePrismaContract } from '@nestrum/prisma/node';
 
-const generated = await generatePrismaContracts(application, {
+const generated = await generatePrismaContract(application, {
     rootDir: process.cwd(),
     outputDir: '.nestrum/contracts'
 });
@@ -79,7 +79,7 @@ This offline step emits contract.json and contract.d.ts in a fresh run directory
 
 ## Metadata and Zod
 
-compileModelMetadata({ database, provider, contract }) from @nestrum/prisma compiles emitted contract JSON. generateModelSchemas(metadata) from @nestrum/zod returns model/create/update/read/where/orderBy schemas and stable names. Object schemas support Zod .extend() composition. Runtime values follow Prisma codecs, including bigint, Date, and Temporal. Public APIs encode native values as JSON strings; see [Phase 9](docs/phases/phase-09-public-api.md) for transport and Temporal adapters, and [Phase 4](docs/phases/phase-04-zod-generation.md) for runtime shapes.
+compileModelMetadata({ provider, contract }) from @nestrum/prisma compiles emitted contract JSON. generateModelSchemas(metadata) from @nestrum/zod returns model/create/update/read/where/orderBy schemas and stable names. Object schemas support Zod .extend() composition. Runtime values follow Prisma codecs, including bigint, Date, and Temporal. Public APIs encode native values as JSON strings; see [Phase 9](docs/phases/phase-09-public-api.md) for transport and Temporal adapters, and [Phase 4](docs/phases/phase-04-zod-generation.md) for runtime shapes.
 
 ## Resources
 
@@ -96,7 +96,7 @@ const ProjectResource = defineResource({
 });
 ```
 
-Register definitions through app.resources or application.resources and supply generated families through application resourceModels (an array or loader). Startup validates every model and composes schemas before app hooks. Lookup uses application.resources.get('default.Project'). Public flags default to false; the Hono runtime generates only enabled operations at startup. See [Phase 5](docs/phases/phase-05-resources.md) for resource bootstrap and [Phase 9](docs/phases/phase-09-public-api.md) for HTTP behavior.
+Register definitions through app.resources or application.resources and supply generated families through application resourceModels (an array or loader). Startup validates every model and composes schemas before app hooks. Lookup uses application.resources.get('Project'). Public flags default to false; the Hono runtime generates only enabled operations at startup. See [Phase 5](docs/phases/phase-05-resources.md) for resource bootstrap and [Phase 9](docs/phases/phase-09-public-api.md) for HTTP behavior.
 
 ## QuerySets
 
@@ -209,7 +209,7 @@ admin.register(Project, { listDisplay: ['id', 'name'] });
 // Include admin, auth, Project, its compiled model/backend, and policies in defineApplication().
 ```
 
-The Hono runtime serves `/__admin/*` with a live Better Auth session and a default-deny policy for `admin.access` with action `access`. Resource metadata and CRUD use resource policies independently of public exposure. `GET /__admin/resources` discovers authorized resources; `/__admin/projects` and `/__admin/projects/:id` provide generic CRUD. Lists return `{ rows }` with a default limit of 20 and maximum of 100. Named database slugs use `documents--articles`.
+The Hono runtime serves `/__admin/*` with a live Better Auth session and a default-deny policy for `admin.access` with action `access`. Resource metadata and CRUD use resource policies independently of public exposure. `GET /__admin/resources` discovers authorized resources; `/__admin/projects` and `/__admin/projects/:id` provide generic CRUD. Lists return `{ rows }` with a default limit of 20 and maximum of 100. Model slugs are plural kebab-case names, such as `articles`.
 
 Same-origin access is enforced by default. `defineAdmin({ allowedOrigins: [...] })` enables explicit credentialed cross-origin access. Configured fields support labels, hidden presentation metadata, readonly input restrictions, and widget overrides; composed schemas remain authoritative. Custom action handlers run only after ordinary resource ABAC and scoped read/object checks. See [Phase 11](docs/phases/phase-11-admin-backend.md) for the private boundary and [admin extensions](docs/admin-extensions.md) for action and custom widget registration.
 

@@ -33,6 +33,7 @@ Nestrum started with named databases and two providers (PostgreSQL and MongoDB) 
 
 ## References
 
+- [Adopter migration guide](../migration-single-postgres.md)
 - [0003 — Database registration boundary](0003-database-registration-boundary.md)
 - [0004 — Prisma contract assembly](0004-prisma-contract-assembly.md)
 - [0017 — Enterprise SSO](0017-enterprise-sso.md)

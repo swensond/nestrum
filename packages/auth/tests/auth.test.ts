@@ -181,6 +181,8 @@ describe('Framework-owned Better Auth', () => {
 
     it('emits the owned contract and keeps core fields protected', () => {
         const postgres = authContract();
+        const declarations = [...postgres.matchAll(/^model (\w+)\s*\{/gm)].map((match) => match[1]);
+        expect(declarations).toEqual(AUTH_MODELS);
         for (const model of AUTH_MODELS) {
             expect(postgres).toContain(`model ${model}`);
         }
