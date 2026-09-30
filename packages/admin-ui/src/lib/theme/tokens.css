@@ -1,0 +1,127 @@
+/* Generated from tokens.json by `pnpm --filter @nestrum/admin-ui tokens`. Do not edit by hand. */
+/* Light is the default; dark follows the system setting unless data-theme on <html> overrides it. */
+:root {
+    color-scheme: light;
+    --canvas: #f3f2f8;
+    --surface: #ffffff;
+    --surface-subtle: #f7f6fb;
+    --input: #fbfafe;
+    --line: #e7e4f0;
+    --control: #8a849e;
+    --ink: #1b1928;
+    --ink-muted: #5c5770;
+    --nav-ink: #3a3650;
+    --nav-ink-muted: #625d78;
+    --nav-active: #ffffff;
+    --nav-active-ink: #5427c4;
+    --violet: #6333d6;
+    --on-violet: #ffffff;
+    --violet-ink: #5427c4;
+    --violet-soft: #efeafd;
+    --focus: #6333d6;
+    --danger: #b3204a;
+    --danger-soft: #fdebf0;
+    --danger-line: #f3c3d1;
+    --success-ink: #17714a;
+    --success-soft: #e6f5ee;
+    --success-line: #c3e6d4;
+    --skeleton: #ece9f5;
+    --skeleton-strong: #ddd8ec;
+    --shadow-card: 0 1px 2px rgba(27, 25, 40, 0.05), 0 8px 24px rgba(27, 25, 40, 0.06);
+    --shadow-nav-active: 0 1px 2px rgba(27, 25, 40, 0.08), 0 2px 8px rgba(27, 25, 40, 0.06);
+    --shadow-menu: 0 8px 24px rgba(27, 25, 40, 0.12);
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --radius-xs: 4px;
+    --radius-sm: 10px;
+    --radius-lg: 16px;
+    --radius-pill: 999px;
+    --control-md: 40px;
+    --control-sm: 36px;
+    --control-xs: 28px;
+    --nav-item: 40px;
+    --row: 48px;
+    --sidebar-width: 220px;
+    --form-width: 640px;
+    --font-sans: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --type-page-title: 700 26px / 32px var(--font-sans);
+    --type-card-title: 700 17px / 24px var(--font-sans);
+    --type-body: 400 14px / 20px var(--font-sans);
+    --type-label: 600 14px / 20px var(--font-sans);
+    --type-small: 400 13px / 18px var(--font-sans);
+    --type-caption: 600 12px / 16px var(--font-sans);
+    --type-identifier: 400 13px / 20px var(--font-mono);
+    --type-code-small: 400 12px / 18px var(--font-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --canvas: #110f18;
+        --surface: #1a1724;
+        --surface-subtle: #211d2e;
+        --input: #15121e;
+        --line: #2d283d;
+        --control: #726b8a;
+        --ink: #f1eff8;
+        --ink-muted: #aba5c0;
+        --nav-ink: #cfcadf;
+        --nav-ink-muted: #9c96b2;
+        --nav-active: #221d33;
+        --nav-active-ink: #d6c9ff;
+        --violet: #b49cff;
+        --on-violet: #1a0e3d;
+        --violet-ink: #c4b1ff;
+        --violet-soft: #2a2148;
+        --focus: #b49cff;
+        --danger: #ff8fab;
+        --danger-soft: #3a1422;
+        --danger-line: #5a2238;
+        --success-ink: #7fddb0;
+        --success-soft: #122a20;
+        --success-line: #224a38;
+        --skeleton: #2d283d;
+        --skeleton-strong: #383249;
+        --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-nav-active: none;
+        --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --canvas: #110f18;
+    --surface: #1a1724;
+    --surface-subtle: #211d2e;
+    --input: #15121e;
+    --line: #2d283d;
+    --control: #726b8a;
+    --ink: #f1eff8;
+    --ink-muted: #aba5c0;
+    --nav-ink: #cfcadf;
+    --nav-ink-muted: #9c96b2;
+    --nav-active: #221d33;
+    --nav-active-ink: #d6c9ff;
+    --violet: #b49cff;
+    --on-violet: #1a0e3d;
+    --violet-ink: #c4b1ff;
+    --violet-soft: #2a2148;
+    --focus: #b49cff;
+    --danger: #ff8fab;
+    --danger-soft: #3a1422;
+    --danger-line: #5a2238;
+    --success-ink: #7fddb0;
+    --success-soft: #122a20;
+    --success-line: #224a38;
+    --skeleton: #2d283d;
+    --skeleton-strong: #383249;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-nav-active: none;
+    --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.5);
+}

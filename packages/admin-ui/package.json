@@ -62,6 +62,7 @@
         "build": "svelte-kit sync && vite build && pnpm --workspace-root exec tsc -p packages/admin-ui/tsconfig.build.json",
         "check": "svelte-kit sync && svelte-check-native --tsconfig tsconfig.json --fail-on-warnings",
         "verify:build": "node tooling/verify-build.mjs",
+        "tokens": "node tooling/tokens.mjs",
         "dev": "vite dev"
     },
     "dependencies": {
