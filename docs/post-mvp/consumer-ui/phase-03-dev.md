@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -42,11 +42,11 @@ Start one command and verify backend + consumer + admin availability, client HMR
 
 ## Acceptance Criteria
 
-- [ ] One command starts backend and consumer UI.
-- [ ] Client HMR works.
-- [ ] Pure frontend edits do not unnecessarily restart backend.
-- [ ] Admin and consumer routes remain distinct.
-- [ ] Docs updated.
+- [x] One command starts backend and consumer UI.
+- [x] Client HMR works.
+- [x] Pure frontend edits do not unnecessarily restart backend.
+- [x] Admin and consumer routes remain distinct.
+- [x] Docs updated.
 
 ## Validation
 
@@ -62,4 +62,6 @@ Backend edits use full restart per PM1. SSR and alternate frontend servers remai
 
 ## Completion Notes
 
-Pending implementation and validation.
+Implemented. `nestrum dev` starts the application's Vite server internally (loopback, ephemeral port, its own HMR websocket port) and proxies only GET/HEAD requests the backend did not claim (never reserved namespaces) through the same `webUi` seam, injecting `publicEnv` into HTML. Files inside the web root are owned by Vite: they never restart the backend, so frontend edits use HMR. Backend/config edits keep the PM1 full restart; the Vite server persists across restarts and closes with the session (`close()` releases it). The banner prints a `Web` line. Admin development is unchanged (prebuilt shell).
+
+Validated with `packages/cli/tests/dev.test.ts` (one command serves consumer + API, proxy boundaries, no restart or log noise on a web edit, updated content, cleanup). Browser-level HMR was not exercised.

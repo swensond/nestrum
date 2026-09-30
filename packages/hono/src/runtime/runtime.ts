@@ -66,9 +66,17 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
                   ? async () => configured.dispose?.()
                   : undefined;
         this.hono = new OpenAPIHono<RuntimeEnv<Scope>>();
-        this.hono.notFound((context) =>
-            context.json({ error: { code: 'NOT_FOUND', message: 'Route not found.' } }, 404),
-        );
+        this.hono.notFound(async (context) => {
+            const web = options.webUi;
+            if (web && (context.req.method === 'GET' || context.req.method === 'HEAD')) {
+                const response = await web.handle(context.req.raw);
+                if (response) {
+                    return response;
+                }
+            }
+
+            return context.json({ error: { code: 'NOT_FOUND', message: 'Route not found.' } }, 404);
+        });
         this.hono.onError((error, context) => this.respondToError(error, context));
         this.hono.use('*', async (context, next) => {
             if (this.currentState !== 'ready' || options.application.state !== 'ready') {

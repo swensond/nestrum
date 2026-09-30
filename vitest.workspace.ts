@@ -61,4 +61,11 @@ export default [
             include: ['packages/runtime-node/tests/**/*.test.ts'],
         },
     }),
+    defineProject({
+        test: {
+            name: '@nestrum/web',
+            environment: 'node',
+            include: ['packages/web/tests/**/*.test.ts'],
+        },
+    }),
 ];

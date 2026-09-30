@@ -1,5 +1,6 @@
 import type { Application } from '@nestrum/core';
 import type { GeneratePrismaOptions } from '@nestrum/prisma/node';
+import type { WebConfig } from '@nestrum/web';
 
 export type CliConfig = {
     readonly application: Application;
@@ -16,6 +17,8 @@ export type CliConfig = {
     readonly extensions?: GeneratePrismaOptions['extensions'];
     readonly timeoutMs?: number;
     readonly server?: ServerConfig;
+    /** Hosted consumer UI, an application-owned Vite project. Off unless `enabled: true`. */
+    readonly web?: WebConfig;
 };
 export type ServerConfig = {
     readonly host?: string;

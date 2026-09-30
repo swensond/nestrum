@@ -25,5 +25,13 @@ export default defineConfig({
     outputDir: process.env.INTEGRATION_OUTPUT_DIR ?? '.nestrum/db-contracts',
     migrationsDir: process.env.INTEGRATION_MIGRATIONS_DIR ?? '.nestrum/migrations',
     server: { port: 3100 },
+    // The consumer UI is this application's own Vite/Svelte project; Nestrum builds and hosts it.
+    web: {
+        enabled: true,
+        root: './src/web',
+        publicEnv: { site: 'nestrum-example' },
+        // Rendered on the server by src/entry-server.ts and hydrated in the browser.
+        ssr: { entry: './src/entry-server.ts' },
+    },
     timeoutMs: 30000,
 });

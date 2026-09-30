@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Application } from '@nestrum/core';
+import { resolveWebConfig } from '@nestrum/web';
 import { CliError } from './cli.errors.js';
 import type { CliConfig } from './cli.types.js';
 
@@ -38,6 +39,12 @@ export function defineCliConfig(config: CliConfig): CliConfig {
             'CLI_CONFIG_INVALID',
             'CLI config requires an unstarted application and valid paths/timeout.',
         );
+    }
+
+    try {
+        resolveWebConfig(config.web);
+    } catch (cause) {
+        throw new CliError('CLI_CONFIG_INVALID', (cause as Error).message, 1, { cause });
     }
 
     return Object.freeze({ ...config });

@@ -23,3 +23,5 @@ export type { RunningServer, ServeCommandOptions } from './serve.js';
 export { runServe } from './serve.js';
 export type { ShutdownSignals } from './signals.js';
 export { installShutdownSignals } from './signals.js';
+export type { ConsumerWeb } from './web.js';
+export { assertNoSecretsInOutput, buildConsumerWeb, consumerWeb, serverSecrets } from './web.js';

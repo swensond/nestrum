@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { totpCode, totpSecretFromUri, totpStep } from '@nestrum/auth';
 import { runServe } from '@nestrum/cli';
+import { runConsumerBrowserChecks } from './consumer-browser.mjs';
 
 const ROOT_DIR = fileURLToPath(new URL('../', import.meta.url));
 const execute = promisify(execFile);
@@ -575,6 +576,10 @@ try {
     console.log(
         'Real auth/session ABAC, SQL/public CRUD, Mongo/admin CRUD, managers/scopes, OpenAPI and generic Svelte forms passed.',
     );
+    // The hosted consumer UI, driven in a real browser against the served application (Post-MVP Plan 04).
+    const consumer = credentials('consumer@example.test');
+    await json(await request('/api/auth/sign-up/email', { method: 'POST', body: consumer }), 200);
+    await runConsumerBrowserChecks({ baseURL: host.baseURL, email: consumer.email, password: consumer.password });
     await server.shutdown();
     assert.deepEqual(events.slice(-5), [
         'shutdown:articles',

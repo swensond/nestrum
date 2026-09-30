@@ -3,6 +3,7 @@ import type { HonoRuntime } from '@nestrum/hono';
 import { createHonoRuntime } from '@nestrum/hono';
 import type { RuntimeAdapter, ServerHandle } from '@nestrum/runtime';
 import { nodeRuntime } from '@nestrum/runtime-node';
+import { createWebHost, resolveWebConfig } from '@nestrum/web';
 import { CliError } from './cli.errors.js';
 import type { ServerConfig } from './cli.types.js';
 import { loadCliConfig } from './config.js';
@@ -11,6 +12,7 @@ import type { BuildManifest } from './manifest.js';
 import { cliVersion, readManifest } from './manifest.js';
 import type { Environment, ServerOptions } from './runtime-options.js';
 import { DEFAULT_DRAIN_TIMEOUT_MS, establishEnvironment, resolveServerOptions } from './runtime-options.js';
+import { loadSsrRender } from './web.js';
 
 export type ServeCommandOptions = {
     readonly cwd?: string;
@@ -71,11 +73,22 @@ export async function runServe(options: ServeCommandOptions = {}): Promise<Runni
         config: config.server,
     });
     const adminUi = await loadAdminShell(manifest);
+    const webUi = manifest.web
+        ? createWebHost({
+              directory: join(root, '.nestrum', manifest.web.directory),
+              publicEnv: resolveWebConfig(config.web)?.publicEnv ?? {},
+              basePath: manifest.web.basePath,
+              ...(manifest.web.ssr
+                  ? { render: await loadSsrRender(join(root, '.nestrum', manifest.web.ssr.entry)) }
+                  : {}),
+          })
+        : undefined;
     let handle: ServerHandle | undefined;
     let shuttingDown = false;
     const runtime = createHonoRuntime({
         application: config.application,
         ...(adminUi === undefined ? {} : { adminUi }),
+        ...(webUi === undefined ? {} : { webUi }),
         drainTimeoutMs: config.server?.drainTimeoutMs ?? DEFAULT_DRAIN_TIMEOUT_MS,
         stopTraffic: async () => {
             await handle?.stopAccepting();

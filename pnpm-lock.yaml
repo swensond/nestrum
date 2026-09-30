@@ -211,12 +211,31 @@ importers:
       '@nestrum/prisma':
         specifier: workspace:*
         version: link:../../packages/prisma
+      '@nestrum/web':
+        specifier: workspace:*
+        version: link:../../packages/web
       '@nestrum/zod':
         specifier: workspace:*
         version: link:../../packages/zod
+      svelte:
+        specifier: 5.57.1
+        version: 5.57.1
       zod:
         specifier: 4.6.5
         version: 4.6.5
+    devDependencies:
+      '@sveltejs/vite-plugin-svelte':
+        specifier: 7.3.1
+        version: 7.3.1(svelte@5.57.1)(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      playwright:
+        specifier: 1.63.0
+        version: 1.63.0
+      svelte-check-native:
+        specifier: 1.8.0
+        version: 1.8.0(typescript@7.0.2)
+      vite:
+        specifier: 8.3.1
+        version: 8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
 
   apps/example-mongo:
     dependencies:
@@ -328,12 +347,19 @@ importers:
       '@nestrum/runtime-node':
         specifier: workspace:*
         version: link:../runtime-node
+      '@nestrum/web':
+        specifier: workspace:*
+        version: link:../web
       '@nestrum/zod':
         specifier: workspace:*
         version: link:../zod
       esbuild:
         specifier: 0.28.2
         version: 0.28.2
+    devDependencies:
+      vite:
+        specifier: 8.3.1
+        version: 8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
 
   packages/core:
     dependencies:
@@ -401,6 +427,8 @@ importers:
       hono:
         specifier: 4.13.11
         version: 4.13.11
+
+  packages/web: {}
 
   packages/zod:
     dependencies:
@@ -3117,6 +3145,16 @@ packages:
 
   pkg-types@2.3.3:
     resolution: {integrity: sha512-j/lCFdcppV0JxWpCEITdbDltBxPP6cHT+yNJ6Go2OgoSA9518X847X9z0p6LtA4Nc16+eQzCZjRrWanTGvHJ5w==}
+
+  playwright-core@1.63.0:
+    resolution: {integrity: sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.63.0:
+    resolution: {integrity: sha512-+7ziBLidS4NaNCdt57SUDT+wYmmd5fmiQejUic/kb+YsYSCPyOOE9sebzMjNmQrsnNpDJqd4WHvV/8lfKfUDUg==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
@@ -6276,6 +6314,12 @@ snapshots:
       exsolve: 1.1.1
       pathe: 2.0.3
 
+  playwright-core@1.63.0: {}
+
+  playwright@1.63.0:
+    dependencies:
+      playwright-core: 1.63.0
+
   pluralize@8.0.0: {}
 
   postcss@8.5.28:
@@ -6593,6 +6637,15 @@ snapshots:
       svelte-check-native-linux-x64: 1.8.0
       svelte-check-native-win32-x64: 1.8.0
       typescript: 6.0.3
+
+  svelte-check-native@1.8.0(typescript@7.0.2):
+    optionalDependencies:
+      svelte-check-native-darwin-arm64: 1.8.0
+      svelte-check-native-darwin-x64: 1.8.0
+      svelte-check-native-linux-arm64: 1.8.0
+      svelte-check-native-linux-x64: 1.8.0
+      svelte-check-native-win32-x64: 1.8.0
+      typescript: 7.0.2
 
   svelte@5.57.1:
     dependencies:

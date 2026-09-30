@@ -20,6 +20,14 @@ export type BuildManifest = {
     readonly auth: boolean;
     /** The prebuilt admin shell package, resolved at serve time. `null` when the application has no admin. */
     readonly admin: { readonly package: string } | null;
+    /** The built consumer UI (`<build>/web`); `null` when the application has none. */
+    readonly web: {
+        readonly directory: string;
+        /** Normalized base path (`''` for the site root). */
+        readonly basePath: string;
+        /** The SSR bundle, relative to the build directory, when the UI renders on the server. */
+        readonly ssr?: { readonly entry: string };
+    } | null;
     readonly databases: readonly {
         readonly name: string;
         readonly provider: string;
@@ -76,6 +84,20 @@ export async function readManifest(root: string, nestrumVersion: string): Promis
             'BUILD_STALE',
             'The production server entry does not match its manifest. Run:\n  nestrum build',
         );
+    }
+    if (manifest.web) {
+        try {
+            await readFile(join(directory, manifest.web.directory, 'index.html'));
+        } catch {
+            throw new CliError('BUILD_INCOMPLETE', 'The consumer UI build is missing. Run:\n  nestrum build');
+        }
+        if (manifest.web.ssr) {
+            try {
+                await readFile(join(directory, manifest.web.ssr.entry));
+            } catch {
+                throw new CliError('BUILD_INCOMPLETE', 'The consumer SSR bundle is missing. Run:\n  nestrum build');
+            }
+        }
     }
     for (const database of manifest.databases ?? []) {
         for (const artifact of [database.contract, database.metadata]) {

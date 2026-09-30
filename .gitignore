@@ -12,3 +12,4 @@ playwright-report/
 *.tsbuildinfo
 .nestrum/
 .tmp-*/
+.svelte-check
