@@ -2,7 +2,7 @@
 
 ## Status and navigation
 
-This is the third post-MVP initiative and is implemented (PM3.0–PM3.5 are complete) on Better Auth's official `@better-auth/api-key` plugin; see [decision 0015](../../decisions/0015-api-keys.md) for the choices that refine the original plan. Key management depends on the admin 2FA assurance boundary from [Post-MVP Plan 02](../admin-2fa/README.md). Two plan items are narrowed: only `user` owners exist (organization owners need Better Auth's organization plugin), and the Docker + MongoDB integration section could not run in the authoring environment.
+This is the third post-MVP initiative and is implemented (PM3.0–PM3.5 are complete) on Better Auth's official `@better-auth/api-key` plugin; see [decision 0015](../../decisions/0015-api-keys.md) for the choices that refine the original plan. Key management depends on the admin 2FA assurance boundary from [Post-MVP Plan 02](../admin-2fa/README.md). Two plan items are narrowed: only `user` owners exist (organization owners need Better Auth's organization plugin). The Docker + MongoDB integration suite, including its API-key section, was run by the project owner and passes.
 
 | Phase | Goal | Primary surface | Status |
 | --- | --- | --- | --- |
