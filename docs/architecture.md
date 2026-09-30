@@ -149,9 +149,49 @@ AdminComponentRegistry registers unique safe widget names and Svelte components 
 
 The [contribution seam design](extension-seams.md) preserves explicit app/resource/DI/admin ownership and specifies conflict/lifecycle rules for future CLI commands and database extensions. Phase 15 implements database source/control extension descriptors and the built-in database commands; generic contributed CLI command descriptors remain a design seam. A full plugin ecosystem is deferred.
 
+## Post-MVP self-serving runtime
+
+The first post-MVP initiative is documented in the [self-serving runtime plan](post-mvp/runtime/README.md). It is planned work: PM1.0 documentation is complete, while PM1.1–PM1.6 have not started and do not add runtime commands yet.
+
+The target entry point is `nestrum.config.ts`, with apps still explicitly registered. The target commands are `nestrum dev`, `nestrum build`, and `nestrum serve`. `dev` owns regeneration, watching, restart, diagnostics, and admin development assets. `build` validates the application and writes a framework-owned `.nestrum/` production build and manifest. `serve` consumes that build, initializes the existing application/auth/admin/Hono lifecycle, completes readiness, then delegates HTTP serving to a runtime adapter. Production never silently builds, regenerates schemas, watches, or migrates; database migrations remain explicit.
+
+The planned package boundary is `@nestrum/runtime` for Node-free adapter/lifecycle contracts and `@nestrum/runtime-node` for the Node HTTP listener, draining, and close behavior. `@nestrum/cli` orchestrates commands and selects an adapter; it does not become the HTTP implementation. The adapter must compose with the existing Hono Fetch runtime, InferDI request ownership, pre-ready route barrier, reverse app shutdown, DI disposal, and managed database disconnect. Health/readiness and signal hardening are scheduled for PM1.6. See the phase records for acceptance criteria and implementation status.
+
+## Post-MVP admin 2FA
+
+The second post-MVP initiative is documented in the [admin 2FA plan](post-mvp/admin-2fa/README.md). It is planned work: PM2.0 documentation is complete, while PM2.1–PM2.5 have not started and admin 2FA is not currently enforced by the framework.
+
+The target admin boundary becomes Better Auth session → current-session two-factor assurance → `admin.access` ABAC → same-origin policy. A configured factor is not sufficient: the current session must have completed a challenge. TOTP is the initial factor; recovery codes are one-time, cryptographically generated, hashed at rest, shown once, and invalidated on regeneration. Assurance may expire independently from the login session.
+
+The consuming application should not provide MFA middleware or pages. Planned framework routes are `/admin/auth/2fa/setup`, `/admin/auth/2fa`, and `/admin/auth/recovery`, with private API operations under `/__admin/auth/2fa/*`. Browser requests may navigate to framework-owned challenge/setup pages; private API requests return structured `ADMIN_2FA_REQUIRED` errors. Existing session, `admin.access`, resource/action ABAC, and same-origin checks remain mandatory. Passkeys/WebAuthn are future factors, not part of the initial plan.
+
+## Post-MVP first-class API keys
+
+The third post-MVP initiative is documented in the [first-class API-key plan](post-mvp/api-keys/README.md). It is planned work: PM3.0 documentation is complete, while PM3.1–PM3.5 have not started and API keys are not currently accepted by resource APIs.
+
+API keys are explicit Nestrum principals, not Better Auth browser sessions. The planned pipeline is credential extraction → hash verification → expiration/revocation → rate limit → API-key subject → scope check → resource/action ABAC → handler. Resources opt in with accepted auth modes such as `session` and `api-key`; scope permission and ABAC permission are both required.
+
+Keys are cryptographically random, one-time reveal, hashed at rest, owner-bound, expirable, revocable, and redacted from logs/errors. Planned management is `/admin/api-keys` and `/__admin/api-keys/*`, protected by Better Auth, the PM2 admin 2FA assurance boundary, `admin.access`, API-key-management ABAC, and same-origin policy. The canonical header, hash/storage details, and rate-limit provider are finalized in the implementation phases.
+
+## Post-MVP hosted consumer UI
+
+The fourth post-MVP initiative is documented in the [hosted consumer UI plan](post-mvp/consumer-ui/README.md). It is planned work: PM4.0 documentation is complete, while PM4.1–PM4.5 have not started and consumer UI hosting is not currently implemented.
+
+The consuming project owns its Svelte product UI, pages, layouts, components, styles, UX, and branding. The planned `@nestrum/web`/`@nestrum/app-svelte` integration extends PM1's `dev`, `build`, and `serve` lifecycle. Production builds to `.nestrum/web/*` and serves ordinary consumer routes alongside `/api/*`, `/admin/*`, `/__admin/*`, and `/__nestrum/*`. Development coordinates backend, consumer Vite/Svelte, and admin development servers behind one command.
+
+Initial hosting targets static/SPA output. Unknown ordinary consumer GET routes may fall back to the consumer index, but framework namespaces can never be swallowed. Consumer auth helpers expose session/user/sign-in/sign-out state and a public API client; private admin APIs remain unavailable. Only explicitly allowlisted client-safe configuration reaches the browser; database credentials, Better Auth secrets, API-key hashes, admin metadata, and private environment values remain server-only.
+
+## Post-MVP feature flags
+
+The fifth post-MVP initiative is documented in the [feature-flag plan](post-mvp/feature-flags/README.md). It is planned work: PM5.0 documentation is complete, while PM5.1–PM5.7 have not started and feature flags are not currently evaluated by the runtime.
+
+Feature flags answer whether a capability is enabled; ABAC still decides whether a subject is authorized. Both may be required, and a flag never bypasses policy. The planned typed registry starts with boolean source defaults, Nestrum-owned persistent overrides, subject/organization/environment targeting, deterministic percentage rollout, and InferDI/request-context evaluation.
+
+Planned management is `/admin/features` and `/__admin/features/*`, protected by Better Auth, admin 2FA, `admin.access`, feature-management ABAC, and same-origin policy. Only explicitly exposed flags reach the hosted consumer UI, as server-evaluated booleans; targeting rules, rollout internals, hidden flags, sensitive attributes, and server-only defaults remain private. Process-local development overrides and isolated test helpers never mutate persistent storage.
+
 ## CLI and provider seams
 
-The public command is `nestrum`. MVP database commands are `nestrum db generate`, `nestrum db migrate`, and `nestrum db status`, with implemented named targeting through `--database documents`. Internal Prisma delegation is allowed; direct Prisma commands are not the public workflow. `nestrum new` and `nestrum dev` are naming examples, not additional MVP commands.
+The public command is `nestrum`. MVP database commands are `nestrum db generate`, `nestrum db migrate`, and `nestrum db status`, with implemented named targeting through `--database documents`. Internal Prisma delegation is allowed; direct Prisma commands are not the public workflow. `nestrum new` remains deferred. The planned `nestrum dev`, `nestrum build`, and `nestrum serve` commands belong to [Post-MVP Plan 01](post-mvp/runtime/README.md) and are not current MVP commands.
 
 PrismaProviderExtension descriptors provide owner/name/database/provider, source contributors and/or provider control-module imports. Validation rejects conflicts and mismatches before contribution; native Prisma validates source/control descriptors. Generated workflow configs preserve authoring/extensions and stable per-database migration paths, taking connections from a child environment variable. Advanced compression/index/extension/partitioning/physical-option implementations remain deferred. See [database workflow](database-workflow.md) and [ADR 0013](decisions/0013-database-workflow-and-lifecycle.md).
 
