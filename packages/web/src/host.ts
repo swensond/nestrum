@@ -47,7 +47,24 @@ export type WebHostOptions = {
     readonly directory: string;
     /** The allowlisted client-safe configuration; nothing else is ever serialized. */
     readonly publicEnv?: Readonly<Record<string, string>>;
+    /** Normalized base path (`''` for the root, otherwise `/app`). Requests outside it are not handled. */
+    readonly basePath?: string;
+    /** Render HTML navigations on the server instead of serving the static index. */
+    readonly render?: SsrRender;
 };
+
+/** What an SSR entry receives. `template` is the built `index.html` with public config already embedded. */
+export type SsrContext = {
+    readonly template: string;
+    readonly basePath: string;
+    readonly publicEnv: Readonly<Record<string, string>>;
+};
+
+/**
+ * The contract of a consumer SSR entry's `render` export. Return a `Response` (normally HTML built from the
+ * template), or `undefined` for "not found". Only GET/HEAD navigations outside framework namespaces reach it.
+ */
+export type SsrRender = (request: Request, context: SsrContext) => Response | undefined | Promise<Response | undefined>;
 
 export type WebHost = { handle(request: Request): Promise<Response | undefined> };
 
@@ -61,6 +78,7 @@ const empty = (status: number, headers: Record<string, string> = {}): Response =
  */
 export function createWebHost(options: WebHostOptions): WebHost {
     const publicEnv = options.publicEnv ?? {};
+    const basePath = options.basePath ?? '';
     let index: string | undefined;
 
     async function loadIndex(): Promise<string> {
@@ -91,6 +109,15 @@ export function createWebHost(options: WebHostOptions): WebHost {
             if (isReservedPath(pathname) || pathname.includes('\0')) {
                 return undefined;
             }
+            if (basePath !== '') {
+                if (pathname === basePath) {
+                    return empty(308, { location: `${basePath}/${new URL(request.url).search}` });
+                }
+                if (!pathname.startsWith(`${basePath}/`)) {
+                    return undefined;
+                }
+                pathname = pathname.slice(basePath.length);
+            }
             const relative = normalize(pathname).replace(/^[/\\]+/, '');
             if (relative.split(sep).includes('..')) {
                 return undefined;
@@ -114,6 +141,14 @@ export function createWebHost(options: WebHostOptions): WebHost {
             const wantsHtml = accept === null || accept.includes('text/html') || accept.includes('*/*');
             if (extname(pathname) !== '' || !wantsHtml) {
                 return undefined;
+            }
+
+            if (options.render) {
+                const rendered = await options.render(request, { template: await loadIndex(), basePath, publicEnv });
+
+                return rendered && request.method === 'HEAD'
+                    ? new Response(null, { status: rendered.status, headers: rendered.headers })
+                    : rendered;
             }
 
             return respond(request, await loadIndex(), {

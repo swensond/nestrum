@@ -6,6 +6,7 @@ import {
     createWebHost,
     findRouteCollisions,
     isReservedPath,
+    normalizeBasePath,
     resolveWebConfig,
     serializePublicConfig,
 } from '../src/index.js';
@@ -92,12 +93,89 @@ describe('routes and config', () => {
     it('validates web config and filters to explicit public env', () => {
         expect(resolveWebConfig(undefined)).toBeUndefined();
         expect(resolveWebConfig({ enabled: false })).toBeUndefined();
-        expect(resolveWebConfig({ enabled: true })).toEqual({ root: './src/web', publicEnv: {} });
+        expect(resolveWebConfig({ enabled: true })).toEqual({
+            root: './src/web',
+            publicEnv: {},
+            basePath: '',
+            ssr: undefined,
+        });
         expect(resolveWebConfig({ enabled: true, publicEnv: { id: 'x' } })?.publicEnv).toEqual({ id: 'x' });
         expect(() => resolveWebConfig({ enabled: true, publicEnv: { id: undefined as never } })).toThrow(
             /string value/,
         );
         expect(() => resolveWebConfig({ enabled: true, root: ' ' })).toThrow(/root/);
         expect(serializePublicConfig({ a: '<&>\u2028' })).not.toMatch(/[<>&\u2028]/);
+    });
+});
+
+describe('basePath', () => {
+    const host = () => createWebHost({ directory: dir, basePath: '/app' });
+
+    it('normalizes and validates base paths', () => {
+        expect(['', '/', undefined].map((value) => normalizeBasePath(value))).toEqual(['', '', '']);
+        expect(normalizeBasePath('/app/')).toBe('/app');
+        expect(normalizeBasePath('/a/b')).toBe('/a/b');
+        for (const bad of ['app', '/api', '/admin/x', '/__admin', '/__nestrum', '/a//b', '/..', '/a b', '/a/../b']) {
+            expect(() => normalizeBasePath(bad), bad).toThrow(/basePath/);
+        }
+        expect(resolveWebConfig({ enabled: true, basePath: '/app/' })?.basePath).toBe('/app');
+    });
+
+    it('serves the UI, assets and deep links only under the prefix', async () => {
+        expect(await (await host().handle(get('/app/')))?.text()).toContain('<body>app</body>');
+        expect(await (await host().handle(get('/app/projects/1')))?.text()).toContain('<body>app</body>');
+        expect((await host().handle(get('/app/assets/app-abc123.js')))?.headers.get('cache-control')).toContain(
+            'immutable',
+        );
+        expect((await host().handle(get('/app')))?.status).toBe(308);
+        expect((await host().handle(get('/app')))?.headers.get('location')).toBe('/app/');
+        for (const path of ['/', '/projects', '/apple', '/favicon.svg', '/assets/app-abc123.js']) {
+            expect(await host().handle(get(path)), path).toBeUndefined();
+        }
+    });
+});
+
+describe('server-side rendering', () => {
+    it('hands the template, base path and public config to render for HTML navigations only', async () => {
+        const seen: unknown[] = [];
+        const host = createWebHost({
+            directory: dir,
+            basePath: '/app',
+            publicEnv: { site: 'x' },
+            render: (request, context) => {
+                seen.push(context);
+                const path = new URL(request.url).pathname;
+
+                return path === '/app/missing'
+                    ? undefined
+                    : new Response(context.template.replace('app</body>', `ssr ${path}</body>`), {
+                          status: 200,
+                          headers: { 'content-type': 'text/html' },
+                      });
+            },
+        });
+        const page = await host.handle(get('/app/projects/2'));
+        expect(await page?.text()).toContain('ssr /app/projects/2</body>');
+        expect(seen[0]).toMatchObject({ basePath: '/app', publicEnv: { site: 'x' } });
+        expect((seen[0] as { template: string }).template).toContain('__nestrum_config__');
+        expect(await host.handle(get('/app/missing'))).toBeUndefined();
+        // Files, assets, non-HTML requests, non-GET, framework paths and out-of-prefix paths never render.
+        const before = seen.length;
+        for (const request of [
+            get('/app/data', { headers: { accept: 'application/json' } }),
+            get('/app/x', { method: 'POST' }),
+            get('/api/x'),
+            get('/elsewhere'),
+        ]) {
+            expect(await host.handle(request)).toBeUndefined();
+        }
+        // Real files are served statically and never rendered.
+        expect((await host.handle(get('/app/assets/app-abc123.js')))?.headers.get('content-type')).toContain(
+            'javascript',
+        );
+        expect(seen.length).toBe(before);
+        const head = await host.handle(get('/app/x', { method: 'HEAD' }));
+        expect(head?.status).toBe(200);
+        expect(await head?.text()).toBe('');
     });
 });

@@ -43,11 +43,13 @@ describe('nestrum build with a consumer UI', () => {
         });
         const { manifest, directory } = await runBuild({ cwd: root });
 
-        expect(manifest.web).toEqual({ directory: 'web' });
+        expect(manifest.web).toEqual({ directory: 'web', basePath: '' });
         expect(await readFile(join(directory, 'web/index.html'), 'utf8')).toContain('assets/');
         expect((await readdir(join(directory, 'web/assets'))).some((file) => file.endsWith('.js'))).toBe(true);
         expect((await readdir(join(directory, 'web/assets'))).some((file) => file.endsWith('.map'))).toBe(false);
-        await expect(readManifest(root, manifest.nestrumVersion)).resolves.toMatchObject({ web: { directory: 'web' } });
+        await expect(readManifest(root, manifest.nestrumVersion)).resolves.toMatchObject({
+            web: { directory: 'web', basePath: '' },
+        });
     });
 
     it('records no web output when the consumer UI is not enabled', async () => {
@@ -105,5 +107,49 @@ describe('secret detection', () => {
         ]);
         const root = await project({ 'out/a.js': 'clean' });
         await expect(assertNoSecretsInOutput(join(root, 'out'), ['nope-nope'])).resolves.toBe(1);
+    });
+});
+
+describe('nestrum build with basePath and SSR', () => {
+    const ssrEntry = `export function render(request, { template, basePath, publicEnv }) {
+    const path = new URL(request.url).pathname;
+    if (path.endsWith('/not-found')) return undefined;
+    return new Response(template.replace('<!--ssr-outlet-->', 'rendered ' + path + ' ' + basePath + ' ' + publicEnv.site), {
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+    });
+}
+`;
+    const ssrPage =
+        '<!doctype html><html><head><title>t</title></head><body><div id="app"><!--ssr-outlet--></div><script type="module" src="./main.js"></script></body></html>';
+    const files = (web: string) => ({
+        'nestrum.config.ts': config(web),
+        'web/index.html': ssrPage,
+        'web/main.js': "document.title = 'consumer';",
+        'web/entry-server.js': ssrEntry,
+    });
+
+    it('bundles the SSR entry outside the served directory and records base path and entry', async () => {
+        const root = await project(
+            files(
+                "{ enabled: true, root: './web', basePath: '/app', ssr: { entry: './entry-server.js' }, publicEnv: { site: 's' } }",
+            ),
+        );
+        const { manifest, directory } = await runBuild({ cwd: root });
+
+        expect(manifest.web).toEqual({ directory: 'web', basePath: '/app', ssr: { entry: 'web-server/entry.mjs' } });
+        expect(await readFile(join(directory, 'web/index.html'), 'utf8')).toContain('/app/assets/');
+        expect(await readFile(join(directory, 'web/index.html'), 'utf8')).toContain('<!--ssr-outlet-->');
+        expect(await readFile(join(directory, 'web-server/entry.mjs'), 'utf8')).toContain('ssr-outlet');
+        await expect(readdir(join(directory, 'web/web-server'))).rejects.toThrow();
+        await expect(readManifest(root, manifest.nestrumVersion)).resolves.toMatchObject({ web: { basePath: '/app' } });
+        await rm(join(directory, 'web-server/entry.mjs'));
+        await expect(readManifest(root, manifest.nestrumVersion)).rejects.toMatchObject({ code: 'BUILD_INCOMPLETE' });
+    });
+
+    it('rejects a reserved base path in config', async () => {
+        const root = await project(files("{ enabled: true, root: './web', basePath: '/admin' }"));
+        await expect(runBuild({ cwd: root })).rejects.toMatchObject({
+            message: expect.stringContaining('reserved framework namespace'),
+        });
     });
 });

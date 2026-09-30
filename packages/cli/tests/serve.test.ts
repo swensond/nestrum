@@ -296,4 +296,43 @@ describe('option resolution', () => {
         expect((await fetch(`${base}/__nestrum/health`)).status).toBe(200);
         expect((await fetch(`${base}/api/openapi.json`)).status).toBe(200);
     });
+
+    it('serves a base-pathed, server-rendered consumer UI with framework namespaces intact', async () => {
+        const root = await project(application('', ''));
+        const source = (await import('node:fs/promises')).readFile;
+        await writeFile(
+            join(root, 'nestrum.config.ts'),
+            (await source(join(root, 'nestrum.config.ts'), 'utf8')).replace(
+                'timeoutMs: 60000',
+                "web: { enabled: true, root: './web', basePath: '/app', ssr: { entry: './entry-server.js' }, publicEnv: { site: 'ssr' } },\n    timeoutMs: 60000",
+            ),
+        );
+        await mkdir(join(root, 'web'), { recursive: true });
+        await writeFile(
+            join(root, 'web/index.html'),
+            '<!doctype html><html><head></head><body><div id="app"><!--ssr-outlet--></div><script type="module" src="./main.js"></script></body></html>',
+        );
+        await writeFile(join(root, 'web/main.js'), "document.title = 'consumer';");
+        await writeFile(
+            join(root, 'web/entry-server.js'),
+            "export function render(request, { template, publicEnv }) { const path = new URL(request.url).pathname; return path.endsWith('/gone') ? undefined : new Response(template.replace('<!--ssr-outlet-->', `rendered ${path} ${publicEnv.site}`), { headers: { 'content-type': 'text/html' } }); }",
+        );
+        await runBuild({ cwd: root });
+        const port = await freePort();
+        const server = await runServe({ cwd: root, flags: { port }, env: env() });
+        servers.push(server);
+        const base = `http://127.0.0.1:${port}`;
+
+        const page = await (await fetch(`${base}/app/projects/7`)).text();
+        expect(page).toContain('rendered /app/projects/7 ssr');
+        expect(page).toContain('__nestrum_config__');
+        const asset = /\/app\/assets\/[^"]+\.js/.exec(page)?.[0] ?? '';
+        expect((await fetch(`${base}${asset}`)).headers.get('cache-control')).toContain('immutable');
+        expect((await fetch(`${base}/app`, { redirect: 'manual' })).status).toBe(308);
+        for (const path of ['/', '/projects', '/app/gone', '/web-server/entry.mjs', '/app/web-server/entry.mjs']) {
+            expect((await fetch(`${base}${path}`)).status, path).toBe(404);
+        }
+        expect((await fetch(`${base}/api/nope`, { headers: { accept: 'text/html' } })).status).toBe(404);
+        expect((await fetch(`${base}/__nestrum/health`)).status).toBe(200);
+    });
 });

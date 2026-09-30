@@ -12,6 +12,7 @@ import type { BuildManifest } from './manifest.js';
 import { cliVersion, readManifest } from './manifest.js';
 import type { Environment, ServerOptions } from './runtime-options.js';
 import { DEFAULT_DRAIN_TIMEOUT_MS, establishEnvironment, resolveServerOptions } from './runtime-options.js';
+import { loadSsrRender } from './web.js';
 
 export type ServeCommandOptions = {
     readonly cwd?: string;
@@ -76,6 +77,10 @@ export async function runServe(options: ServeCommandOptions = {}): Promise<Runni
         ? createWebHost({
               directory: join(root, '.nestrum', manifest.web.directory),
               publicEnv: resolveWebConfig(config.web)?.publicEnv ?? {},
+              basePath: manifest.web.basePath,
+              ...(manifest.web.ssr
+                  ? { render: await loadSsrRender(join(root, '.nestrum', manifest.web.ssr.entry)) }
+                  : {}),
           })
         : undefined;
     let handle: ServerHandle | undefined;

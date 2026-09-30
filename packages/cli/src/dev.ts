@@ -228,7 +228,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
                     'HTTP',
                     `  API        ${url}/api`,
                     ...(config.application.adminConfigured ? [`  Admin      ${url}/admin`] : []),
-                    ...(web ? [`  Web        ${url}/`] : []),
+                    ...(web ? [`  Web        ${url}${web.basePath}/${web.ssr ? '  (SSR)' : ''}`] : []),
                     `  OpenAPI    ${url}/api/openapi.json`,
                     ...adminSecurityDiagnostics(config.application.adminSecurity),
                     '',

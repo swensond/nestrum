@@ -224,4 +224,40 @@ describe('nestrum dev', () => {
         await session.close();
         await expect(fetch(`${url}/`)).rejects.toThrow();
     });
+
+    it('renders server-side through Vite under a base path and applies SSR edits without a backend restart', async () => {
+        const root = await scaffold();
+        await writeFile(
+            join(root, 'nestrum.config.ts'),
+            config(root, 0).replace(
+                'timeoutMs: 60000',
+                "web: { enabled: true, root: './web', basePath: '/app', ssr: { entry: './entry-server.js' } },\n    timeoutMs: 60000",
+            ),
+        );
+        await mkdir(join(root, 'web'), { recursive: true });
+        await writeFile(
+            join(root, 'web/index.html'),
+            '<!doctype html><html><head></head><body><div id="app"><!--ssr-outlet--></div><script type="module" src="/app/main.js"></script></body></html>',
+        );
+        await writeFile(join(root, 'web/main.js'), 'export const v = 1;');
+        const entry = (label: string) =>
+            `export function render(request, { template }) { return new Response(template.replace('<!--ssr-outlet-->', '${label} ' + new URL(request.url).pathname), { headers: { 'content-type': 'text/html' } }); }`;
+        await writeFile(join(root, 'web/entry-server.js'), entry('one'));
+        const { session, lines } = await start(root);
+        const url = session.url();
+
+        expect(lines.join('\n')).toContain(`Web        ${url}/app/  (SSR)`);
+        const page = await (await fetch(`${url}/app/deep/link`)).text();
+        expect(page).toContain('one /app/deep/link');
+        expect(page).toContain('/@vite/client');
+        expect(await (await fetch(`${url}/app/main.js`)).text()).toContain('v = 1');
+        expect((await fetch(`${url}/`)).status).toBe(404);
+        expect((await fetch(`${url}/api/nope`, { headers: { accept: 'text/html' } })).status).toBe(404);
+        const before = lines.length;
+        await writeFile(join(root, 'web/entry-server.js'), entry('two'));
+        session.changed(join(root, 'web/entry-server.js'));
+        await session.idle();
+        expect(lines.length).toBe(before);
+        expect(await (await fetch(`${url}/app/deep/link`)).text()).toContain('two /app/deep/link');
+    });
 });

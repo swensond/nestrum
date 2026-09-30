@@ -1,3 +1,5 @@
+import { isReservedPath } from './routes.js';
+
 /** Application-owned consumer UI configuration, set as `web` in `nestrum.config.ts`. */
 export type WebConfig = {
     readonly enabled?: boolean;
@@ -8,11 +10,25 @@ export type WebConfig = {
      * server environment. Values must be strings.
      */
     readonly publicEnv?: Readonly<Record<string, string>>;
+    /**
+     * URL prefix the consumer UI is served under, e.g. `/app`. Default `/` (the site root). It may not start with a
+     * framework namespace (`/api`, `/admin`, `/__admin`, `/__nestrum`). Requests outside it are not the UI's.
+     */
+    readonly basePath?: string;
+    /**
+     * Server-side rendering. `entry` is a module in the web root exporting `render(request, context)` (see
+     * `SsrRender`). Nestrum builds it as a Vite SSR bundle, loads it in production, and loads it through Vite in
+     * development. Omit for a static SPA.
+     */
+    readonly ssr?: { readonly entry: string };
 };
 
 export type ResolvedWebConfig = {
     readonly root: string;
     readonly publicEnv: Readonly<Record<string, string>>;
+    /** `''` for the site root, otherwise `/segment[/segment]` with no trailing slash. */
+    readonly basePath: string;
+    readonly ssr: { readonly entry: string } | undefined;
 };
 
 export const DEFAULT_WEB_ROOT = './src/web';
@@ -53,5 +69,42 @@ export function resolveWebConfig(config: WebConfig | undefined): ResolvedWebConf
         }
     }
 
-    return { root, publicEnv: Object.freeze({ ...publicEnv }) };
+    const basePath = normalizeBasePath(config.basePath);
+    if (config.ssr !== undefined && (typeof config.ssr?.entry !== 'string' || !config.ssr.entry.trim())) {
+        throw new WebConfigError('WEB_CONFIG_INVALID', 'web.ssr.entry must be a non-empty module path.');
+    }
+
+    return {
+        root,
+        publicEnv: Object.freeze({ ...publicEnv }),
+        basePath,
+        ssr: config.ssr === undefined ? undefined : { entry: config.ssr.entry },
+    };
+}
+
+const BASE_SEGMENT = /^[A-Za-z0-9._~-]+$/;
+
+/** `undefined`, `''` and `/` mean the root; otherwise a validated `/a/b` without a trailing slash. */
+export function normalizeBasePath(basePath: string | undefined): string {
+    if (basePath === undefined || basePath === '' || basePath === '/') {
+        return '';
+    }
+    const segments = typeof basePath === 'string' && basePath.startsWith('/') ? basePath.slice(1).split('/') : [];
+    if (segments.at(-1) === '') {
+        segments.pop();
+    }
+    if (segments.length === 0 || segments.some((segment) => !BASE_SEGMENT.test(segment) || /^\.+$/.test(segment))) {
+        throw new WebConfigError(
+            'WEB_CONFIG_INVALID',
+            'web.basePath must be "/" or an absolute path of plain segments such as "/app".',
+        );
+    }
+    if (isReservedPath(`/${segments[0]}`)) {
+        throw new WebConfigError(
+            'WEB_CONFIG_INVALID',
+            `web.basePath "/${segments.join('/')}" starts with a reserved framework namespace.`,
+        );
+    }
+
+    return `/${segments.join('/')}`;
 }

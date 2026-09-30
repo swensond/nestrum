@@ -1,8 +1,10 @@
 <script lang="ts">
 import type { AuthState } from '@nestrum/web/client';
 import { onMount } from 'svelte';
-import { api, auth, publicConfig } from './nestrum';
+import { api, auth } from './nestrum';
 
+// Public config arrives as a prop so the server render and the hydrating client agree.
+let { publicEnv }: { publicEnv: Readonly<Record<string, string>> } = $props();
 let session = $state<AuthState>({ status: 'loading', user: undefined, error: undefined });
 let email = $state('');
 let password = $state('');
@@ -38,7 +40,7 @@ async function probe() {
 
 <main>
     <h1 id="title">Example consumer app</h1>
-    <p id="site">site: {publicConfig.site ?? 'unset'}</p>
+    <p id="site">site: {publicEnv.site ?? 'unset'}</p>
     {#if session.status === 'loading'}
         <p>Loading…</p>
     {:else if session.status === 'authenticated'}

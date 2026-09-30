@@ -179,11 +179,11 @@ Keys are random, hashed at rest, revealed once, owner-bound, expirable, revocabl
 
 ## Post-MVP hosted consumer UI
 
-The fourth post-MVP initiative is documented in the [hosted consumer UI plan](post-mvp/consumer-ui/README.md). It is implemented (PM4.0–PM4.5) except for `basePath` and SSR; browser coverage is in the example integration suite.
+The fourth post-MVP initiative is documented in the [hosted consumer UI plan](post-mvp/consumer-ui/README.md). It is implemented (PM4.0–PM4.5) including `web.basePath` and opt-in SSR (`web.ssr`); browser coverage is in the example integration suite.
 
 The consuming project owns its Svelte product UI, pages, layouts, components, styles, UX, and branding. The `@nestrum/web` integration (server hosting plus `@nestrum/web/client` helpers) extends PM1's `dev`, `build`, and `serve` lifecycle. Production builds to `.nestrum/web/*` and serves ordinary consumer routes alongside `/api/*`, `/admin/*`, `/__admin/*`, and `/__nestrum/*`. Development coordinates backend, consumer Vite/Svelte, and admin development servers behind one command.
 
-Initial hosting targets static/SPA output. Unknown ordinary consumer GET routes may fall back to the consumer index, but framework namespaces can never be swallowed. Consumer auth helpers expose session/user/sign-in/sign-out state and a public API client; private admin APIs remain unavailable. Only explicitly allowlisted client-safe configuration reaches the browser; database credentials, Better Auth secrets, API-key hashes, admin metadata, and private environment values remain server-only.
+Hosting serves static/SPA output, or server-renders through an application-supplied `render` entry. Unknown ordinary consumer GET routes may fall back to the consumer index, but framework namespaces can never be swallowed. Consumer auth helpers expose session/user/sign-in/sign-out state and a public API client; private admin APIs remain unavailable. Only explicitly allowlisted client-safe configuration reaches the browser; database credentials, Better Auth secrets, API-key hashes, admin metadata, and private environment values remain server-only.
 
 ## Post-MVP feature flags
 

@@ -32,13 +32,13 @@ export default defineConfig({
 });
 ```
 
-`publicEnv` is implemented; `basePath` is not (root `/` only). The web root remains application-owned and does not introduce automatic app discovery.
+`publicEnv`, `basePath`, and `ssr: { entry }` are implemented (see PM4.5's follow-up). The web root remains application-owned and does not introduce automatic app discovery.
 
 ## Routes and serving
 
 Reserve `/api/*`, `/admin/*`, `/__admin/*`, and `/__nestrum/*`. Consumer routes are ordinary application routes; collisions fail build with useful diagnostics. Production serves consumer UI at `/`, `/projects`, `/account`, alongside the public API, admin UI/API, and runtime endpoints.
 
-Start with static/SPA output hosted by Nestrum. Keep the shape open to future SSR without making SSR a requirement. Serve JavaScript, CSS, images, fonts, favicon, and public assets while preserving hashed output. In SPA mode, unknown ordinary GET routes serve the consumer index; framework namespaces and non-GET/API 404s are never swallowed.
+Static/SPA output hosted by Nestrum is the default; SSR is opt-in through `web.ssr`. Serve JavaScript, CSS, images, fonts, favicon, and public assets while preserving hashed output. In SPA mode, unknown ordinary GET routes serve the consumer index; framework namespaces and non-GET/API 404s are never swallowed.
 
 ## Auth, API, and configuration safety
 
