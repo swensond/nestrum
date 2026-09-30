@@ -43,9 +43,11 @@ export async function runConsumerBrowserChecks({ baseURL, email, password }) {
         console.log('consumer browser deep links and assets ok');
 
         // 3. Framework namespaces are never shadowed by the SPA fallback, even for browser navigations.
-        for (const path of ['/api/nothing', '/__admin/nothing', '/__nestrum/nothing']) {
+        // The private admin API authenticates before routing, so an anonymous browser sees 401 there, not 404.
+        const expected = { '/api/nothing': [404], '/__admin/nothing': [401, 404], '/__nestrum/nothing': [404] };
+        for (const [path, statuses] of Object.entries(expected)) {
             const response = await page.goto(`${baseURL}${path}`);
-            assert.equal(response.status(), 404, path);
+            assert.ok(statuses.includes(response.status()), `${path} returned ${response.status()}`);
             assert.match(response.headers()['content-type'], /json/, path);
         }
         const health = await context.request.get(`${baseURL}/__nestrum/health`);
