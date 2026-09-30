@@ -31,6 +31,14 @@ export type AdminRegistryState = {
 
 const BUILTIN_ACTIONS: readonly string[] = ['list', 'retrieve', 'create', 'update', 'delete'];
 
+function extensionName(value: string, subject: string): string {
+    if (typeof value !== 'string' || !/^[A-Za-z][A-Za-z0-9_.-]*$/.test(value)) {
+        throw new AdminError('ADMIN_REGISTRATION_INVALID', `Admin ${subject} names must be safe identifier segments.`);
+    }
+
+    return value;
+}
+
 function origin(value: string): string {
     try {
         const url = new URL(value);
@@ -115,6 +123,7 @@ function configuration(identity: string, input: AdminResourceConfiguration): Adm
             ...(configured === undefined ? {} : { label: configured }),
             ...(options.hidden === undefined ? {} : { hidden: options.hidden }),
             ...(options.readOnly === undefined ? {} : { readOnly: options.readOnly }),
+            ...(options.widget === undefined ? {} : { widget: extensionName(options.widget, 'widget') }),
         });
     }
     const actions: Record<string, AdminActionConfiguration> = Object.create(null) as Record<
@@ -128,7 +137,16 @@ function configuration(identity: string, input: AdminResourceConfiguration): Adm
                 `Invalid admin action configuration for ${identity}.${String(name)}.`,
             );
         }
-        const action = key(name, 'action');
+        const action = extensionName(name, 'action');
+        if (
+            (options.handler !== undefined && typeof options.handler !== 'function') ||
+            (options.input !== undefined && (!options.input || typeof options.input.parseAsync !== 'function'))
+        ) {
+            throw new AdminError(
+                'ADMIN_REGISTRATION_INVALID',
+                `Admin action ${action} requires a callable handler and a Zod input schema.`,
+            );
+        }
         if (BUILTIN_ACTIONS.includes(action)) {
             throw new AdminError(
                 'ADMIN_ACTION_DUPLICATE',
@@ -136,7 +154,11 @@ function configuration(identity: string, input: AdminResourceConfiguration): Adm
             );
         }
         const configured = label(options.label, `action ${action}`);
-        actions[action] = Object.freeze(configured === undefined ? {} : { label: configured });
+        actions[action] = Object.freeze({
+            ...(configured === undefined ? {} : { label: configured }),
+            ...(options.input === undefined ? {} : { input: options.input }),
+            ...(options.handler === undefined ? {} : { handler: options.handler }),
+        });
     }
 
     return Object.freeze({

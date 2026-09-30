@@ -1,5 +1,5 @@
 import type { AdminRequestContext, Application, QuerySet } from '@nestrum/core';
-import { AdminError, AppError, AuthorizationError, QuerySetError } from '@nestrum/core';
+import { AdminError, AppError, AuthorizationError, QuerySetError, snapshotQueryValue } from '@nestrum/core';
 import type { ScalarTransport } from '@nestrum/hono';
 import {
     DEFAULT_LIST_LIMIT,
@@ -14,6 +14,7 @@ import {
 } from '@nestrum/hono';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { z } from 'zod';
 import type { AdminAccess } from '#admin/access';
 import { assertSameOrigin, authorizeAccess, permits } from '#admin/access';
 import type { AdminResourceMetadata } from '#admin/metadata';
@@ -248,20 +249,48 @@ export function createAdminRouter(
         }
         const access = context.get('access');
         itemQuery(context.req.raw);
-        const result = await application.authorization.authorize({
-            identity: target.identity,
-            action,
-            subject: access.subject,
-            environment: access.environment,
-            resource: await querySet(target, 'read', access)
-                .filterPrimaryKey(primaryKey(target, context.req.param('id')))
-                .get(),
-        });
-        if (!result.allowed) {
-            throw new QuerySetError('QUERY_NOT_FOUND', `No matching ${target.identity} record.`);
+        const configured = target.actions[action];
+        const request = context.req.raw;
+        const input = request.body === null ? {} : z.record(z.string(), z.unknown()).parse(await jsonBody(request));
+        const validated = configured?.input
+            ? z.record(z.string(), z.unknown()).parse(await configured.input.parseAsync(input))
+            : input;
+        const permission = await application.authorization.prepare(
+            target.identity,
+            { ...access, action },
+            undefined,
+            validated,
+        );
+        let objects = querySet(target, 'read', access).filterPrimaryKey(primaryKey(target, context.req.param('id')));
+        if (permission.scope) {
+            objects = objects.withinPolicyScope(permission.scope);
         }
+        const record = await objects.get();
+        try {
+            await permission.checkObject(record);
+        } catch (error) {
+            if (error instanceof AuthorizationError) {
+                throw new QuerySetError('QUERY_NOT_FOUND', `No matching ${target.identity} record.`);
+            }
+            throw error;
+        }
+        if (!configured?.handler) {
+            throw new AdminError('ADMIN_ACTION_NOT_IMPLEMENTED', 'Custom action execution is not configured.');
+        }
+        const result = await configured.handler(
+            Object.freeze({
+                application,
+                resource: target.resource,
+                record: Object.freeze(snapshotQueryValue(record)),
+                objects: querySet(target, action, access).filterPrimaryKey(primaryKey(target, context.req.param('id'))),
+                subject: access.subject,
+                environment: access.environment,
+                request,
+                input: validated,
+            }),
+        );
 
-        throw new AdminError('ADMIN_ACTION_NOT_IMPLEMENTED', 'Custom action execution is not implemented.');
+        return result === undefined ? new Response(null, { status: 204 }) : json({ result });
     });
 
     router.notFound(() => json({ error: { code: 'ADMIN_ROUTE_NOT_FOUND', message: 'Admin route not found.' } }, 404));

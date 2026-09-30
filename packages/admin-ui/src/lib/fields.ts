@@ -24,9 +24,24 @@ export function writable(field: AdminFieldMetadata, mode: FormMode): boolean {
     return !field.readOnly && (mode === 'create' ? field.creatable : field.updatable && !field.primaryKey);
 }
 
+const BUILTIN_WIDGETS: readonly FieldWidget[] = [
+    'text',
+    'textarea',
+    'number',
+    'boolean',
+    'enum',
+    'date',
+    'datetime-local',
+    'time',
+    'readonly',
+];
+
 export function fieldWidget(field: AdminFieldMetadata, mode: FormMode): FieldWidget {
     if (!writable(field, mode)) {
         return 'readonly';
+    }
+    if (field.widget && BUILTIN_WIDGETS.includes(field.widget as FieldWidget)) {
+        return field.widget as FieldWidget;
     }
     if (field.array) {
         return 'textarea';

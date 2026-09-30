@@ -1,6 +1,6 @@
 # Implementation phases
 
-Phases 0–13 are complete; Phases 14–16 are not started. Each task should introduce one primary abstraction or integrate two existing abstractions, and leave the repository green.
+Phases 0–14 are complete; Phases 15–16 are not started. Each task should introduce one primary abstraction or integrate two existing abstractions, and leave the repository green.
 
 | Phase | Goal | Packages | Status |
 | --- | --- | --- | --- |
@@ -18,7 +18,7 @@ Phases 0–13 are complete; Phases 14–16 are not started. Each task should int
 | [11 — Admin Backend Boundary](phase-11-admin-backend.md) | Create the private admin API independently of public API exposure. | @nestrum/admin | Complete |
 | [12 — Prebuilt Svelte Admin Shell](phase-12-admin-shell.md) | Build a prebuilt metadata-driven Svelte 5/SvelteKit admin shell. | @nestrum/admin-ui | Complete |
 | [13 — Generic Svelte Admin CRUD](phase-13-admin-crud.md) | Deliver usable generic list/create/edit/delete without per-resource Svelte code. | @nestrum/admin-ui | Complete |
-| [14 — Admin Extensibility and Arbitrary Actions](phase-14-admin-extensions.md) | Add admin overrides, custom components, and ABAC-backed arbitrary actions. | @nestrum/admin, @nestrum/admin-ui | Not Started |
+| [14 — Admin Extensibility and Arbitrary Actions](phase-14-admin-extensions.md) | Add admin overrides, custom components, and ABAC-backed arbitrary actions. | @nestrum/core, @nestrum/admin, @nestrum/admin-ui | Complete |
 | [15 — Nestrum DB CLI and Lifecycle Hardening](phase-15-cli-lifecycle.md) | Own the public database workflow and harden deterministic bootstrap/shutdown. | @nestrum/cli, @nestrum/core, @nestrum/prisma | Not Started |
 | [16 — MVP Integration and Architecture Test](phase-16-integration.md) | Prove fresh resources work end-to-end without changing framework internals. | all; @nestrum/testing and example apps as needed | Not Started |
 

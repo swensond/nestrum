@@ -48,6 +48,11 @@
             "nestrum-source": "./src/lib/FieldRenderer.svelte",
             "types": "./dist/lib/FieldRenderer.svelte",
             "import": "./dist/lib/FieldRenderer.svelte"
+        },
+        "./components/ResourceActions": {
+            "nestrum-source": "./src/lib/ResourceActions.svelte",
+            "types": "./dist/lib/ResourceActions.svelte",
+            "import": "./dist/lib/ResourceActions.svelte"
         }
     },
     "files": [

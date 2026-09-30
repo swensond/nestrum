@@ -110,6 +110,17 @@ export class QuerySet<
         return this.chain({ ...this.#state, filters: [...this.#state.filters, parsed] });
     }
 
+    /** Intersect a trusted policy scope without applying user query transforms to its predicate. */
+    withinPolicyScope(scope: Parameters<typeof compilePolicyScope>[0]): this {
+        const predicate = compilePolicyScope(
+            scope,
+            this.#context.metadata.fields.filter((field) => !field.array).map((field) => field.name),
+        );
+        this.#context.schemas.where.parse(snapshotQueryValue(predicate));
+
+        return this.chain({ ...this.#state, filters: [...this.#state.filters, predicate] });
+    }
+
     /** Preserve unique identity predicates even when a composed Where schema transforms inputs. */
     filterPrimaryKey(value: unknown): this {
         const keys = this.#context.metadata.fields.filter((field) => field.primaryKey);

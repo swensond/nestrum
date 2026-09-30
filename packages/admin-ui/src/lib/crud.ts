@@ -63,11 +63,12 @@ export class AdminResourceClient {
         id?: string,
         body?: AdminRecord,
         query = '',
+        action?: string,
     ): Promise<Response> {
         let response: Response;
         try {
             response = await this.fetch(
-                `/__admin/${encodeURIComponent(resource.slug)}${id === undefined ? '' : `/${encodeURIComponent(id)}`}${query}`,
+                `/__admin/${encodeURIComponent(resource.slug)}${id === undefined ? '' : `/${encodeURIComponent(id)}`}${action === undefined ? '' : `/actions/${encodeURIComponent(action)}`}${query}`,
                 {
                     method,
                     credentials: 'same-origin',
@@ -140,5 +141,8 @@ export class AdminResourceClient {
 
     async delete(resource: AdminResourceMetadata, id: string): Promise<void> {
         await this.request(resource, 'DELETE', id);
+    }
+    async action(resource: AdminResourceMetadata, id: string, action: string, input: AdminRecord = {}): Promise<void> {
+        await this.request(resource, 'POST', id, input, '', action);
     }
 }

@@ -1,6 +1,6 @@
 # Nestrum
 
-A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–13 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, default-deny ABAC, a Hono/InferDI runtime, opt-in public CRUD with OpenAPI, framework-owned Better Auth, a private session/ABAC-protected admin backend, and a prebuilt metadata-driven admin shell with generic CRUD.
+A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–14 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, default-deny ABAC, a Hono/InferDI runtime, opt-in public CRUD with OpenAPI, framework-owned Better Auth, a private session/ABAC-protected admin backend, and a prebuilt metadata-driven admin shell with generic CRUD, custom widgets, and authorized per-record actions.
 
 ## Development
 
@@ -160,7 +160,7 @@ admin.register(Project, { listDisplay: ['id', 'name'] });
 
 The Hono runtime serves `/__admin/*` with a live Better Auth session and a default-deny policy for `admin.access` with action `access`. Resource metadata and CRUD use resource policies independently of public exposure. `GET /__admin/resources` discovers authorized resources; `/__admin/projects` and `/__admin/projects/:id` provide generic CRUD. Lists return `{ rows }` with a default limit of 20 and maximum of 100. Named database slugs use `documents--articles`.
 
-Same-origin access is enforced by default. `defineAdmin({ allowedOrigins: [...] })` enables explicit credentialed cross-origin access. Configured fields support labels, hidden presentation metadata, and readonly input restrictions; composed schemas remain authoritative. Custom actions expose known authorized metadata and an authorization seam; custom action handlers ship in Phase 14. See [Phase 11](docs/phases/phase-11-admin-backend.md) for endpoints, security semantics, and limitations.
+Same-origin access is enforced by default. `defineAdmin({ allowedOrigins: [...] })` enables explicit credentialed cross-origin access. Configured fields support labels, hidden presentation metadata, readonly input restrictions, and widget overrides; composed schemas remain authoritative. Custom action handlers run only after ordinary resource ABAC and scoped read/object checks. See [Phase 11](docs/phases/phase-11-admin-backend.md) for the private boundary and [admin extensions](docs/admin-extensions.md) for action and custom widget registration.
 
 ## Admin UI
 

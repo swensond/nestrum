@@ -20,3 +20,5 @@ Use ADR-style records when future sessions need the reasoning for a durable deci
 - [0010 — Public API transport and mutation boundary](0010-public-api-transport-and-mutations.md): one enabled route plan, wire/native values, preserved item predicates, and bodyless scoped writes.
 
 - [0011 — Framework-owned Better Auth boundary](0011-better-auth-boundary.md): selected-database contracts, adapter ownership, protected models, and session subjects.
+
+- [0012 — Admin extension boundaries](0012-admin-extension-boundaries.md): ordinary ABAC action handlers and build-time widget registration shared by SSR/client.

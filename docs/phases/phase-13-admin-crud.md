@@ -25,7 +25,7 @@ The existing four generic routes now use reusable components and SvelteKit serve
 
 CRUD forms use ordinary POST submissions and work without JavaScript. With JavaScript, editing a control automatically selects its “Set value” mode and pending buttons prevent repeat submissions. Unchanged update fields are omitted by default; a mode selector also supports explicit omission/defaults and nullable values. Without JavaScript, choose “Set value” explicitly when editing. Empty strings, false, zero, null, and omitted values remain distinct.
 
-Date/instant/datetime-string widgets show and submit UTC. Temporal plain date/time values remain local and acquire missing seconds from browser controls. Bigints stay decimal strings to preserve precision. Arrays use JSON textareas and remain subject to server scalar/array validation. The initial multiline string heuristic covers description/content/notes/body names; explicit widget overrides belong to Phase 14.
+Date/instant/datetime-string widgets show and submit UTC. Temporal plain date/time values remain local and acquire missing seconds from browser controls. Bigints stay decimal strings to preserve precision. Arrays use JSON textareas and remain subject to server scalar/array validation. The initial multiline string heuristic covers description/content/notes/body names; Phase 14 subsequently adds explicit widget overrides.
 
 ## Implementation
 
@@ -95,7 +95,7 @@ Verified: `pnpm check` passed with 343 tests across 16 files, all seven package 
 
 - Lists are bounded first-page views; the backend has no offset/cursor contract yet. Limit/order controls do not claim pagination or total counts.
 - IDs equal to `.`, `..`, or an empty string cannot be addressed safely through the existing private path API and are not linked. The UI escapes `new` and leading `~` IDs with a `~` prefix so they do not collide with the create route; other scalar IDs are URL encoded.
-- Array editing uses JSON, without advanced relation pickers. Multiline strings use a naming heuristic until explicit widget overrides arrive in Phase 14.
+- Array editing uses JSON, without advanced relation pickers. Multiline strings use a naming heuristic by default; [Phase 14](phase-14-admin-extensions.md) now adds explicit widget overrides.
 - UTC instant widgets have browser Date precision; unchanged edit fields stay omitted to avoid incidental conversion or overwrites. Advanced precision/timezone widgets remain deferred.
 - The private backend's existing restriction on object-policy item mutations remains enforced. The UI does not bypass it.
 - Auth UI still requires JavaScript for login/logout. CRUD submissions work without JavaScript; editing then requires explicit field mode selection.
@@ -106,4 +106,4 @@ Phase 14 provides component/widget overrides and custom actions. Phase 16 exerci
 
 ## Completion Notes
 
-Phase 13 is complete. Generic list/create/edit/delete, all initial widgets, retained validation feedback, server-authoritative private API forwarding, reusable packaged components, and zero-resource-specific-page behavior are implemented and validated. Component overrides and custom actions remain Phase 14.
+Phase 13 is complete. Generic list/create/edit/delete, all initial widgets, retained validation feedback, server-authoritative private API forwarding, reusable packaged components, and zero-resource-specific-page behavior are implemented and validated. Phase 14 subsequently implements component overrides and custom actions.

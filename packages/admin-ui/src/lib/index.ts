@@ -1,3 +1,9 @@
+export type { AdminWidget, AdminWidgetProps } from './component-registry.js';
+export {
+    ADMIN_COMPONENTS_CONTEXT,
+    AdminComponentRegistry,
+    createAdminComponentRegistry,
+} from './component-registry.js';
 export type { AdminRecord, FieldErrors } from './crud.js';
 export { AdminCrudError, AdminResourceClient, recordHref, recordId } from './crud.js';
 export type { FieldWidget, FormFeedback, FormMode, ValueMode } from './fields.js';

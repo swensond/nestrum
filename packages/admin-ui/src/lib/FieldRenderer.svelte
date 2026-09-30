@@ -1,5 +1,8 @@
 <script lang="ts">
 import type { AdminFieldMetadata } from '@nestrum/admin';
+import { getContext } from 'svelte';
+import type { AdminComponentRegistry } from './component-registry.js';
+import { ADMIN_COMPONENTS_CONTEXT } from './component-registry.js';
 import type { FormMode, ValueMode } from './fields.js';
 import { displayValue, fieldWidget, initialValueMode, inputValue } from './fields.js';
 
@@ -10,6 +13,7 @@ let {
     submitted,
     selection,
     errors = [],
+    components,
 }: {
     field: AdminFieldMetadata;
     mode: FormMode;
@@ -17,10 +21,15 @@ let {
     submitted?: string | undefined;
     selection?: ValueMode | undefined;
     errors?: string[];
+    components?: AdminComponentRegistry | undefined;
 } = $props();
+const contextualComponents = getContext<AdminComponentRegistry | undefined>(ADMIN_COMPONENTS_CONTEXT);
+const registry = $derived(components ?? contextualComponents);
+const CustomWidget = $derived(field.widget ? registry?.get(field.widget) : undefined);
+let entered = $state<string | undefined>();
 let chosen = $derived(selection ?? initialValueMode(field, mode, value));
 const widget = $derived(fieldWidget(field, mode));
-const text = $derived(submitted ?? inputValue(field, value));
+const text = $derived(entered ?? submitted ?? inputValue(field, value));
 const id = $derived(`field-${field.name}`);
 const required = $derived(mode === 'create' && field.required && !field.nullable);
 </script>
@@ -39,7 +48,9 @@ const required = $derived(mode === 'create' && field.required && !field.nullable
                 </select>
             </label>
         {:else}<input type="hidden" name={`mode:${field.name}`} value="value" />{/if}
-        {#if widget === 'textarea'}
+        {#if CustomWidget}
+            <CustomWidget {field} {mode} {id} name={field.name} value={text} {required} {errors} onchange={(value) => { entered = value; chosen = 'value'; }} />
+        {:else if widget === 'textarea'}
             <textarea oninput={() => { chosen = 'value'; }} {id} name={field.name} value={text} {required} aria-invalid={errors.length > 0} aria-describedby={errors.length ? `${id}-errors` : undefined} rows="4"></textarea>
             {#if field.array}<small>Enter a JSON array.</small>{/if}
         {:else if widget === 'enum' || widget === 'boolean'}

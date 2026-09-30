@@ -44,6 +44,8 @@ const stores = new Map(
     resources.map((resource) => [resource.model, [{ id: 'record-one', name: `${resource.model} One`, enabled: true }]]),
 );
 let writesAllowed = true;
+let actionsAllowed = true;
+let actionCalls = 0;
 let writeCalls = 0;
 const matches = (row, query) =>
     query.filters.every((filter) =>
@@ -96,7 +98,20 @@ function backend(model) {
 function createApplication() {
     const admin = defineAdmin();
     for (const resource of resources) {
-        admin.register(resource, { listDisplay: ['id', 'name', 'enabled'] });
+        admin.register(resource, {
+            listDisplay: ['id', 'name', 'enabled'],
+            fields: { name: { widget: process.env.NESTRUM_ADMIN_COMPONENTS ? 'json-editor' : 'textarea' } },
+            actions: {
+                archive: {
+                    label: 'Archive',
+                    input: z.object({}).strict(),
+                    handler: async ({ objects }) => {
+                        actionCalls += 1;
+                        await objects.update({ enabled: false });
+                    },
+                },
+            },
+        });
     }
 
     return defineApplication({
@@ -174,6 +189,10 @@ function createApplication() {
                             (resource.model !== 'Article' || articleEnabled) && writesAllowed
                                 ? allow()
                                 : deny('WRITE_DENIED'),
+                    },
+                    archive: {
+                        operations: ['update'],
+                        authorize: () => (actionsAllowed ? allow() : deny('ACTION_DENIED')),
                     },
                     delete: {
                         authorize: () =>
@@ -269,7 +288,7 @@ try {
     const invalid = await submit('/admin/projects/new?/create', { name: 'x', enabled: 'false' });
     assert.equal(invalid.status, 400);
     const invalidHtml = await invalid.text();
-    assert.ok(invalidHtml.includes('value="x"'));
+    assert.ok(/<textarea[^>]*>x<\/textarea>/.test(invalidHtml));
     assert.ok(invalidHtml.includes('aria-invalid="true"'));
     assert.equal(writeCalls, 0);
     const created = await submit('/admin/projects/new?/create', { name: 'New project', enabled: 'false' });
@@ -309,6 +328,39 @@ try {
         stores.get('Project').some((row) => row.id === 'new'),
         false,
     );
+    assert.ok((await (await request('/admin/projects/record-one')).text()).includes('Record actions'));
+    const action = await submit('/admin/projects/record-one?/action', { action: 'archive', input: '{}' });
+    assert.equal(action.status, 303);
+    assert.equal(action.headers.get('location'), '/admin/projects/record-one?saved=action');
+    assert.equal(stores.get('Project').find((row) => row.id === 'record-one').enabled, false);
+    assert.equal(actionCalls, 1);
+    assert.equal((await submit('/admin/projects/record-one?/action', { action: 'archive', input: '[]' })).status, 400);
+    assert.equal((await submit('/admin/projects/record-one?/action', { action: 'unknown', input: '{}' })).status, 403);
+    for (const cookie of ['', 'session=expired', 'session=member']) {
+        assert.ok(
+            [401, 403].includes(
+                (await submit('/admin/projects/record-one?/action', { action: 'archive', input: '{}' }, cookie)).status,
+            ),
+        );
+    }
+    assert.equal(
+        (
+            await submit(
+                '/admin/projects/record-one?/action',
+                { action: 'archive', input: '{}' },
+                'session=staff',
+                'https://evil.example',
+            )
+        ).status,
+        403,
+    );
+    actionsAllowed = false;
+    assert.ok(!(await (await request('/admin/projects/record-one')).text()).includes('Record actions'));
+    assert.equal((await submit('/admin/projects/record-one?/action', { action: 'archive', input: '{}' })).status, 403);
+    assert.equal(actionCalls, 1);
+    if (process.env.NESTRUM_ADMIN_COMPONENTS) {
+        assert.ok((await (await request('/admin/projects/new')).text()).includes('data-custom-widget="json-editor"'));
+    }
     const beforeDenied = writeCalls;
     for (const cookie of ['', 'session=expired', 'session=member']) {
         assert.ok(
@@ -337,7 +389,7 @@ try {
     assert.equal(writeCalls, beforeDenied);
     assert.equal((await request('/api/projects')).status, 404);
     console.log(
-        'Prebuilt admin UI: generic CRUD, validation, permissions, routes, sessions, SSR isolation and static assets passed.',
+        'Prebuilt admin UI: generic CRUD, custom actions/widgets, validation, permissions, routes, sessions, SSR isolation and static assets passed.',
     );
 } finally {
     await runtime.shutdown();

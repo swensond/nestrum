@@ -4,6 +4,7 @@ export type { AdminErrorCode } from './admin/admin.errors.js';
 export { AdminError } from './admin/admin.errors.js';
 export type {
     AdminActionConfiguration,
+    AdminActionContext,
     AdminApi,
     AdminDefinition,
     AdminFieldConfiguration,

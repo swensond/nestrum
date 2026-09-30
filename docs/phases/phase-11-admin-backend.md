@@ -71,9 +71,9 @@ const application = defineApplication({
 | GET /__admin/:slug/:id | Scoped retrieve |
 | PATCH /__admin/:slug/:id | Scoped update; 204 |
 | DELETE /__admin/:slug/:id | Scoped delete; 204 |
-| POST /__admin/:slug/:id/actions/:action | Known-action authorization seam; authorized calls return 501 until handlers ship |
+| POST /__admin/:slug/:id/actions/:action | Known-action authorization seam; Phase 14 adds handlers, while metadata-only actions return 501 |
 
-Default database slugs use plural kebab-case model names, e.g. projects. Named database slugs use database--model, e.g. documents--articles. The resources slug is reserved for metadata routes. Custom action metadata includes only configured names with policy grants; item execution additionally requires read access and the action's object decision. No action handler runs in this phase.
+Default database slugs use plural kebab-case model names, e.g. projects. Named database slugs use database--model, e.g. documents--articles. The resources slug is reserved for metadata routes. Custom action metadata includes only configured names with policy grants; item execution additionally requires read access and the action's object decision. Phase 11 introduced no handler dispatch; Phase 14 now provides it.
 
 ## Files / Packages Changed
 
@@ -113,7 +113,7 @@ Validated on 2026-09-29:
 
 ## Known Limitations
 
-Custom action handlers and UI are deferred to their planned phases. Action metadata does not promise an object/input grant. Lists currently have no total/count, cursor, offset, or arbitrary filter interface. Regular pluralization and a single scalar key match public API constraints. readOnly/hidden are admin configuration, not field-level ABAC.
+Phase 11 delivered the metadata-only action seam; [Phase 14](phase-14-admin-extensions.md) now implements handlers and UI while retaining authorized 501 for registrations without handlers. Action metadata does not promise an object/input grant. Lists currently have no total/count, cursor, offset, or arbitrary filter interface. Regular pluralization and a single scalar key match public API constraints. readOnly/hidden are admin configuration, not field-level ABAC.
 
 Origin checks use the Fetch request URL; deployment proxies must supply the correct externally visible origin. Cross-site cookie delivery remains subject to the configured cookie/browser rules. Application-supplied trusted subject resolvers remain supported, but never replace the required session check. Registration definitions initialize for one application only.
 
@@ -125,4 +125,4 @@ Phase 12 can consume resource metadata for navigation, Phase 13 can use CRUD, an
 
 ## Completion Notes
 
-Phase 11 is complete. Private session/ABAC/origin boundaries, independent registration and discovery, generic CRUD without public exposure, and the known-action metadata seam are implemented and validated. UI and action-handler implementation remain scoped to later phases.
+Phase 11 is complete. Private session/ABAC/origin boundaries, independent registration and discovery, generic CRUD without public exposure, and the known-action metadata seam are implemented and validated. Phases 12–14 subsequently add the shell, generic CRUD UI, custom widgets, and action handlers.

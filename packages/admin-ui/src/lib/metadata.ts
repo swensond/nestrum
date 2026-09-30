@@ -29,6 +29,10 @@ const FIELD_SCHEMA = z.object({
     updatable: z.boolean(),
     required: z.boolean(),
     readOnly: z.boolean(),
+    widget: z
+        .string()
+        .regex(/^[A-Za-z][A-Za-z0-9_.-]*$/)
+        .optional(),
 });
 export const ADMIN_METADATA_SCHEMA = z
     .array(

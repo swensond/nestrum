@@ -1,5 +1,6 @@
 export type {
     AdminActionConfiguration,
+    AdminActionContext,
     AdminApi,
     AdminDefinition,
     AdminFieldConfiguration,

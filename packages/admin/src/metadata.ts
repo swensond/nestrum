@@ -20,6 +20,7 @@ export type AdminFieldMetadata = {
     readonly updatable: boolean;
     readonly required: boolean;
     readonly readOnly: boolean;
+    readonly widget?: string | undefined;
 };
 
 export type AdminActionMetadata = {
@@ -81,6 +82,7 @@ function field(
         updatable,
         required: creatable && !create.isOptional(),
         readOnly: configuration?.readOnly === true || (!creatable && !updatable),
+        ...(configuration?.widget === undefined ? {} : { widget: configuration.widget }),
     });
 }
 

@@ -1,15 +1,18 @@
 import { defineAuth } from '@nestrum/auth';
 import type {
+    AdminActionContext,
     AuthenticationDefinition,
     FieldMetadata,
     ModelMetadata,
     PolicyDefinition,
     QuerySpec,
+    ResourceSchemaComposers,
 } from '@nestrum/core';
 import { allow, defineApplication, defineResource, deny, eq } from '@nestrum/core';
 import { createHonoRuntime } from '@nestrum/hono';
 import { generateModelSchemas } from '@nestrum/zod';
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { storage } from '../../auth/tests/fixtures.js';
 import type { AdminOptions, AdminResourceConfiguration } from '../src/index.js';
 import { defineAdmin } from '../src/index.js';
@@ -69,11 +72,17 @@ function fixture(
         configuration?: AdminResourceConfiguration;
         auth?: AuthenticationDefinition;
         metadata?: ModelMetadata;
+        schemas?: ResourceSchemaComposers;
         configureRegistration?: boolean;
     } = {},
 ) {
     const metadata = options.metadata ?? METADATA;
-    const resource = defineResource({ model: metadata.name, database: metadata.database, api: false });
+    const resource = defineResource({
+        model: metadata.name,
+        database: metadata.database,
+        api: false,
+        ...(options.schemas ? { schemas: options.schemas } : {}),
+    });
     const admin = defineAdmin(options.admin);
     const register = () => {
         admin.register(resource, options.configuration ?? CONFIGURATION);
@@ -280,7 +289,9 @@ describe('Private admin backend', () => {
     });
 
     it('checks custom action object grants and hides unknown action metadata', async () => {
+        const handler = vi.fn();
         const { runtime, request } = fixture({
+            configuration: { ...CONFIGURATION, actions: { archive: { handler } } },
             policies: [
                 ACCESS,
                 {
@@ -294,10 +305,176 @@ describe('Private admin backend', () => {
         });
         await runtime.start();
         expect((await request('/__admin/projects/1/actions/archive', { method: 'POST' })).status).toBe(404);
+        expect(handler).not.toHaveBeenCalled();
         const metadata = await (await request('/__admin/resources/projects')).json();
         expect(metadata.actions.map((action: { name: string }) => action.name)).toEqual(['archive']);
         expect(metadata.capabilities.update).toBe(false);
         await runtime.shutdown();
+    });
+
+    it('executes known actions under their ordinary ABAC action and scopes handler QuerySets to the target', async () => {
+        const handler = vi.fn(async (context: AdminActionContext) => {
+            expect(context.subject.id).toBe('alice');
+            expect(context.record.id).toBe(1);
+            expect(Object.isFrozen(context.record)).toBe(true);
+            expect(context.environment.method).toBe('POST');
+            return context.objects.update({ name: 'Archived' });
+        });
+        const { runtime, request, backend } = fixture({
+            configuration: {
+                ...CONFIGURATION,
+                fields: { name: { widget: 'textarea' } },
+                actions: { archive: { label: 'Archive project', handler } },
+            },
+            policies: [
+                ACCESS,
+                {
+                    ...RESOURCE_POLICY,
+                    actions: {
+                        ...RESOURCE_POLICY.actions,
+                        archive: { operations: ['update'], scope: () => eq('ownerId', 'alice') },
+                    },
+                },
+            ],
+        });
+        await runtime.start();
+        const metadata = await (await request('/__admin/resources/projects')).json();
+        expect(metadata.fields.find((value: { name: string }) => value.name === 'name').widget).toBe('textarea');
+        expect(metadata.actions).toEqual([{ name: 'archive', label: 'Archive project' }]);
+        expect(await (await request('/__admin/projects/1/actions/archive', body('POST', {}))).json()).toEqual({
+            result: 1,
+        });
+        expect(handler).toHaveBeenCalledOnce();
+        expect(backend.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                filters: expect.arrayContaining([{ id: 1 }, { ownerId: { equals: 'alice' } }]),
+            }),
+            { name: 'Archived' },
+        );
+        await runtime.shutdown();
+    });
+
+    it('never executes denied, unknown, out-of-scope, or unauthenticated action handlers', async () => {
+        const handler = vi.fn();
+        const denied = fixture({
+            configuration: { ...CONFIGURATION, actions: { archive: { handler } } },
+            policies: [
+                ACCESS,
+                {
+                    resource: 'default.Project',
+                    actions: { read: { authorize: () => allow() }, archive: { authorize: () => deny('NO_ARCHIVE') } },
+                },
+            ],
+        });
+        await denied.runtime.start();
+        expect((await denied.request('/__admin/projects/1/actions/archive', body('POST', {}))).status).toBe(403);
+        expect((await denied.request('/__admin/projects/1/actions/missing', body('POST', {}))).status).toBe(404);
+        expect((await denied.request('/__admin/projects/1/actions/archive', body('POST', {}), false)).status).toBe(401);
+        expect(handler).not.toHaveBeenCalled();
+        expect(denied.backend.all).not.toHaveBeenCalled();
+        await denied.runtime.shutdown();
+        const scoped = fixture({
+            configuration: { ...CONFIGURATION, actions: { archive: { handler } } },
+            policies: [
+                ACCESS,
+                {
+                    ...RESOURCE_POLICY,
+                    actions: { ...RESOURCE_POLICY.actions, archive: { scope: () => eq('ownerId', 'bob') } },
+                },
+            ],
+        });
+        scoped.backend.all.mockImplementation(async () => []);
+        await scoped.runtime.start();
+        expect((await scoped.request('/__admin/projects/1/actions/archive', body('POST', {}))).status).toBe(404);
+        expect(handler).not.toHaveBeenCalled();
+        expect(scoped.backend.all).toHaveBeenCalledWith(
+            expect.objectContaining({
+                filters: expect.arrayContaining([{ ownerId: { equals: 'alice' } }, { ownerId: { equals: 'bob' } }]),
+            }),
+        );
+        await scoped.runtime.shutdown();
+    });
+
+    it('validates action input before execution and authorizes parsed input, while encoding native results', async () => {
+        const schema = z
+            .object({
+                reason: z
+                    .string()
+                    .min(3)
+                    .transform((value) => value.toUpperCase()),
+            })
+            .strict();
+        const handler = vi.fn(async (context: AdminActionContext) => {
+            expect(context.input).toEqual({ reason: 'READY' });
+            return { count: 42n, at: ROW.createdAt };
+        });
+        const setup = fixture({
+            configuration: { ...CONFIGURATION, actions: { archive: { input: schema, handler } } },
+            policies: [
+                ACCESS,
+                {
+                    resource: 'default.Project',
+                    actions: {
+                        read: { authorize: () => allow() },
+                        archive: {
+                            authorize: ({ input }) => (input?.reason === 'READY' ? allow() : deny('BAD_REASON')),
+                        },
+                    },
+                },
+            ],
+        });
+        await setup.runtime.start();
+        expect((await setup.request('/__admin/projects/1/actions/archive', body('POST', { reason: 'x' }))).status).toBe(
+            400,
+        );
+        expect(handler).not.toHaveBeenCalled();
+        expect(
+            await (
+                await setup.request('/__admin/projects/1/actions/archive', body('POST', { reason: 'ready' }))
+            ).json(),
+        ).toEqual({ result: { count: '42', at: ROW.createdAt.toISOString() } });
+        expect(handler).toHaveBeenCalledOnce();
+        await setup.runtime.shutdown();
+    });
+
+    it('preserves trusted action scope predicates when user where transforms would broaden them', async () => {
+        const handler = vi.fn();
+        const setup = fixture({
+            schemas: {
+                where: (schema) =>
+                    schema.transform((value) => ({
+                        ...(value as Record<string, unknown>),
+                        ownerId: { equals: 'alice' },
+                    })),
+            },
+            configuration: { ...CONFIGURATION, actions: { archive: { handler } } },
+            policies: [
+                ACCESS,
+                {
+                    ...RESOURCE_POLICY,
+                    actions: { ...RESOURCE_POLICY.actions, archive: { scope: () => eq('ownerId', 'bob') } },
+                },
+            ],
+        });
+        setup.backend.all.mockImplementation(async () => []);
+        await setup.runtime.start();
+        expect((await setup.request('/__admin/projects/1/actions/archive', body('POST', {}))).status).toBe(404);
+        expect(setup.backend.all).toHaveBeenCalledWith(
+            expect.objectContaining({ filters: expect.arrayContaining([{ ownerId: { equals: 'bob' } }]) }),
+        );
+        expect(handler).not.toHaveBeenCalled();
+        await setup.runtime.shutdown();
+    });
+
+    it.each([
+        { fields: { name: { widget: '../remote' } } },
+        { actions: { 'unsafe/name': {} } },
+        { actions: { archive: { handler: 'invalid' } } },
+        { actions: { archive: { input: {} } } },
+    ])('rejects invalid widget/action registration: %j', (configuration) => {
+        expect(() =>
+            fixture({ configuration: { ...CONFIGURATION, ...configuration } as AdminResourceConfiguration }),
+        ).toThrow();
     });
 
     it.each([

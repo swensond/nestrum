@@ -1,14 +1,29 @@
+import type { z } from 'zod';
 import type { Application } from '#core/application/application';
 import type { AuthorizationEnvironment, Subject } from '#core/authorization/authorization.types';
-import type { ResourceConfig } from '#core/resource/resource.types';
+import type { QuerySet } from '#core/queryset/queryset';
+import type { RegisteredResource, ResourceConfig } from '#core/resource/resource.types';
 
 export type AdminFieldConfiguration = {
     readonly label?: string;
     readonly hidden?: boolean;
     readonly readOnly?: boolean;
+    readonly widget?: string;
+};
+export type AdminActionContext = {
+    readonly application: Application;
+    readonly resource: RegisteredResource;
+    readonly record: Readonly<Record<string, unknown>>;
+    readonly objects: QuerySet;
+    readonly subject: Subject;
+    readonly environment: AuthorizationEnvironment;
+    readonly request: Request;
+    readonly input: unknown;
 };
 export type AdminActionConfiguration = {
     readonly label?: string;
+    readonly input?: z.ZodType;
+    readonly handler?: (context: AdminActionContext) => unknown | Promise<unknown>;
 };
 export type AdminResourceConfiguration = {
     readonly listDisplay: readonly string[];
