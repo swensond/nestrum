@@ -2,6 +2,24 @@
 
 These features are outside the frozen MVP unless a small supporting abstraction is necessary for an included capability. Record newly deferred work here as implementation proceeds.
 
+## Plan 06 — Enterprise SSO
+
+The [enterprise SSO initiative](post-mvp/sso/README.md) is the sixth planned post-MVP initiative. It adds OIDC and SAML 2.0 single sign-on on Better Auth's official SSO plugin (`@better-auth/sso`), with a prebuilt Svelte admin at `/admin/auth/sso` for managing multiple providers, organization and domain mapping, encrypted secrets, provisioning policy, and validation, all behind admin 2FA and `sso.*` ABAC actions.
+
+PM6.0 documentation is complete. PM6.1–PM6.8 are Not Started; SSO is not currently implemented. IdP claims never become Nestrum authorization, and an SSO login does not satisfy admin 2FA. The remaining MVP atomic object-policy write gate stays open independently.
+
+| Phase | Goal | Status |
+| --- | --- | --- |
+| [PM6.0](post-mvp/sso/phase-00-contract.md) | Document SSO contract | Complete |
+| [PM6.1](post-mvp/sso/phase-01-better-auth-integration.md) | Better Auth SSO plugin integration | Not Started |
+| [PM6.2](post-mvp/sso/phase-02-provider-registry.md) | Provider registry and secure persistence | Not Started |
+| [PM6.3](post-mvp/sso/phase-03-oidc.md) | OIDC | Not Started |
+| [PM6.4](post-mvp/sso/phase-04-saml.md) | SAML 2.0 | Not Started |
+| [PM6.5](post-mvp/sso/phase-05-admin-backend.md) | Private admin management API | Not Started |
+| [PM6.6](post-mvp/sso/phase-06-admin-ui.md) | Prebuilt Svelte SSO admin | Not Started |
+| [PM6.7](post-mvp/sso/phase-07-provisioning.md) | Provisioning and organization/domain mapping | Not Started |
+| [PM6.8](post-mvp/sso/phase-08-hardening.md) | Diagnostics, testing, hardening | Not Started |
+
 ## Plan 05 — Feature flags
 
 The [feature-flag initiative](post-mvp/feature-flags/README.md) is the fifth post-MVP initiative and is implemented. It provides typed boolean capability evaluation across backend services, public APIs, admin, and the hosted consumer UI while keeping feature state separate from authorization.
@@ -115,6 +133,7 @@ Node-specific listener APIs stay in the Node adapter, outside core and CLI. Prod
 - GraphQL, advanced relationship expansion, generated external SDKs, and public arbitrary Prisma expressions.
 - Field-level ABAC is excluded from the MVP; any later adoption requires revisiting stable response and admin contracts.
 - Organization-owned and service-identity API keys, external (Redis) API-key rate-limit providers, and key grace-period rotation. (API keys shipped in [Plan 03](post-mvp/api-keys/README.md).)
+- OAuth2-only enterprise providers and trusting upstream MFA assurance (`acr`/`amr`, `AuthnContext`) for admin 2FA. (OIDC and SAML SSO are planned in [Plan 06](post-mvp/sso/README.md).)
 - Social auth providers, non-admin MFA, passkeys/WebAuthn, QR-image enrollment, factor reset and backup-code/disable UI, independently expiring admin assurance, email verification delivery, account linking, and broader Better Auth plugin coverage. (Admin TOTP 2FA shipped in [Plan 02](post-mvp/admin-2fa/README.md).)
 
 ## Implementation follow-ups

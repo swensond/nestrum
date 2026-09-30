@@ -193,6 +193,14 @@ The fifth post-MVP initiative ([feature-flag plan](post-mvp/feature-flags/README
 
 Management is `/admin/features` and `/__admin/features/*`, protected by Better Auth, admin 2FA, `admin.access`, the `features` ABAC actions (`read`, `manage`) and same-origin policy, with evaluation explanations and an `onChange` audit seam. Only `exposeToClient` flags reach the hosted consumer UI, as server-evaluated booleans through `createFeatureClient()`; targeting rules, rollout internals, hidden flags and attributes stay private. `withFeatureFlags` and `nestrum dev --feature` overrides never mutate persistent storage.
 
+## Post-MVP enterprise SSO
+
+The sixth post-MVP initiative is documented in the [SSO plan](post-mvp/sso/README.md). It is planned work: PM6.0 documentation is complete, while PM6.1–PM6.8 have not started and SSO is not currently available.
+
+Better Auth's official SSO plugin will own OIDC and SAML 2.0 protocol correctness; Nestrum will own the provider registry, encrypted secret persistence, organization and domain mapping, provisioning policy, diagnostics, and a prebuilt Svelte admin. An SSO login produces a Better Auth session that passes through the SubjectFactory and ABAC like any other. IdP attributes never become authorization, and SSO does not satisfy Nestrum admin 2FA.
+
+Planned management is `/admin/auth/sso` and `/__admin/auth/sso/*`, protected by Better Auth, admin 2FA, `admin.access`, the `sso.read`/`create`/`update`/`delete`/`enable`/`disable`/`test` ABAC actions, and same-origin policy. Stored secrets are write-only and redacted everywhere.
+
 ## CLI and provider seams
 
 The public command is `nestrum`. MVP database commands are `nestrum db generate`, `nestrum db migrate`, and `nestrum db status`, with implemented named targeting through `--database documents`. Internal Prisma delegation is allowed; direct Prisma commands are not the public workflow. `nestrum new` remains deferred. The planned `nestrum dev`, `nestrum build`, and `nestrum serve` commands belong to [Post-MVP Plan 01](post-mvp/runtime/README.md) and are not current MVP commands.
