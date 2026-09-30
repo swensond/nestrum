@@ -2,6 +2,7 @@ import type { Application } from '#core/application/application';
 import type { AppDefinition } from '#core/application/application.types';
 import type { Subject } from '#core/authorization/authorization.types';
 import type { ModelIdentity, PrismaProvider } from '#core/database/database.types';
+import type { ApiKeys } from './api-key.js';
 
 export type AuthSession = {
     readonly user: Readonly<Record<string, unknown> & { id: string }>;
@@ -48,6 +49,7 @@ export type AuthAdministratorInput = {
 };
 export type Authentication = {
     readonly users: AuthUsers;
+    readonly apiKeys: ApiKeys;
     /** Operator bootstrap (CLI): create or promote an administrator without a session. Never reachable over HTTP. */
     createAdministrator(
         input: AuthAdministratorInput,

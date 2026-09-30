@@ -28,12 +28,13 @@ const href = (offset: number) =>
         <p>No users found.</p>
     {:else}
         <table>
-            <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Two-factor</th><th>Access</th></tr></thead>
+            <thead><tr><th>Email</th><th>Name</th><th>User ID</th><th>Role</th><th>Two-factor</th><th>Access</th></tr></thead>
             <tbody>
                 {#each data.page.users as user (user.id)}
                     <tr>
                         <td>{user.email}</td>
                         <td>{user.name}</td>
+                        <td><code>{user.id}</code></td>
                         <td>{user.role}</td>
                         <td>{user.twoFactorEnabled ? 'On' : 'Off'}</td>
                         <td>

@@ -26,3 +26,5 @@ Use ADR-style records when future sessions need the reasoning for a durable deci
 - [0013 — Database workflow and lifecycle ownership](0013-database-workflow-and-lifecycle.md): named Prisma 8 command delegation, stable migrations, provider seams, and app/DI/database cleanup barriers.
 
 - [0014 — Roles and staff management](0014-roles-and-staff-management.md): Better Auth admin-plugin roles, CLI-created administrators, admin-managed staff, and role-based policies.
+
+- [0015 — First-class API keys](0015-api-keys.md): Better Auth's API-key plugin behind server-side calls, `X-API-Key` transport, explicit key subjects, scopes plus ABAC, and admin-managed keys.

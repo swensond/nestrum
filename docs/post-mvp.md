@@ -36,18 +36,18 @@ PM4.0 documentation is complete. PM4.1–PM4.5 are Not Started; consumer UI host
 
 ## Plan 03 — First-class API keys
 
-The [first-class API-key initiative](post-mvp/api-keys/README.md) is the third planned post-MVP initiative. It gives resource APIs framework-owned machine authentication with one-time-reveal hashed secrets, ownership, scopes, expiry, revocation, rate-limit metadata, explicit API-key subjects, and ABAC integration.
+The [first-class API-key initiative](post-mvp/api-keys/README.md) is the third post-MVP initiative and is implemented. It gives resource APIs framework-owned machine authentication built on Better Auth's official `@better-auth/api-key` plugin: one-time-reveal hashed secrets, ownership, scopes, expiry, revocation, per-key rate limits, explicit API-key subjects, and ABAC integration.
 
-PM3.0 documentation is complete. PM3.1–PM3.5 are Not Started; API keys are not currently accepted by the runtime. Key management depends on the default-required admin 2FA boundary from [Plan 02](post-mvp/admin-2fa/README.md). The remaining MVP atomic object-policy write gate stays open independently.
+PM3.0–PM3.5 are complete. Resources opt in with `api: { auth: ['session', 'api-key'] }`; keys are sent as `X-API-Key`, become `type: 'api-key'` subjects (never sessions), must hold the resource's scope (`<resource>:read` / `<resource>:write` by default) and still pass ABAC. Administrators manage keys at `/admin/api-keys` (`/__admin/api-keys/*`) behind admin 2FA and the `api-key` ABAC actions; see [decision 0015](decisions/0015-api-keys.md). Existing applications must migrate the new `ApiKey` table. Only user-owned keys exist: organization owners need Better Auth's organization plugin and remain future work. The real PostgreSQL verification (`pnpm --filter @nestrum/example verify:api-keys`) passes; the Docker + MongoDB `pnpm test:integration` run, including its real API-key creation, reveal, scoped access, rotation and revocation section, was run by the project owner and passes. The remaining MVP atomic object-policy write gate stays open independently.
 
 | Phase | Goal | Status |
 | --- | --- | --- |
 | [PM3.0](post-mvp/api-keys/phase-00-contract.md) | Document API-key contract | Complete |
-| [PM3.1](post-mvp/api-keys/phase-01-storage.md) | Key generation and secure storage | Not Started |
-| [PM3.2](post-mvp/api-keys/phase-02-authentication.md) | Request authentication and subjects | Not Started |
-| [PM3.3](post-mvp/api-keys/phase-03-scopes-abac.md) | Scopes and ABAC integration | Not Started |
-| [PM3.4](post-mvp/api-keys/phase-04-admin.md) | Protected admin management | Not Started |
-| [PM3.5](post-mvp/api-keys/phase-05-hardening.md) | Rate limits, rotation, redaction, integration | Not Started |
+| [PM3.1](post-mvp/api-keys/phase-01-storage.md) | Key generation and secure storage | Complete |
+| [PM3.2](post-mvp/api-keys/phase-02-authentication.md) | Request authentication and subjects | Complete |
+| [PM3.3](post-mvp/api-keys/phase-03-scopes-abac.md) | Scopes and ABAC integration | Complete |
+| [PM3.4](post-mvp/api-keys/phase-04-admin.md) | Protected admin management | Complete |
+| [PM3.5](post-mvp/api-keys/phase-05-hardening.md) | Rate limits, rotation, redaction, integration | Complete |
 
 ## Plan 02 — Admin 2FA enforcement
 
@@ -112,6 +112,7 @@ Node-specific listener APIs stay in the Node adapter, outside core and CLI. Prod
 - Provider-specific optimizations outside Node.
 - GraphQL, advanced relationship expansion, generated external SDKs, and public arbitrary Prisma expressions.
 - Field-level ABAC is excluded from the MVP; any later adoption requires revisiting stable response and admin contracts.
+- Organization-owned and service-identity API keys, external (Redis) API-key rate-limit providers, and key grace-period rotation. (API keys shipped in [Plan 03](post-mvp/api-keys/README.md).)
 - Social auth providers, non-admin MFA, passkeys/WebAuthn, QR-image enrollment, factor reset and backup-code/disable UI, independently expiring admin assurance, email verification delivery, account linking, and broader Better Auth plugin coverage. (Admin TOTP 2FA shipped in [Plan 02](post-mvp/admin-2fa/README.md).)
 
 ## Implementation follow-ups

@@ -136,12 +136,13 @@ try {
         false,
     );
 
-    const request = async (path, { method = 'GET', body, cookie = '', origin = host.baseURL, form } = {}) =>
+    const request = async (path, { method = 'GET', body, cookie = '', origin = host.baseURL, form, apiKey } = {}) =>
         fetch(`${host.baseURL}${path}`, {
             method,
             redirect: 'manual',
             headers: {
                 ...(cookie ? { cookie } : {}),
+                ...(apiKey ? { 'x-api-key': apiKey } : {}),
                 origin,
                 ...(form ? { accept: 'text/html' } : {}),
                 ...(body === undefined ? {} : { 'content-type': 'application/json' }),
@@ -369,6 +370,79 @@ try {
     const openapi = await json(await request('/api/openapi.json', { cookie }), 200);
     assert.ok(Object.keys(openapi.paths).some((path) => path.includes('projects')));
     assert.ok(!JSON.stringify(openapi).includes('articles'));
+    assert.equal(openapi.components.securitySchemes.ApiKeyAuth.name, 'X-API-Key');
+    // API keys (Better Auth's API-key plugin): created by an administrator with 2FA, revealed once, hashed at rest.
+    const keyRequest = (path, options) => request(path, { cookie, ...options });
+    assert.deepEqual(await json(await keyRequest('/__admin/api-keys/capabilities'), 200), {
+        read: true,
+        create: true,
+        revoke: true,
+        rotate: true,
+    });
+    const issued = await json(
+        await keyRequest('/__admin/api-keys', {
+            method: 'POST',
+            body: {
+                name: 'Integration key',
+                ownerId: staff.user.id,
+                scopes: ['projects:read', 'projects:write'],
+                expiresInDays: 7,
+                rateLimit: { requests: 50, windowSeconds: 60 },
+            },
+        }),
+        201,
+    );
+    assert.match(issued.secret, /^nes_live_/);
+    const listedKeys = await (await keyRequest('/__admin/api-keys')).text();
+    assert.ok(!listedKeys.includes(issued.secret), 'Only the creation response may contain the secret.');
+    const use = (path, options = {}) => request(path, { apiKey: issued.secret, ...options });
+    const viaKey = await json(await use('/api/projects'), 200);
+    assert.ok(
+        viaKey.some((project) => project.id === 'project-one'),
+        'The key acts for its owner through the same ABAC scope.',
+    );
+    assert.ok(viaKey.every((project) => project.ownerId === staff.user.id));
+    assert.equal((await use('/api/projects/project-one', { method: 'DELETE' })).status, 403, 'ABAC still denies keys.');
+    assert.equal((await use('/api/projects', { method: 'POST', body: { ...projectData, id: 'via-key' } })).status, 201);
+    assert.equal((await request('/api/documents/articles', { apiKey: issued.secret })).status, 404);
+    assert.equal(
+        (await request('/__admin/resources', { apiKey: issued.secret })).status,
+        401,
+        'Keys never enter admin.',
+    );
+    assert.equal((await request('/api/projects', { apiKey: 'nes_live_not-a-real-key-not-a-real-key' })).status, 401);
+    const readOnly = await json(
+        await keyRequest('/__admin/api-keys', {
+            method: 'POST',
+            body: { name: 'Read only', ownerId: staff.user.id, scopes: ['projects:read'] },
+        }),
+        201,
+    );
+    assert.equal((await request('/api/projects', { apiKey: readOnly.secret })).status, 200);
+    assert.equal(
+        (
+            await request('/api/projects', {
+                apiKey: readOnly.secret,
+                method: 'POST',
+                body: { ...projectData, id: 'nope' },
+            })
+        ).status,
+        403,
+        'A missing scope denies even when ABAC would allow.',
+    );
+    const rotatedKey = await json(
+        await keyRequest(`/__admin/api-keys/${issued.key.id}/rotate`, { method: 'POST' }),
+        200,
+    );
+    assert.equal((await use('/api/projects')).status, 401, 'Rotation revokes the predecessor.');
+    assert.equal((await request('/api/projects', { apiKey: rotatedKey.secret })).status, 200);
+    await json(await keyRequest(`/__admin/api-keys/${rotatedKey.key.id}/revoke`, { method: 'POST' }), 200);
+    assert.equal((await request('/api/projects', { apiKey: rotatedKey.secret })).status, 401);
+    assert.equal((await keyRequest('/__admin/api-keys', { origin: 'https://foreign.invalid' })).status, 403);
+    assert.ok((await (await navigate('/admin/api-keys', cookie)).text()).includes('API keys'));
+    // Remove the record created through the key so later counts only see the suite's own data.
+    assert.equal((await request('/api/projects/via-key', { method: 'DELETE', cookie })).status, 204);
+    console.log('Real API-key creation, one-time reveal, scoped ABAC resource access, rotation and revocation passed.');
     assert.equal(
         (await request('/api/projects', { method: 'POST', cookie, body: { ...projectData, id: 'invalid', name: 'x' } }))
             .status,

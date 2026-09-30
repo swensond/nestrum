@@ -1,3 +1,4 @@
+import { apiKey } from '@better-auth/api-key';
 import type {
     Application,
     AuthAdministratorInput,
@@ -12,6 +13,9 @@ import type { DBAdapterInstance } from 'better-auth/adapters';
 import { admin, twoFactor } from 'better-auth/plugins';
 import type { AuthPrismaBinding } from '#auth/adapter/prisma-adapter';
 import { createPrismaAuthAdapter } from '#auth/adapter/prisma-adapter';
+import type { ApiKeyOptions, ResolvedApiKeyOptions } from '#auth/api-keys/options';
+import { resolveApiKeyOptions } from '#auth/api-keys/options';
+import { createApiKeys } from '#auth/api-keys/service';
 import { AUTH_MODELS, authContract } from '#auth/contracts/contracts';
 import { AUTH_ROLE_DEFINITIONS } from '#auth/roles/roles';
 import { createAdministrator, createUserManagement } from '#auth/roles/users';
@@ -30,6 +34,8 @@ export type AuthConfig = {
     readonly trustedOrigins?: readonly string[];
     readonly subjectFactory?: SubjectMapper;
     /** Better Auth `twoFactor` plugin settings that Nestrum exposes. */
+    /** Better Auth `apiKey` plugin settings that Nestrum exposes. */
+    readonly apiKeys?: ApiKeyOptions;
     readonly twoFactor?: {
         /** Authenticator-app issuer label. Defaults to "Nestrum". */
         readonly issuer?: string;
@@ -75,6 +81,7 @@ type AuthInstanceOptions = {
     readonly issuer: string;
     readonly maxFailedAttempts: number;
     readonly lockoutSeconds: number;
+    readonly apiKeys: ResolvedApiKeyOptions;
 };
 
 /** The one place Better Auth is configured, so tests can compare its schema with the prebaked contract. */
@@ -92,6 +99,30 @@ export function createAuthInstance(options: AuthInstanceOptions) {
                 roles: AUTH_ROLE_DEFINITIONS,
                 adminRoles: ['admin'],
                 defaultRole: 'user',
+            }),
+            // Keys are verified and managed only through server-side calls; `enableSessionForAPIKeys` stays off so a
+            // key never becomes a Better Auth session, and none of the plugin's HTTP endpoints are forwarded.
+            apiKey({
+                configId: 'default',
+                defaultPrefix: options.apiKeys.prefix,
+                startingCharactersConfig: { shouldStore: true, charactersLength: options.apiKeys.prefix.length + 4 },
+                requireName: true,
+                maximumNameLength: 64,
+                enableMetadata: true,
+                disableKeyHashing: false,
+                enableSessionForAPIKeys: false,
+                references: 'user',
+                keyExpiration: {
+                    defaultExpiresIn:
+                        options.apiKeys.defaultTtlDays === null ? null : options.apiKeys.defaultTtlDays * 86_400,
+                    maxExpiresIn: options.apiKeys.maxTtlDays,
+                },
+                rateLimit: {
+                    enabled: options.apiKeys.rateLimit.enabled,
+                    maxRequests: options.apiKeys.rateLimit.requests,
+                    timeWindow: options.apiKeys.rateLimit.windowSeconds * 1000,
+                },
+                schema: { apikey: { modelName: 'ApiKey' } },
             }),
             twoFactor({
                 issuer: options.issuer,
@@ -148,6 +179,7 @@ export function defineAuth(config: AuthConfig): AuthenticationDefinition {
             'Two-factor needs a short issuer without a colon and positive integer lockout settings.',
         );
     }
+    const apiKeys = resolveApiKeyOptions(config.apiKeys);
     const subjectFactory = new SubjectFactory(config.subjectFactory);
     const secret = config.secret;
     const prisma = config.prisma;
@@ -172,6 +204,7 @@ export function defineAuth(config: AuthConfig): AuthenticationDefinition {
                 issuer,
                 maxFailedAttempts,
                 lockoutSeconds,
+                apiKeys,
             });
             await instance.$context;
             const getSession = async (request: Request): Promise<AuthSession | null> => {
@@ -185,6 +218,7 @@ export function defineAuth(config: AuthConfig): AuthenticationDefinition {
             return Object.freeze({
                 basePath: '/api/auth' as const,
                 users: createUserManagement(instance),
+                apiKeys: createApiKeys(instance, apiKeys),
                 createAdministrator: (input: AuthAdministratorInput) => createAdministrator(instance, input),
                 async handle(request: Request): Promise<Response> {
                     const path = new URL(request.url).pathname;

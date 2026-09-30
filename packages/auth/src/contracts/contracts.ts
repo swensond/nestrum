@@ -1,7 +1,7 @@
 import type { PrismaProvider } from '@nestrum/core';
 
-/** Better Auth models Nestrum persists, including the `twoFactor` plugin's `TwoFactor` table. */
-export const AUTH_MODELS = ['User', 'Session', 'Account', 'Verification', 'TwoFactor'] as const;
+/** Better Auth models Nestrum persists, including the `twoFactor` plugin's `TwoFactor` and the API-key plugin's `ApiKey` tables. */
+export const AUTH_MODELS = ['User', 'Session', 'Account', 'Verification', 'TwoFactor', 'ApiKey'] as const;
 export type AuthModel = (typeof AUTH_MODELS)[number];
 
 // The contract is fixed, so it is written out per provider instead of being assembled. `contracts.test.ts` checks
@@ -67,6 +67,32 @@ model TwoFactor {
     lockedUntil TimestamptzString?
     user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+model ApiKey {
+    id String @id
+    configId String
+    name String?
+    start String?
+    referenceId String
+    prefix String?
+    key String
+    refillInterval Int?
+    refillAmount Int?
+    lastRefillAt TimestamptzString?
+    enabled Boolean?
+    rateLimitEnabled Boolean?
+    rateLimitTimeWindow Int?
+    rateLimitMax Int?
+    requestCount Int?
+    remaining Int?
+    lastRequest TimestamptzString?
+    expiresAt TimestamptzString?
+    createdAt TimestamptzString
+    updatedAt TimestamptzString
+    permissions String?
+    metadata String?
+    @@index([key])
+    @@index([referenceId])
+}
 `;
 
 const MONGODB = `model User {
@@ -126,6 +152,32 @@ model TwoFactor {
     verified Bool?
     failedVerificationCount Int?
     lockedUntil Date?
+}
+model ApiKey {
+    id String @id @map("_id")
+    configId String
+    name String?
+    start String?
+    referenceId String
+    prefix String?
+    key String
+    refillInterval Int?
+    refillAmount Int?
+    lastRefillAt Date?
+    enabled Bool?
+    rateLimitEnabled Bool?
+    rateLimitTimeWindow Int?
+    rateLimitMax Int?
+    requestCount Int?
+    remaining Int?
+    lastRequest Date?
+    expiresAt Date?
+    createdAt Date
+    updatedAt Date
+    permissions String?
+    metadata String?
+    @@index([key])
+    @@index([referenceId])
 }
 `;
 

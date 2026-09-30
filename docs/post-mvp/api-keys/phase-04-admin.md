@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -27,36 +27,41 @@ Depends on [PM3.3](phase-03-scopes-abac.md) and the completed PM2 assurance boun
 
 ## Implementation
 
-Planned generic metadata-driven admin views plus dedicated key-management operations. Protect direct API calls as well as browser routes. Revoke is stateful (`revokedAt`); rotate creates a replacement and reveals it once before revoking the predecessor according to the documented policy.
+- **Private API.** `GET /__admin/api-keys/capabilities`, `GET /__admin/api-keys?limit&offset&ownerId`, `POST /__admin/api-keys`, `POST /__admin/api-keys/:id/revoke`, `POST /__admin/api-keys/:id/rotate` (`packages/admin/src/api-key-routes.ts`). They run behind the complete admin boundary (same-origin check, Better Auth session, `admin.access`, admin 2FA assurance) and then each operation requires its own `api-key` ABAC action: `read`, `create`, `revoke`, `rotate`. A missing policy action denies. Unknown subpaths and wrong methods under the prefix are 404. Responses are `Cache-Control: no-store`; request bodies are strictly validated.
+- **Policies.** `roleBasedAdminPolicies()` now includes an `api-key` policy granting all four actions to `admin` only; staff may use administration but not manage keys. Applications can replace it.
+- **Secret handling.** The key is in the create and rotate responses only; list, revoke, and later reads never contain it.
+- **Svelte UI.** `/admin/api-keys` (list, create form with name, owner user ID, scopes, expiry, rate limit, revoke and rotate forms; native forms and SvelteKit actions, no client script required). The layout shows the nav link only when the capabilities endpoint says the subject can read keys. A one-time panel, "This key will not be shown again.", appears only in the action response that created or rotated the key (never in a redirect, URL, or the following load), and pages are `no-store`. The user-access page now shows user IDs so owners can be chosen.
+- **Owners.** Keys belong to a user chosen by ID; creation fails (`API_KEY_OWNER_NOT_FOUND`) for unknown owners.
+- **Rotation policy.** Create the replacement with the same name, owner, scopes, lifetime, rate limit, and metadata, reveal it once, revoke the predecessor (revoking the replacement if that fails). Only active keys rotate (409 otherwise). No grace-period overlap.
 
 ## Public API
 
-Planned `/admin/api-keys` and `/__admin/api-keys/*` routes, management ABAC action names, safe metadata response, and one-time secret response. Document exact actions/statuses after implementation.
+`/__admin/api-keys*` as above; ABAC identity `api-key` (`API_KEY_IDENTITY`) with actions `read`, `create`, `revoke`, `rotate` (`API_KEY_ACTIONS`); create body `{ name, ownerId, scopes, expiresInDays?, rateLimit?, metadata? }` → `201 { key, secret }`; rotate → `{ key, secret, revoked }`; revoke → `{ key }`; list → `{ keys, total, limit, offset }`. Safe error messages in the UI are fixed strings keyed by error code.
 
 ## Files / Packages Changed
 
-Planned admin/admin-ui/auth integration, route/ABAC registration, tests, [architecture](../../architecture.md), [initiative index](README.md), and this record.
+`packages/admin` (`api-key-routes.ts`, `policies.ts`, `router.ts`), `packages/admin-ui` (`api-keys.server.ts`, `routes/api-keys/*`, shell link, access page IDs), tests, [architecture](../../architecture.md), the [initiative index](README.md), and this record.
 
 ## Tests
 
-Cover admin 2FA requirement, create/list/revoke/rotate, owner/scope/expiry configuration, one-time reveal, direct API protection, same-origin, management ABAC, and no secret in later responses or logs.
+`packages/admin/tests/api-keys.test.ts` (real Better Auth and 2FA): anonymous, user, unenrolled-administrator, and staff denial; capabilities; create/list/revoke/rotate with one-time reveal and no secret in later responses or storage; invalid input; cross-origin rejection; unknown routes; the `api-key`/`create` action requirement. `packages/admin-ui/tests/api-keys.test.ts`: client, actions, safe messages, malformed forms, rendering, escaping, and link visibility.
 
 ## Acceptance Criteria
 
-- [ ] Admin 2FA is required.
-- [ ] Create/list/revoke work.
-- [ ] Rotation works according to policy.
-- [ ] Secret is shown once only.
-- [ ] Owner/scopes/expiry are configurable.
-- [ ] Docs updated.
+- [x] Admin 2FA is required.
+- [x] Create/list/revoke work.
+- [x] Rotation works according to policy.
+- [x] Secret is shown once only.
+- [x] Owner/scopes/expiry are configurable.
+- [x] Docs updated.
 
 ## Validation
 
-Run targeted admin/API tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, applicable Svelte/browser checks, and `git diff --check`.
+`pnpm test`, `pnpm typecheck` (including svelte-check), `pnpm build`, `admin-ui verify:build`, `pnpm check`, biome, and `git diff --check` pass. No Playwright browser script was added for this page; the forms are covered by render and action tests.
 
 ## Known Limitations
 
-Rate limiting, last-use operational details, and final redaction/rotation integration are PM3.5.
+Owners are entered as user IDs (no picker). No edit-in-place (rename, rescope): revoke and create, or rotate. Organization owners are not supported.
 
 ## Follow-Ups
 
@@ -64,4 +69,4 @@ Rate limiting, last-use operational details, and final redaction/rotation integr
 
 ## Completion Notes
 
-Pending implementation and validation.
+Management uses the same boundary as staff management, plus its own ABAC actions.

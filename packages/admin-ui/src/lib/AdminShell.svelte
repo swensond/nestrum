@@ -9,6 +9,7 @@ let {
     activePath = '/admin',
     loading = false,
     canManageUsers = false,
+    canManageApiKeys = false,
     onretry,
     ontwofactor,
     children,
@@ -18,6 +19,8 @@ let {
     loading?: boolean;
     /** Show the user-access link; the API still authorizes every request. */
     canManageUsers?: boolean;
+    /** Show the API-keys link; the API still authorizes every request. */
+    canManageApiKeys?: boolean;
     onretry?: () => void | Promise<void>;
     /** Called when sign-in succeeded but a second factor must be verified before a session exists. */
     ontwofactor?: () => void | Promise<void>;
@@ -91,6 +94,9 @@ async function authenticate(path: string, body: object) {
             {/each}
             {#if canManageUsers}
                 <a href="/admin/access" aria-current={activePath.startsWith('/admin/access') ? 'page' : undefined}>User access</a>
+            {/if}
+            {#if canManageApiKeys}
+                <a href="/admin/api-keys" aria-current={activePath.startsWith('/admin/api-keys') ? 'page' : undefined}>API keys</a>
             {/if}
         </nav>
     {/if}

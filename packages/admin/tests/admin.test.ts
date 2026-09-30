@@ -117,6 +117,19 @@ function fixture(
                     throw new Error('unused');
                 },
             },
+            apiKeys: {
+                authenticate: async () => null,
+                create: async () => {
+                    throw new Error('unused');
+                },
+                list: async () => ({ keys: [], total: 0, limit: 25, offset: 0 }),
+                revoke: async () => {
+                    throw new Error('unused');
+                },
+                rotate: async () => {
+                    throw new Error('unused');
+                },
+            },
             createAdministrator: async () => {
                 throw new Error('unused');
             },
