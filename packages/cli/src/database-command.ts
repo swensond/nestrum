@@ -30,7 +30,7 @@ export async function runDatabaseCommand(
     const rootDir = resolve(config.rootDir ?? process.cwd());
     const generation = await dependencies.generate(config.application, {
         rootDir,
-        outputDir: config.outputDir ?? '.nestrum/contracts',
+        outputDir: config.contractDirs?.[args.database] ?? config.outputDir ?? '.nestrum/contracts',
         database: args.database,
         ...(config.authoring === undefined ? {} : { authoring: config.authoring }),
         ...(config.extensions === undefined ? {} : { extensions: config.extensions }),

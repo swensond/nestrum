@@ -91,7 +91,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
     const root = dirname(configPath);
     const devDir = join(root, '.nestrum', 'dev');
     await rm(devDir, { recursive: true, force: true });
-    await mkdir(devDir, { recursive: true });
+    await mkdir(join(devDir, 'server'), { recursive: true });
     const version = await cliVersion();
     const adapter = options.adapter ?? nodeRuntime;
     const debounceMs = options.debounceMs ?? 100;
@@ -127,7 +127,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
         if (kinds.has('config')) {
             models = undefined;
         }
-        const entry = join(devDir, `server-${++generation}.mjs`);
+        const entry = join(devDir, 'server', `server-${++generation}.mjs`);
         try {
             await bundleConfig(configPath, entry);
             const config = await loadBuiltConfig(entry, root);
@@ -203,9 +203,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
         } catch (error) {
             log(`${describe(error)}\n\nFix the error and save to retry.`);
         } finally {
-            for (const file of await readdir(devDir).catch(() => [] as string[])) {
+            for (const file of await readdir(join(devDir, 'server')).catch(() => [] as string[])) {
                 if (file.startsWith('server-') && file !== basename(entry)) {
-                    await rm(join(devDir, file), { force: true });
+                    await rm(join(devDir, 'server', file), { force: true });
                 }
             }
         }

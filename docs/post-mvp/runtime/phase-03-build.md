@@ -46,6 +46,7 @@ Decisions:
 - **Connections.** Connection strings remain in the application definition; the manifest and diagnostics contain none. Applications should read secrets from the environment.
 - **Zod.** Runtime schema families derived from metadata remain the baseline; static Zod source files are still deferred, so only metadata is emitted.
 - **Admin.** The prebuilt `@nestrum/admin-ui` shell is referenced by package name in the manifest and resolved at serve time rather than copied into `.nestrum/admin/`: its server output imports SvelteKit packages that must resolve from the admin-ui package. Rebuilding the shell with application-supplied Svelte component registries is not part of this phase.
+- **Contract locations.** Optional `contractDirs` emits selected databases inside other packages (Prisma 8 allows one database facade per package); every database also gets a stable copy at `.nestrum/contracts/<db>.json`, which the manifest references. Earlier `run-*` directories in `contractDirs` are pruned per build.
 - **Migrations.** Nothing connects to a database or migrates.
 
 ## Public API

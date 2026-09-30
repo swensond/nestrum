@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readManifest, runBuild } from '../src/index.js';
@@ -74,6 +74,23 @@ describe('nestrum build', () => {
 
         await expect(runBuild({ cwd: root })).rejects.toMatchObject({ code: 'BUILD_VALIDATION_FAILED' });
         await expect(readManifest(root, manifest.nestrumVersion)).rejects.toMatchObject({ code: 'BUILD_NOT_FOUND' });
+    });
+
+    it('emits into per-database contract directories and keeps a stable copy in the build', async () => {
+        const root = await project({
+            'nestrum.config.ts': valid.replace(
+                'server: { port: 4321 },',
+                "server: { port: 4321 }, contractDirs: { default: 'emit/here' },",
+            ),
+            'src/helper.ts': helper,
+        });
+        const { manifest, directory } = await runBuild({ cwd: root });
+
+        expect(manifest.databases[0]?.contract).toBe('contracts/default.json');
+        expect(await readFile(join(directory, 'contracts/default.json'), 'utf8')).toContain('Project');
+        expect((await readdir(join(root, 'emit/here'))).some((entry) => entry.startsWith('run-'))).toBe(true);
+        await runBuild({ cwd: root });
+        expect((await readdir(join(root, 'emit/here'))).filter((entry) => entry.startsWith('run-'))).toHaveLength(1);
     });
 
     it('fails on an invalid app dependency graph', async () => {

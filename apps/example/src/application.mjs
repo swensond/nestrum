@@ -1,26 +1,18 @@
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { defineAdmin } from '@nestrum/admin';
 import { defineAuth, field } from '@nestrum/auth';
 import { allow, defineApplication, deny } from '@nestrum/core';
 import mongo, { bindMongoCollection } from '@nestrum/example-mongo';
 import postgres from '@nestrum/example-postgres';
 import { compileModelMetadata } from '@nestrum/prisma';
-import { generatePrismaContracts } from '@nestrum/prisma/node';
 import { createPrismaQueryBackend } from '@nestrum/prisma/querysets';
 import { generateModelSchemas } from '@nestrum/zod';
 import { Article, articlesApp } from './apps/articles/app.mjs';
 import { Project, projectsApp } from './apps/projects/app.mjs';
 
-export const ROOT_DIR = fileURLToPath(new URL('../', import.meta.url));
-export const providerDirectory = (database) =>
-    resolve(ROOT_DIR, database === 'documents' ? '../example-mongo' : '../example-postgres');
-
 export function createExample({
     connections,
     baseURL = 'http://127.0.0.1:3100',
-    outputDir = '.nestrum/contracts',
     events = [],
     secret = process.env.AUTH_SECRET,
 } = {}) {
@@ -79,29 +71,23 @@ export function createExample({
                 },
             },
         ],
+        // Contracts are emitted by `nestrum build`/`nestrum dev`; startup only reads them. The application module is
+        // bundled into `<build>/server/`, so the build directory is its parent.
         async prepare(app) {
+            const buildDir = new URL('../', import.meta.url);
             const metadata = [];
             for (const database of app.databases.names()) {
-                const generated = await generatePrismaContracts(app, {
-                    rootDir: ROOT_DIR,
-                    database,
-                    outputDir: resolve(providerDirectory(database), outputDir),
-                });
-                const contract = generated.contracts[0];
-                const contractJson = JSON.parse(await readFile(contract.contractPath, 'utf8'));
+                const provider = app.databases.get(database).provider;
+                const contractJson = JSON.parse(
+                    await readFile(new URL(`contracts/${database}.json`, buildDir), 'utf8'),
+                );
                 clients.set(
-                    contract.database,
-                    contract.provider === 'postgresql'
-                        ? postgres({ contractJson, url: connections[contract.database] })
-                        : mongo({ contractJson, url: connections[contract.database] }),
+                    database,
+                    provider === 'postgresql'
+                        ? postgres({ contractJson, url: connections[database] })
+                        : mongo({ contractJson, url: connections[database] }),
                 );
-                metadata.push(
-                    ...compileModelMetadata({
-                        database: contract.database,
-                        provider: contract.provider,
-                        contract: contractJson,
-                    }),
-                );
+                metadata.push(...compileModelMetadata({ database, provider, contract: contractJson }));
             }
             resourceModels = metadata
                 .filter((model) => [Project.identity, Article.identity].includes(model.identity))

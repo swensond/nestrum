@@ -1,26 +1,35 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { readFile, rm } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
-import { createAdminShell } from '@nestrum/admin-ui/node';
-import { createHonoRuntime } from '@nestrum/hono';
-import { createExample, providerDirectory, ROOT_DIR } from '../src/application.mjs';
-import { createFetchHost } from '../src/host.mjs';
+import { runServe } from '@nestrum/cli';
+import postgres from '@nestrum/example-postgres';
 
+const ROOT_DIR = fileURLToPath(new URL('../', import.meta.url));
 const execute = promisify(execFile);
 const project = `nestrum-integration-${process.pid}`;
 const runDir = `.nestrum/integration-${process.pid}`;
 const compose = ['compose', '-p', project, '-f', join(ROOT_DIR, 'compose.yaml')];
+const freePort = async () => {
+    const probe = createServer();
+    await new Promise((resolve) => probe.listen(0, '127.0.0.1', resolve));
+    const { port } = probe.address();
+    await new Promise((resolve) => probe.close(resolve));
+    return port;
+};
 const docker = async (args) =>
     (await execute('docker', [...compose, ...args], { timeout: 90_000, maxBuffer: 1024 * 1024 })).stdout;
-const events = [];
-let runtime;
-let host;
+let server;
+let identityClient;
 
 try {
     console.log('Starting dedicated Docker PostgreSQL and MongoDB services.');
     await docker(['up', '--wait', '--wait-timeout', '60']);
+    const port = await freePort();
+    const baseURL = `http://127.0.0.1:${port}`;
     const postgresAddress = (await docker(['port', 'postgres', '5432'])).trim();
     const mongoAddress = (await docker(['port', 'mongo', '27017'])).trim();
     const connections = {
@@ -34,10 +43,13 @@ try {
         INTEGRATION_POSTGRES_URL: connections.default,
         INTEGRATION_IDENTITY_URL: connections.identity,
         INTEGRATION_MONGO_URL: connections.documents,
-        INTEGRATION_OUTPUT_DIR: `${runDir}/contracts`,
+        INTEGRATION_OUTPUT_DIR: `${runDir}/db-contracts`,
         INTEGRATION_MIGRATIONS_DIR: `${runDir}/migrations`,
         AUTH_SECRET: secret,
+        PORT: String(port),
+        BASE_URL: baseURL,
     };
+    Object.assign(process.env, env);
     const cli = async (args) =>
         (
             await execute(
@@ -65,28 +77,23 @@ try {
         console.log(`Real ${database} generation, migration application and status passed.`);
     }
 
-    host = await createFetchHost((request) => (runtime ? runtime.fetch(request) : new Response(null, { status: 503 })));
-    const example = createExample({
-        connections,
-        baseURL: host.baseURL,
-        outputDir: `${runDir}/contracts`,
-        events,
-        secret,
-    });
-    runtime = createHonoRuntime({
-        application: example.application,
-        adminUi: await createAdminShell(),
-        stopTraffic: () => {
-            events.push('stop-traffic');
-            host.stop();
+    // The framework owns the lifecycle: build, then serve the built application (no application HTTP bootstrap).
+    await execute(
+        process.execPath,
+        [resolve(ROOT_DIR, '../../packages/cli/dist/bin.js'), 'build', '--config', 'nestrum.config.mjs'],
+        {
+            env,
+            cwd: ROOT_DIR,
+            timeout: 120_000,
+            maxBuffer: 4 * 1024 * 1024,
         },
-        onError: (error) => {
-            if (!(error.status >= 400 && error.status < 500) && error.name !== 'ZodError') {
-                console.error('Integration runtime error:', error);
-            }
-        },
-    });
-    await runtime.start();
+    );
+    server = await runServe({ cwd: ROOT_DIR, config: 'nestrum.config.mjs', flags: { port }, env: process.env });
+    // runServe loaded the built module; importing the same file yields the same instance and its exported handles.
+    const { example } = await import(pathToFileURL(join(ROOT_DIR, '.nestrum/server/index.mjs')).href);
+    const events = example.events;
+    const host = { baseURL };
+    const runtime = server.runtime;
     assert.deepEqual(
         example.application.apps.all().map((app) => app.name),
         ['nestrum.auth', 'projects', 'articles'],
@@ -135,7 +142,13 @@ try {
         200,
     );
     assert.equal(staff.user.staff, false, 'Public signup cannot grant staff.');
-    await example.clients.get('identity').orm.public.User.where({ id: staff.user.id }).updateAndCount({ staff: true });
+    // A trusted operator promotes staff directly in the identity database, using the same built contract.
+    identityClient = postgres({
+        contractJson: JSON.parse(await readFile(join(ROOT_DIR, '.nestrum/contracts/identity.json'), 'utf8')),
+        url: connections.identity,
+    });
+    await identityClient.connect();
+    await identityClient.orm.public.User.where({ id: staff.user.id }).updateAndCount({ staff: true });
     const signin = await request('/api/auth/sign-in/email', {
         method: 'POST',
         body: credentials('staff@example.test'),
@@ -328,16 +341,14 @@ try {
     assert.equal((await request('/api/projects/project-one', { cookie })).status, 404);
     await json(await request('/api/auth/sign-out', { method: 'POST', cookie, body: {} }), 200);
     assert.equal((await request('/__admin/resources', { cookie })).status, 401);
-    assert.equal(
-        (await example.clients.get('identity').orm.public.User.where({ id: staff.user.id }).first()).staff,
-        true,
-    );
+    assert.equal((await identityClient.orm.public.User.where({ id: staff.user.id }).first()).staff, true);
     console.log(
         'Real auth/session ABAC, SQL/public CRUD, Mongo/admin CRUD, managers/scopes, OpenAPI and generic Svelte forms passed.',
     );
-    await runtime.shutdown();
-    assert.deepEqual(events.slice(-6), [
-        'stop-traffic',
+    await identityClient.close();
+    identityClient = undefined;
+    await server.shutdown();
+    assert.deepEqual(events.slice(-5), [
         'shutdown:articles',
         'shutdown:projects',
         'disconnect:identity',
@@ -348,12 +359,10 @@ try {
     console.log('Reverse app/DI/database shutdown and traffic gating passed.');
 } finally {
     try {
-        await runtime?.shutdown();
+        await identityClient?.close();
+        await server?.shutdown();
     } finally {
-        host?.stop();
         await docker(['down', '--volumes', '--remove-orphans']);
-        for (const database of ['default', 'documents']) {
-            await rm(join(providerDirectory(database), runDir), { recursive: true, force: true });
-        }
+        await rm(join(ROOT_DIR, runDir), { recursive: true, force: true });
     }
 }

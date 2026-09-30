@@ -65,7 +65,13 @@ try {
     }
 } catch (error) {
     process.stderr.write(
-        `${error instanceof AppError ? `${error.code}: ${error.message}` : 'CLI_FAILED: Nestrum database command failed.'}\n`,
+        `${
+            error instanceof AppError
+                ? `${error.code}: ${error.message}`
+                : RUNTIME_COMMANDS.includes(args[0] ?? '')
+                  ? `CLI_FAILED: ${error instanceof Error ? error.message : String(error)}`
+                  : 'CLI_FAILED: Nestrum database command failed.'
+        }\n`,
     );
     process.exitCode = error instanceof CliError ? error.exitCode : 1;
 }

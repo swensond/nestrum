@@ -304,6 +304,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@nestrum/admin-ui':
+        specifier: workspace:*
+        version: link:../admin-ui
       '@nestrum/core':
         specifier: workspace:*
         version: link:../core

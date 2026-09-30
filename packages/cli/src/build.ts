@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import type { Application, ModelMetadata } from '@nestrum/core';
 import { compileModelMetadata } from '@nestrum/prisma';
@@ -104,12 +104,23 @@ export async function generateArtifacts(config: CliConfig, directory: string): P
     const generatedDir = join(directory, 'generated', 'models');
     await rm(contractsDir, { recursive: true, force: true });
     await mkdir(generatedDir, { recursive: true });
+    await mkdir(contractsDir, { recursive: true });
     const databases: BuildManifest['databases'][number][] = [];
     const models: ModelMetadata[] = [];
     for (const name of application.databases.names()) {
+        const custom = config.contractDirs?.[name];
+        if (custom !== undefined) {
+            // Drop earlier emission runs so repeated builds do not accumulate inside provider packages.
+            const previous = resolve(rootDir, custom);
+            for (const entry of await readdir(previous).catch(() => [] as string[])) {
+                if (entry.startsWith('run-')) {
+                    await rm(join(previous, entry), { recursive: true, force: true });
+                }
+            }
+        }
         const generated = await generatePrismaContracts(application, {
             rootDir,
-            outputDir: contractsDir,
+            outputDir: custom ?? contractsDir,
             database: name,
             ...(config.authoring === undefined ? {} : { authoring: config.authoring }),
             ...(config.extensions === undefined ? {} : { extensions: config.extensions }),
@@ -119,6 +130,10 @@ export async function generateArtifacts(config: CliConfig, directory: string): P
         if (!contract) {
             continue;
         }
+        // A stable per-database path lets application code locate the emitted contract from a bundle in
+        // `<build>/server/` (build) or `<build>/dev/server/` (dev) via `new URL('../contracts/<db>.json', import.meta.url)`.
+        const stableContract = join(contractsDir, `${name}.json`);
+        await copyFile(contract.contractPath, stableContract);
         const contractJson = JSON.parse(await readFile(contract.contractPath, 'utf8')) as unknown;
         const compiled = compileModelMetadata({
             database: name,
@@ -131,7 +146,7 @@ export async function generateArtifacts(config: CliConfig, directory: string): P
         databases.push({
             name,
             provider: contract.provider,
-            contract: relative(directory, contract.contractPath),
+            contract: relative(directory, stableContract),
             metadata: relative(directory, metadataPath),
         });
     }
