@@ -1,11 +1,12 @@
 import type { RouteConfig } from '@hono/zod-openapi';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { InferdiScope } from '@inferdi/hono';
-import type { FieldMetadata, RegisteredResource, ResourceApiOperation } from '@nestrum/core';
-import { AppError, QuerySetError } from '@nestrum/core';
+import type { RegisteredResource, ResourceApiOperation } from '@nestrum/core';
+import { AppError, QuerySetError, resourceSlug } from '@nestrum/core';
 import type { Context } from 'hono';
 import type { RuntimeEnv } from '#hono/runtime/runtime.types';
 import type { PublicApiOptions } from './api.types.js';
+import { DEFAULT_LIST_LIMIT, itemQuery, jsonBody, LIST_QUERY_SCHEMA, listQuery, primaryKeyField } from './request.js';
 import {
     decodeBody,
     decodePrimaryKey,
@@ -15,8 +16,6 @@ import {
     wireObjectSchema,
 } from './transport.js';
 
-const DEFAULT_LIST_LIMIT = 20;
-const MAX_LIST_LIMIT = 100;
 const OPENAPI_PATH = '/api/openapi.json';
 const OPENAPI_CONFIG = { openapi: '3.1.0' as const, info: { title: 'Nestrum public API', version: '0.0.0' } };
 const ERROR_SCHEMA = z.object({
@@ -31,16 +30,6 @@ const ERROR_SCHEMA = z.object({
             .optional(),
     }),
 });
-const LIST_QUERY_SCHEMA = z.strictObject({
-    limit: z
-        .string()
-        .regex(/^(0|[1-9][0-9]*)$/)
-        .transform(Number)
-        .pipe(z.number().int().min(0).max(MAX_LIST_LIMIT))
-        .optional(),
-    orderBy: z.string().min(1).optional(),
-});
-const EMPTY_QUERY_SCHEMA = z.strictObject({});
 const METHODS = { list: 'get', retrieve: 'get', create: 'post', update: 'patch', delete: 'delete' } as const;
 
 type PlannedRoute<Scope extends InferdiScope> = {
@@ -50,64 +39,13 @@ type PlannedRoute<Scope extends InferdiScope> = {
 
 export type PublicOpenApiDocument = ReturnType<OpenAPIHono['getOpenAPI31Document']>;
 
-function pluralSlug(name: string): string {
-    const slug = name
-        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
-        .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-        .replaceAll('_', '-')
-        .toLowerCase();
-    if (/[^aeiou]y$/.test(slug)) {
-        return `${slug.slice(0, -1)}ies`;
+function queryInput(context: Context, list: boolean): { limit?: number | undefined; orderBy?: string | undefined } {
+    if (list) {
+        return listQuery(context.req.raw);
     }
-    if (/(s|x|z|ch|sh)$/.test(slug)) {
-        return `${slug}es`;
-    }
+    itemQuery(context.req.raw);
 
-    return `${slug}s`;
-}
-
-function primaryKey(resource: RegisteredResource): FieldMetadata {
-    const keys = resource.metadata.fields.filter((field) => field.primaryKey);
-    const field = keys[0];
-    if (
-        keys.length !== 1 ||
-        !field ||
-        field.array ||
-        field.nullable ||
-        field.optional ||
-        !resource.schemas.model.shape[field.name]
-    ) {
-        throw new AppError(
-            'HTTP_API_PRIMARY_KEY_INVALID',
-            `Item routes for ${resource.identity} require one nonnullable scalar primary key.`,
-        );
-    }
-
-    return field;
-}
-
-function queryInput(context: Context, list: boolean): { limit?: number; orderBy?: string } {
-    const parameters = new URL(context.req.url).searchParams;
-    const input: Record<string, string> = {};
-    for (const [key, value] of parameters) {
-        if (Object.hasOwn(input, key)) {
-            throw new AppError('VALIDATION_ERROR', 'Query parameters must not repeat.', 400);
-        }
-        Object.defineProperty(input, key, { value, enumerable: true });
-    }
-
-    return (list ? LIST_QUERY_SCHEMA : EMPTY_QUERY_SCHEMA).parse(input);
-}
-
-async function bodyInput(context: Context): Promise<unknown> {
-    if (context.req.header('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json') {
-        throw new AppError('HTTP_UNSUPPORTED_MEDIA_TYPE', 'Content-Type must be application/json.', 415);
-    }
-    try {
-        return await context.req.json<unknown>();
-    } catch {
-        throw new AppError('VALIDATION_ERROR', 'Request body must contain valid JSON.', 400);
-    }
+    return {};
 }
 
 function requireSingleMutation(count: number): void {
@@ -125,7 +63,7 @@ function jsonResponse(context: Context, value: unknown, status: 200 | 201): Resp
     });
 }
 
-function pathsOverlap(left: string, right: string): boolean {
+export function pathsOverlap(left: string, right: string): boolean {
     const first = left.split('/');
     const second = right.split('/');
     for (let index = 0; index < Math.max(first.length, second.length); index += 1) {
@@ -152,7 +90,7 @@ function planRoute<Scope extends InferdiScope>(
     options: PublicApiOptions,
 ): PlannedRoute<Scope> {
     const item = operation === 'retrieve' || operation === 'update' || operation === 'delete';
-    const key = item ? primaryKey(resource) : undefined;
+    const key = item ? primaryKeyField(resource) : undefined;
     const family = operation === 'create' ? 'create' : operation === 'update' ? 'update' : undefined;
     if (
         family &&
@@ -244,12 +182,12 @@ function planRoute<Scope extends InferdiScope>(
                 case 'create':
                     return jsonResponse(
                         context,
-                        await query.create(decodeBody(resource, 'create', await bodyInput(context), options)),
+                        await query.create(decodeBody(resource, 'create', await jsonBody(context.req.raw), options)),
                         201,
                     );
                 case 'update': {
                     requireSingleMutation(
-                        await query.update(decodeBody(resource, 'update', await bodyInput(context), options)),
+                        await query.update(decodeBody(resource, 'update', await jsonBody(context.req.raw), options)),
                     );
 
                     return context.body(null, 204);
@@ -279,7 +217,7 @@ export function registerPublicApi<Scope extends InferdiScope>(
         if (operations.length === 0) {
             continue;
         }
-        const basePath = `/api/${resource.database === 'default' ? '' : `${resource.database}/`}${pluralSlug(resource.model)}`;
+        const basePath = `/api/${resource.database === 'default' ? '' : `${resource.database}/`}${resourceSlug(resource.model)}`;
         if (paths.has(basePath)) {
             throw new AppError('HTTP_API_ROUTE_CONFLICT', `Public resource path ${basePath} is duplicated.`);
         }

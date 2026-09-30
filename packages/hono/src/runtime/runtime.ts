@@ -5,7 +5,7 @@ import type { AuthorizationEnvironment, Subject } from '@nestrum/core';
 import { AppError, snapshotQueryValue } from '@nestrum/core';
 import type { Context, Hono } from 'hono';
 import type { PublicOpenApiDocument } from '#hono/api/public-api';
-import { registerPublicApi } from '#hono/api/public-api';
+import { pathsOverlap, registerPublicApi } from '#hono/api/public-api';
 import type { RequestScope } from './container.js';
 import { createRuntimeContainer, openRequestScope } from './container.js';
 import { mapHttpError } from './runtime.errors.js';
@@ -31,6 +31,7 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
     private activeRequests = 0;
     private drain: (() => void) | undefined;
     private readonly disposeRoot: (() => Promise<void>) | undefined;
+    private readonly frameworkRouteCount: number;
 
     constructor(private readonly options: RuntimeOptions<Scope>) {
         options = Object.freeze({
@@ -121,6 +122,7 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
                     }),
             }),
         );
+        this.frameworkRouteCount = this.hono.routes.length;
     }
 
     get state(): RuntimeState {
@@ -145,6 +147,32 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
         this.currentState = 'starting';
         try {
             await this.options.application.start();
+            const admin = this.options.application.admin;
+            if (admin) {
+                if (
+                    this.hono.routes
+                        .slice(this.frameworkRouteCount)
+                        .some((route) => pathsOverlap(route.path, `${admin.basePath}/*`))
+                ) {
+                    throw new AppError('ADMIN_ROUTE_CONFLICT', 'Admin routes overlap an existing route.');
+                }
+                const handle = (context: Context<RuntimeEnv<Scope>>) => {
+                    const { subject, environment } = context.get('nestrum');
+
+                    return admin.handle(context.req.raw, {
+                        subject,
+                        environment,
+                        reportError: (error) =>
+                            this.reportError(error, {
+                                phase: 'request',
+                                request: context.req.raw,
+                                context: context.get('nestrum'),
+                            }),
+                    });
+                };
+                this.hono.all(admin.basePath, handle);
+                this.hono.all(`${admin.basePath}/*`, handle);
+            }
             const auth = this.options.application.auth;
             if (auth) {
                 if (

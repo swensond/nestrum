@@ -1,7 +1,7 @@
 import { z } from '@hono/zod-openapi';
 import type { FieldMetadata, RegisteredResource } from '@nestrum/core';
 import { AppError } from '@nestrum/core';
-import type { PublicApiOptions, TemporalType } from './api.types.js';
+import type { ScalarTransport, TemporalType } from './api.types.js';
 
 const TEMPORAL_TYPES: Readonly<Partial<Record<FieldMetadata['kind'], TemporalType>>> = {
     'temporal-instant': 'Instant',
@@ -12,10 +12,10 @@ const TEMPORAL_TYPES: Readonly<Partial<Record<FieldMetadata['kind'], TemporalTyp
 
 export function temporalAdapter(
     field: FieldMetadata,
-    options: PublicApiOptions,
+    options: ScalarTransport,
 ): { from(value: string): unknown } | undefined {
     const name = TEMPORAL_TYPES[field.kind];
-    const temporal = (globalThis as unknown as { Temporal?: PublicApiOptions['temporal'] }).Temporal;
+    const temporal = (globalThis as unknown as { Temporal?: ScalarTransport['temporal'] }).Temporal;
 
     return name ? (options.temporal?.[name] ?? temporal?.[name]) : undefined;
 }
@@ -73,7 +73,7 @@ export function wireObjectSchema(resource: RegisteredResource, family: 'create' 
     return schema.safeExtend(shape).strict();
 }
 
-function decodeScalar(field: FieldMetadata, value: unknown, options: PublicApiOptions): unknown {
+function decodeScalar(field: FieldMetadata, value: unknown, options: ScalarTransport): unknown {
     if (value === null || value === undefined) {
         return value;
     }
@@ -105,7 +105,7 @@ export function decodeBody(
     resource: RegisteredResource,
     family: 'create' | 'update',
     input: unknown,
-    options: PublicApiOptions,
+    options: ScalarTransport,
 ): Record<string, unknown> {
     const value = z.record(z.string(), z.unknown()).parse(input);
     const decoded = { ...value };
@@ -136,7 +136,7 @@ export function decodePrimaryKey(
     field: FieldMetadata,
     schema: z.ZodType,
     value: string,
-    options: PublicApiOptions,
+    options: ScalarTransport,
 ): unknown {
     if (field.kind === 'integer' || field.kind === 'number') {
         return z

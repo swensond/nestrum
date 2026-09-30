@@ -1,6 +1,6 @@
 # Nestrum
 
-A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–10 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, default-deny ABAC, a Hono/InferDI runtime, opt-in public CRUD with OpenAPI, and framework-owned Better Auth.
+A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–11 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, default-deny ABAC, a Hono/InferDI runtime, opt-in public CRUD with OpenAPI, framework-owned Better Auth, and a private session/ABAC-protected admin backend.
 
 ## Development
 
@@ -14,7 +14,7 @@ pnpm typecheck
 pnpm check
 ```
 
-`pnpm test:watch` starts interactive watch mode. `pnpm check` runs tests, type checking, and builds. Core, Prisma, Zod, and Hono packages emit ESM JavaScript and declarations to their dist directories. Workspace tests/type checking resolve source through the nestrum-source condition; ordinary Node imports use compiled output.
+`pnpm test:watch` starts interactive watch mode. `pnpm check` runs tests, type checking, and builds. Core, Prisma, Zod, Hono, Auth, and Admin packages emit ESM JavaScript and declarations to their dist directories. Workspace tests/type checking resolve source through the nestrum-source condition; ordinary Node imports use compiled output.
 
 Start with [the documentation index](docs/README.md), [architecture](docs/architecture.md), and [MVP scope](docs/mvp.md). Implement one bounded phase at a time; documentation and validation are part of completion.
 
@@ -145,6 +145,22 @@ const auth = defineAuth({
 ```
 
 `auth.database` selects the configured store. Nestrum contributes protected User, Session, Account, and Verification contracts and owns the Better Auth Prisma 8 adapter. Email/password, session, logout, and session retrieval are available under `/api/auth`. Valid sessions become ABAC subjects; absent, expired, or invalid sessions are anonymous. Domain profile data remains separate from the core auth user. See [Phase 10](docs/phases/phase-10-auth.md).
+
+## Private admin API
+
+```ts
+import { defineAdmin } from '@nestrum/admin';
+import { defineResource } from '@nestrum/core';
+
+const Project = defineResource({ model: 'Project', api: false });
+const admin = defineAdmin();
+admin.register(Project, { listDisplay: ['id', 'name'] });
+// Include admin, auth, Project, its compiled model/backend, and policies in defineApplication().
+```
+
+The Hono runtime serves `/__admin/*` with a live Better Auth session and a default-deny policy for `admin.access` with action `access`. Resource metadata and CRUD use resource policies independently of public exposure. `GET /__admin/resources` discovers authorized resources; `/__admin/projects` and `/__admin/projects/:id` provide generic CRUD. Lists return `{ rows }` with a default limit of 20 and maximum of 100. Named database slugs use `documents--articles`.
+
+Same-origin access is enforced by default. `defineAdmin({ allowedOrigins: [...] })` enables explicit credentialed cross-origin access. Configured fields support labels, hidden presentation metadata, and readonly input restrictions; composed schemas remain authoritative. Custom actions expose known authorized metadata and an authorization seam; handlers and the Svelte UI ship in later phases. See [Phase 11](docs/phases/phase-11-admin-backend.md) for endpoints, security semantics, and limitations.
 
 ## HTTP runtime
 

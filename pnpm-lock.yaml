@@ -179,6 +179,28 @@ importers:
         specifier: 5.0.2
         version: 5.0.2(@types/node@26.6.3)(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
 
+  packages/admin:
+    dependencies:
+      '@nestrum/core':
+        specifier: workspace:*
+        version: link:../core
+      '@nestrum/hono':
+        specifier: workspace:*
+        version: link:../hono
+      hono:
+        specifier: 4.13.11
+        version: 4.13.11
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@nestrum/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@nestrum/zod':
+        specifier: workspace:*
+        version: link:../zod
+
   packages/auth:
     dependencies:
       '@nestrum/core':

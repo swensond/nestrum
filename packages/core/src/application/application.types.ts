@@ -1,3 +1,4 @@
+import type { AdminDefinition } from '#core/admin/admin.types';
 import type { AuthenticationDefinition } from '#core/auth/auth.types';
 import type { AuthorizationEngine } from '#core/authorization/authorization';
 import type { PolicyDefinition } from '#core/authorization/authorization.types';
@@ -35,6 +36,7 @@ export type ApplicationConfig = {
     readonly apps: readonly AppDefinition[];
     readonly databases: DatabaseConfig;
     readonly auth?: AuthenticationDefinition;
+    readonly admin?: AdminDefinition;
     readonly resources?: readonly ResourceDefinition[];
     readonly policies?: readonly PolicyDefinition[];
     readonly resourceModels?:

@@ -8,6 +8,23 @@ import type {
     ResourceSchemaFamily,
 } from './resource.types.js';
 
+/** Regular plural kebab-case model slug shared by the public API and the admin API. */
+export function resourceSlug(model: string): string {
+    const slug = model
+        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+        .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+        .replaceAll('_', '-')
+        .toLowerCase();
+    if (/[^aeiou]y$/.test(slug)) {
+        return `${slug.slice(0, -1)}ies`;
+    }
+    if (/(s|x|z|ch|sh)$/.test(slug)) {
+        return `${slug}es`;
+    }
+
+    return `${slug}s`;
+}
+
 export const RESOURCE_API_OPERATIONS = Object.freeze(['list', 'retrieve', 'create', 'update', 'delete'] as const);
 export const RESOURCE_SCHEMA_FAMILIES = Object.freeze([
     'model',

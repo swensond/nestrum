@@ -1,5 +1,16 @@
 export const FRAMEWORK_NAME = 'Nestrum';
 
+export type { AdminErrorCode } from './admin/admin.errors.js';
+export { AdminError } from './admin/admin.errors.js';
+export type {
+    AdminActionConfiguration,
+    AdminApi,
+    AdminDefinition,
+    AdminFieldConfiguration,
+    AdminRequestContext,
+    AdminResourceConfiguration,
+    AdminResourceRegistration,
+} from './admin/admin.types.js';
 export { defineApp } from './application/app.js';
 export { AppRegistry } from './application/app-registry.js';
 export { AppError, AppLifecycleError, AppRegistryError } from './application/application.errors.js';
@@ -62,7 +73,7 @@ export type {
 } from './queryset/queryset.types.js';
 export type { FieldMetadata, ModelMetadata, RelationMetadata, ScalarKind } from './resource/model-metadata.types.js';
 export { ResourceError } from './resource/resource.errors.js';
-export { defineResource } from './resource/resource.js';
+export { defineResource, resourceSlug } from './resource/resource.js';
 export type {
     RegisteredResource,
     ResourceApi,

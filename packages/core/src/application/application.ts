@@ -1,3 +1,4 @@
+import type { AdminApi, AdminDefinition } from '#core/admin/admin.types';
 import type { Authentication, AuthenticationDefinition } from '#core/auth/auth.types';
 import { AuthorizationEngine } from '#core/authorization/authorization';
 import { PolicyError } from '#core/authorization/authorization.errors';
@@ -17,7 +18,9 @@ import type {
 
 export class Application {
     private authentication: Authentication | undefined;
+    private adminApi: AdminApi | undefined;
     private readonly authDefinition: AuthenticationDefinition | undefined;
+    private readonly adminDefinition: AdminDefinition | undefined;
     readonly apps: AppRegistry;
     readonly databases: DatabaseRegistry;
     readonly resources: ResourceRegistry;
@@ -30,6 +33,20 @@ export class Application {
     constructor(config: ApplicationConfig) {
         this.databases = new DatabaseRegistry(config.databases);
         this.authDefinition = config.auth;
+        this.adminDefinition = config.admin;
+        if (
+            config.admin &&
+            (config.admin.kind !== 'nestrum-admin' ||
+                config.admin.basePath !== '/__admin' ||
+                typeof config.admin.register !== 'function' ||
+                typeof config.admin.initialize !== 'function' ||
+                !config.auth)
+        ) {
+            throw new AppError(
+                'ADMIN_CONFIG_INVALID',
+                'Admin requires a Nestrum admin definition and configured authentication.',
+            );
+        }
         if (
             config.auth &&
             (config.auth.kind !== 'better-auth' ||
@@ -93,6 +110,10 @@ export class Application {
         return this.authentication;
     }
 
+    get admin(): AdminApi | undefined {
+        return this.adminApi;
+    }
+
     async start(): Promise<void> {
         if (this.currentState === 'ready') {
             return;
@@ -123,10 +144,13 @@ export class Application {
             if (this.authDefinition) {
                 this.authentication = await this.authDefinition.initialize(this);
             }
-
             for (const app of this.apps.all()) {
                 this.startedApps.push(app);
                 await this.runHook(app, 'configure');
+            }
+
+            if (this.adminDefinition && this.authentication) {
+                this.adminApi = await this.adminDefinition.initialize(this);
             }
 
             for (const app of this.apps.all()) {

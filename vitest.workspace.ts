@@ -3,6 +3,13 @@ import { defineProject } from 'vitest/config';
 export default [
     defineProject({
         test: {
+            name: '@nestrum/admin',
+            environment: 'node',
+            include: ['packages/admin/tests/**/*.test.ts'],
+        },
+    }),
+    defineProject({
+        test: {
             name: '@nestrum/auth',
             environment: 'node',
             include: ['packages/auth/tests/**/*.test.ts'],
