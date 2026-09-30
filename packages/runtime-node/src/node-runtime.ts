@@ -25,7 +25,9 @@ function validate(options: ServeOptions): void {
 export const nodeRuntime: RuntimeAdapter = {
     async serve(application: ServableApplication, options: ServeOptions): Promise<ServerHandle> {
         validate(options);
-        const server = createServer(getRequestListener((request) => application.fetch(request)));
+        const server = createServer(
+            getRequestListener((request) => application.fetch(request), { overrideGlobalObjects: false }),
+        );
         await new Promise<void>((resolve, reject) => {
             const failed = (error: Error) => {
                 server.close();

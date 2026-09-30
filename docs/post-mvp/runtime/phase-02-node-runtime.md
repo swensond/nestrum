@@ -32,6 +32,7 @@ Added `packages/runtime-node` (`@nestrum/runtime-node`). `nodeRuntime` implement
 - The handle reports the actual bound port, so port `0` works.
 - `stopAccepting()` stops the listener synchronously and closes idle keep-alive connections; in-flight requests continue.
 - `close()` calls `stopAccepting()` and resolves only after every connection has ended, so pending requests finish first. Both operations are idempotent.
+- `getRequestListener` is called with `overrideGlobalObjects: false`. With the default, `@hono/node-server` replaces the global `Response` with its own class, and responses that set their own `content-length` (SvelteKit pages) were sent with two `Content-Length` headers, which clients reject (`HPE_UNEXPECTED_CONTENT_LENGTH`). Found by the Docker integration run; covered by a regression test.
 - The adapter does not own application shutdown; the orchestrator composes `stopAccepting` (as `stopTraffic`) with Hono request-scope draining, app shutdown, DI disposal, and database disconnects.
 - Drain deadlines and forced termination are deliberately absent (PM1.6).
 

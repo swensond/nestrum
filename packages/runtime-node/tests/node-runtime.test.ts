@@ -34,6 +34,19 @@ describe('nodeRuntime', () => {
         expect((await fetch(`${base}/missing`)).status).toBe(404);
     });
 
+    it('sends exactly one content-length for responses that set their own', async () => {
+        const body = 'héllo';
+        const handle = await serve(
+            () =>
+                new Response(body, {
+                    headers: { 'content-length': String(Buffer.byteLength(body)), 'content-type': 'text/plain' },
+                }),
+        );
+
+        const response = await fetch(`http://127.0.0.1:${handle.port}/`);
+        expect(await response.text()).toBe(body);
+    });
+
     it('binds the requested port', async () => {
         const probe = await serve(() => new Response('probe'));
         const port = probe.port;
