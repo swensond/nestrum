@@ -1,7 +1,7 @@
 import { AppError, allow, defineApplication, defineResource, deny } from '@nestrum/core';
 import { createHonoRuntime } from '@nestrum/hono';
 import { describe, expect, it, vi } from 'vitest';
-import { AUTH_MODELS, authContract, createPrismaAuthAdapter, defineAuth, field, SubjectFactory } from '../src/index.js';
+import { AUTH_MODELS, authContract, createPrismaAuthAdapter, defineAuth, SubjectFactory } from '../src/index.js';
 import { storage } from './fixtures.js';
 
 const BASE_URL = 'http://localhost:3000';
@@ -36,13 +36,6 @@ describe('Framework-owned Better Auth', () => {
             baseURL: BASE_URL,
             secret: SECRET,
             prisma,
-            extend: {
-                user: {
-                    timezone: field.string().optional().input(),
-                    staff: field.boolean().default(false),
-                    privateNote: field.string().optional().hidden(),
-                },
-            },
         });
         const application = defineApplication({
             apps: [],
@@ -82,15 +75,14 @@ describe('Framework-owned Better Auth', () => {
                 name: 'Alice',
                 email: 'alice@example.com',
                 password: 'a-valid-password-123',
-                timezone: 'Europe/London',
                 staff: true,
             }),
         );
         expect(signup.status).toBe(200);
-        const registered = (await signup.json()) as { user: { id: string; timezone: string; staff: boolean } };
-        expect(registered.user.timezone).toBe('Europe/London');
-        expect(registered.user.staff).toBe(false);
-        expect(registered.user).not.toHaveProperty('privateNote');
+        const registered = (await signup.json()) as { user: { id: string; twoFactorEnabled: boolean } };
+        // Unknown body fields are never persisted, and a new user starts without a second factor.
+        expect(registered.user).not.toHaveProperty('staff');
+        expect(registered.user.twoFactorEnabled).toBe(false);
         expect(memory.records.User).toHaveLength(1);
         expect(memory.records.Account).toHaveLength(1);
         expect(memory.records.Account[0]!.password).not.toBe('a-valid-password-123');
@@ -104,6 +96,7 @@ describe('Framework-owned Better Auth', () => {
         expect(await (await runtime.fetch(request('/private', undefined, cookie))).json()).toEqual({
             id: registered.user.id,
             anonymous: false,
+            role: 'user',
         });
         const spoofed = await runtime.fetch(
             new Request(`${BASE_URL}/private`, {
@@ -172,9 +165,14 @@ describe('Framework-owned Better Auth', () => {
     it('protects auth models and rejects invalid database/extension configuration', async () => {
         const options = { baseURL: BASE_URL, secret: SECRET, prisma: () => storage().binding };
         expect(() => defineAuth({ ...options, secret: 'short' })).toThrow();
-        expect(() => defineAuth({ ...options, extend: { user: { email: field.string().optional() } } })).toThrow();
-        expect(() => defineAuth({ ...options, extend: { user: { role: field.string() } } })).toThrow();
-        expect(() => field.boolean().default('wrong')).toThrow();
+        for (const twoFactor of [
+            { issuer: '' },
+            { issuer: 'a:b' },
+            { maxFailedAttempts: 0 },
+            { lockoutSeconds: 1.5 },
+        ]) {
+            expect(() => defineAuth({ ...options, twoFactor })).toThrow(/Two-factor/);
+        }
         expect(() =>
             defineApplication({
                 apps: [],
@@ -195,13 +193,14 @@ describe('Framework-owned Better Auth', () => {
     });
 
     it('emits owned provider contracts only for the selected database and keeps core fields protected', () => {
-        const postgres = authContract('postgresql', { timezone: field.string().optional().descriptor });
-        const mongo = authContract('mongodb', {});
+        const postgres = authContract('postgresql');
+        const mongo = authContract('mongodb');
         for (const model of AUTH_MODELS) {
             expect(postgres).toContain(`model ${model}`);
             expect(mongo).toContain(`model ${model}`);
         }
-        expect(postgres).toContain('timezone String?');
+        expect(postgres).toContain('twoFactorEnabled Boolean?');
+        expect(postgres).toContain('model TwoFactor');
         expect(postgres).toContain('email String @unique');
         expect(postgres).not.toContain('model UserProfile');
         expect(mongo).toContain('@map("_id")');

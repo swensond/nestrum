@@ -8,10 +8,13 @@ import type {
 } from '@nestrum/core';
 import { AdminError, modelIdentity, resourceSlug } from '@nestrum/core';
 import type { ScalarTransport } from '@nestrum/hono';
+import type { AdminSecurityOptions } from './security.js';
 
 export type AdminOptions = ScalarTransport & {
     /** Additional browser origins allowed to call the admin API. Same-origin is always allowed. */
     readonly allowedOrigins?: readonly string[];
+    /** Admin security policy. Two-factor is required by default. */
+    readonly security?: AdminSecurityOptions;
 };
 
 export type AdminEntry = {
@@ -228,6 +231,7 @@ export class AdminRegistry {
         if (this.registrations.some((entry) => entry.identity === identity)) {
             throw new AdminError('ADMIN_RESOURCE_DUPLICATE', `Resource ${identity} is registered for admin twice.`);
         }
+        // Slugs are always pluralized, so they can never equal the framework-owned singular "auth" namespace.
         if (slug === 'resources' || [...this.slugs.values()].includes(slug)) {
             throw new AdminError('ADMIN_ROUTE_CONFLICT', `Admin resource path /${slug} is used more than once.`);
         }

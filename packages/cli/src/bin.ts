@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 import { AppError } from '@nestrum/core';
 import { CLI_HELP, parseCliArguments } from './arguments.js';
+import { AUTH_HELP, parseAuthArguments } from './auth-arguments.js';
+import { runAuthCommand } from './auth-command.js';
 import { runBuild } from './build.js';
 import { CliError } from './cli.errors.js';
 import { loadCliConfig } from './config.js';
 import { runDatabaseCommand } from './database-command.js';
 import { runDev } from './dev.js';
+import { promptNewPassword } from './prompt.js';
 import { parseRuntimeArguments, RUNTIME_COMMANDS, RUNTIME_HELP } from './runtime-arguments.js';
 import { runServe } from './serve.js';
 import { installShutdownSignals } from './signals.js';
@@ -27,7 +30,7 @@ function installGracefulSignals(target: { shutdown(): Promise<void> }): void {
 const args = process.argv.slice(2);
 try {
     if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-        process.stdout.write(`${RUNTIME_HELP}\n\n${CLI_HELP}\n`);
+        process.stdout.write(`${RUNTIME_HELP}\n\n${CLI_HELP}\n\n${AUTH_HELP}\n`);
     } else if (RUNTIME_COMMANDS.includes(args[0] ?? '')) {
         const parsed = parseRuntimeArguments(args);
         if (parsed.command === 'build') {
@@ -57,6 +60,11 @@ try {
             });
             installGracefulSignals({ shutdown: () => session.close() });
         }
+    } else if (args[0] === 'auth') {
+        const result = await runAuthCommand(parseAuthArguments(args), { promptPassword: promptNewPassword });
+        process.stdout.write(
+            `${result.created ? 'Created' : 'Promoted'} administrator ${result.email} (role ${result.role}). They must set up two-factor authentication at first sign-in.\n`,
+        );
     } else {
         const parsed = parseCliArguments(args);
         const result = await runDatabaseCommand(await loadCliConfig(parsed.config), parsed);
@@ -68,7 +76,7 @@ try {
         `${
             error instanceof AppError
                 ? `${error.code}: ${error.message}`
-                : RUNTIME_COMMANDS.includes(args[0] ?? '')
+                : RUNTIME_COMMANDS.includes(args[0] ?? '') || args[0] === 'auth'
                   ? `CLI_FAILED: ${error instanceof Error ? error.message : String(error)}`
                   : 'CLI_FAILED: Nestrum database command failed.'
         }\n`,

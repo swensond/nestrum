@@ -1,5 +1,6 @@
 import type {
     AdminRequestContext,
+    AdminTwoFactorPolicy,
     Application,
     AuthorizationEngine,
     AuthorizationEnvironment,
@@ -7,7 +8,8 @@ import type {
     QueryOperation,
     Subject,
 } from '@nestrum/core';
-import { AdminError, AppError, AuthorizationError } from '@nestrum/core';
+import { AdminError, AdminTwoFactorRequiredError, AppError, AuthorizationError } from '@nestrum/core';
+import { sessionAssurance } from './security.js';
 
 /** Capability identity and action evaluated for every admin request before data access. */
 export const ADMIN_ACCESS_IDENTITY = 'admin.access';
@@ -51,14 +53,18 @@ export type AdminAccess = {
 };
 
 /**
- * A live Better Auth session and a default-deny `admin.access` grant are both required.
- * Anonymous sessions never reach resource authorization.
+ * A live Better Auth session, a default-deny `admin.access` grant and (unless disabled) current-session
+ * two-factor assurance are all required. Anonymous sessions never reach resource authorization.
+ *
+ * `admin.access` is decided before assurance is revealed, so a user who may not use administration learns nothing
+ * about their factor state; both checks are always enforced.
  */
 export async function authorizeAccess(
     application: Application,
     request: Request,
     context: AdminRequestContext,
     allowedOrigins: readonly string[],
+    policy: AdminTwoFactorPolicy,
 ): Promise<AdminAccess> {
     assertSameOrigin(request, allowedOrigins);
     const authentication = application.auth;
@@ -77,6 +83,12 @@ export async function authorizeAccess(
     });
     if (!decision.allowed) {
         throw new AuthorizationError(decision.reason);
+    }
+    if (policy.required) {
+        const assurance = sessionAssurance(session, policy);
+        if (assurance !== 'satisfied') {
+            throw new AdminTwoFactorRequiredError(assurance);
+        }
     }
 
     return { subject: context.subject, environment: context.environment };

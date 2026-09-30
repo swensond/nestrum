@@ -1,19 +1,26 @@
 <script lang="ts">
 import type { Snippet } from 'svelte';
 import type { AdminShellState } from './metadata.js';
+import { isAuthPath } from './return-to.js';
 import { resourceHref } from './routes.js';
 
 let {
     state: shellState,
     activePath = '/admin',
     loading = false,
+    canManageUsers = false,
     onretry,
+    ontwofactor,
     children,
 }: {
     state: AdminShellState;
     activePath?: string;
     loading?: boolean;
+    /** Show the user-access link; the API still authorizes every request. */
+    canManageUsers?: boolean;
     onretry?: () => void | Promise<void>;
+    /** Called when sign-in succeeded but a second factor must be verified before a session exists. */
+    ontwofactor?: () => void | Promise<void>;
     children?: Snippet;
 } = $props();
 let pending = $state(false);
@@ -49,6 +56,15 @@ async function authenticate(path: string, body: object) {
             sessionError = 'Unable to update your session. Check your credentials and try again.';
             return;
         }
+        const result: unknown = await response.json().catch(() => null);
+        if (
+            result &&
+            typeof result === 'object' &&
+            (result as { twoFactorRedirect?: unknown }).twoFactorRedirect === true
+        ) {
+            await ontwofactor?.();
+            return;
+        }
         await onretry?.();
     } catch {
         sessionError = 'Unable to connect. Please try again.';
@@ -61,7 +77,7 @@ async function authenticate(path: string, body: object) {
 <a class="skip" href="#admin-content">Skip to content</a>
 <header>
     <a class="brand" href="/admin">Nestrum administration</a>
-    {#if shellState.status === 'ready' || shellState.status === 'denied'}
+    {#if shellState.status === 'ready' || shellState.status === 'denied' || shellState.status === 'two-factor'}
         <button type="button" disabled={pending} onclick={() => authenticate('/api/auth/sign-out', {})}>Sign out</button>
     {/if}
 </header>
@@ -73,13 +89,16 @@ async function authenticate(path: string, body: object) {
                 {@const href = resourceHref(resource)}
                 <a {href} aria-current={activePath === href || activePath.startsWith(`${href}/`) ? 'page' : undefined}>{resource.label}</a>
             {/each}
+            {#if canManageUsers}
+                <a href="/admin/access" aria-current={activePath.startsWith('/admin/access') ? 'page' : undefined}>User access</a>
+            {/if}
         </nav>
     {/if}
     <main id="admin-content" aria-busy={loading || pending} tabindex="-1">
         {#if sessionError}<p role="alert">{sessionError}</p>{/if}
         {#if loading}
             <p role="status">Loading administration…</p>
-        {:else if shellState.status === 'ready'}
+        {:else if shellState.status === 'ready' || shellState.status === 'two-factor' || (shellState.status === 'sign-in' && isAuthPath(activePath))}
             {#if children}{@render children()}{/if}
         {:else if shellState.status === 'sign-in'}
             <h1>Sign in</h1>

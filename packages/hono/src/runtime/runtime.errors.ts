@@ -1,4 +1,4 @@
-import { AppError, AuthorizationError } from '@nestrum/core';
+import { AdminTwoFactorRequiredError, AppError, AuthorizationError } from '@nestrum/core';
 import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ZodError } from 'zod';
@@ -46,7 +46,9 @@ export function mapHttpError(error: unknown): MappedError {
                 error: {
                     code: error.code,
                     message: status >= 500 ? 'Internal server error.' : error.message,
-                    ...(error instanceof AuthorizationError ? { reason: error.reason } : {}),
+                    ...(error instanceof AuthorizationError || error instanceof AdminTwoFactorRequiredError
+                        ? { reason: error.reason }
+                        : {}),
                 },
             },
         };

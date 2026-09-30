@@ -25,7 +25,8 @@ export function articlesApp(events) {
         policies: [
             {
                 resource: Article.identity,
-                authorize: ({ subject }) => (subject.staff === true ? allow() : deny('NOT_STAFF')),
+                authorize: ({ subject }) =>
+                    subject.role === 'staff' || subject.role === 'admin' ? allow() : deny('NOT_STAFF'),
                 actions: {
                     read: { scope: ({ subject }) => eq('ownerId', subject.id) },
                     create: {

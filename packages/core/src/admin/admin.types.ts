@@ -45,9 +45,15 @@ export type AdminApi = {
     readonly basePath: '/__admin';
     handle(request: Request, context: AdminRequestContext): Promise<Response>;
 };
+/** Resolved admin second-factor policy: required by default. */
+export type AdminTwoFactorPolicy = {
+    readonly required: boolean;
+    readonly assuranceTtlSeconds: number;
+};
 export type AdminDefinition = {
     readonly kind: 'nestrum-admin';
     readonly basePath: '/__admin';
+    readonly security: { readonly twoFactor: AdminTwoFactorPolicy };
     readonly allowedOrigins: readonly string[];
     register(resource: ResourceConfig, configuration: AdminResourceConfiguration): AdminDefinition;
     initialize(application: Application): Promise<AdminApi>;

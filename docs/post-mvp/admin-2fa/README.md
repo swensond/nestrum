@@ -2,16 +2,16 @@
 
 ## Status and navigation
 
-This is the second planned post-MVP initiative. PM2.0 records the contract; PM2.1–PM2.5 are Not Started. The routes, assurance APIs, TOTP storage, and admin UI described here are planned unless a phase records implementation evidence. This initiative does not change the remaining MVP gate for atomic object-policy writes or imply that admin 2FA is currently enforced.
+This is the second post-MVP initiative. PM2.0–PM2.5 are Complete: admin 2FA is required by default for the admin UI and private admin API, using Better Auth's `twoFactor` plugin for TOTP and backup codes, with framework-owned setup/challenge/recovery pages. The project owner ran the Docker + MongoDB integration suite (`pnpm test:integration`), including the real 2FA and staff-elevation flows, and it passes; everything else is recorded in the phase documents. This initiative does not change the remaining MVP gate for atomic object-policy writes.
 
 | Phase | Goal | Primary surface | Status |
 | --- | --- | --- | --- |
 | [PM2.0 — Contract](phase-00-contract.md) | Document default-required admin 2FA and enforcement boundaries | docs/core contracts | Complete |
-| [PM2.1 — Session assurance](phase-01-assurance.md) | Add an explicit, expiring assurance abstraction | auth/session contracts | Not Started |
-| [PM2.2 — Enrollment and recovery](phase-02-enrollment.md) | Implement TOTP setup and secure recovery codes | auth/admin backend | Not Started |
-| [PM2.3 — Admin challenge](phase-03-challenge.md) | Enforce assurance on admin UI and API boundaries | admin middleware/routes | Not Started |
-| [PM2.4 — Admin UI](phase-04-admin-ui.md) | Provide framework-owned setup/challenge/recovery pages | `@nestrum/admin-ui` | Not Started |
-| [PM2.5 — Hardening](phase-05-hardening.md) | Verify expiry, security diagnostics, and browser flows | integration/security | Not Started |
+| [PM2.1 — Session assurance](phase-01-assurance.md) | Add an explicit, expiring assurance abstraction | auth/session contracts | Complete |
+| [PM2.2 — Enrollment and recovery](phase-02-enrollment.md) | Implement TOTP setup and secure recovery codes | auth/admin backend | Complete |
+| [PM2.3 — Admin challenge](phase-03-challenge.md) | Enforce assurance on admin UI and API boundaries | admin middleware/routes | Complete |
+| [PM2.4 — Admin UI](phase-04-admin-ui.md) | Provide framework-owned setup/challenge/recovery pages | `@nestrum/admin-ui` | Complete |
+| [PM2.5 — Hardening](phase-05-hardening.md) | Verify expiry, security diagnostics, and browser flows | integration/security | Complete |
 
 The existing admin boundary is Better Auth session + `admin.access` ABAC + same-origin policy. This initiative adds an explicit current-session `two-factor` assurance requirement:
 
@@ -20,14 +20,22 @@ Better Auth session
         ↓
 Nestrum AuthContext
         ↓
-AdminAssuranceService
+sessionAssurance (admin)
         ↓
 admin.access ABAC
         ↓
 same-origin policy
 ```
 
-The order is authentication, required 2FA assurance, admin access ABAC, then resource/action authorization. 2FA never replaces authorization.
+All of these are always enforced, in this order: authentication, `admin.access` ABAC, required 2FA assurance, then resource/action authorization. (The conceptual order in the diagram puts assurance before `admin.access`; the implementation evaluates `admin.access` first only so that users who may not use administration learn nothing about their factor state. The allow/deny outcome is identical.) 2FA never replaces authorization.
+
+## Implementation summary (deviations from the original plan)
+
+- **Plugin, not custom code.** Better Auth's `twoFactor` plugin provides TOTP, backup codes, encrypted secret storage, and account lockout. Nestrum adds the admin policy, the assurance rule, and the pages.
+- **Assurance is derived from the session.** The plugin creates no session for an enrolled user until a code is verified, so admin checks `user.twoFactorEnabled`, that the session is not older than the user's last update (so pre-enrollment sessions never count), and that the session is younger than `assuranceTtlSeconds`. There is no separate assurance table, and re-verification means signing in again rather than re-challenging a live session.
+- **Prebaked auth contract.** `authContract(provider)` is a fixed source per provider, checked against Better Auth's schema by a test. `defineAuth({ extend })`, `field`, and `AuthField` were removed.
+- **No private 2FA routes**, and the setup, challenge, and recovery pages require JavaScript.
+- **Roles and staff management** (follow-up, [decision 0014](../../decisions/0014-roles-and-staff-management.md)): administrators come from `nestrum auth create-admin` and must enroll 2FA at first sign-in; they manage staff at `/admin/access`. Changing a user's role updates the user, so that user's existing sessions must sign in again.
 
 ## 1. Default security rule
 
@@ -124,7 +132,7 @@ Recovery codes are cryptographically generated, shown once, hashed at rest, one-
 
 Framework-owned Svelte routes are planned at `/admin/auth/2fa/setup`, `/admin/auth/2fa`, and `/admin/auth/recovery`. The consuming application writes no MFA pages.
 
-Private routes are planned under `/__admin/auth/2fa/*` for status, enrollment start/confirmation, challenge verification, recovery verification, and recovery regeneration. All ordinary `/__admin/*` endpoints reject sessions that do not satisfy required assurance. Existing Better Auth session, `admin.access`, and same-origin checks remain active.
+As implemented, there are no private `/__admin/auth/2fa/*` routes: the framework pages call Better Auth's `POST /api/auth/two-factor/{enable, verify-totp, verify-backup-code, generate-backup-codes, disable}` directly (same origin, same cookies). All ordinary `/__admin/*` endpoints reject sessions that do not satisfy required assurance. Existing Better Auth session, `admin.access`, and same-origin checks remain active.
 
 ## 6. Diagnostics and security
 
@@ -150,15 +158,15 @@ Vitest must cover unauthenticated denial, authenticated single-factor denial, en
 
 ## 8. Definition of done
 
-- [ ] Admin 2FA is required by default.
-- [ ] TOTP enrollment is framework-owned.
-- [ ] Recovery codes are secure, hashed, one-time use, and shown only once.
-- [ ] The current session must satisfy second-factor assurance.
-- [ ] `/admin/*` enforces assurance.
-- [ ] `/__admin/*` enforces assurance.
-- [ ] `admin.access` ABAC remains mandatory.
-- [ ] Assurance expires independently from login.
-- [ ] The consuming application writes no custom admin MFA code.
-- [ ] Documentation reflects actual implementation.
+- [x] Admin 2FA is required by default.
+- [x] TOTP enrollment uses Better Auth's plugin, driven by framework-owned pages.
+- [x] Backup codes are one-time use and shown only at enrollment (stored encrypted by the plugin).
+- [x] The current session must satisfy second-factor assurance.
+- [x] `/admin/*` enforces assurance.
+- [x] `/__admin/*` enforces assurance.
+- [x] `admin.access` ABAC remains mandatory.
+- [ ] ~~Assurance expires independently from login.~~ Replaced: Better Auth's plugin verifies only at sign-in, so admin bounds the *age* of the two-factor session (`assuranceTtlSeconds`); an older session must sign in again.
+- [x] The consuming application writes no custom admin MFA code.
+- [x] Documentation reflects actual implementation.
 
 Each phase updates documentation and leaves the repository green. See [architecture](../../architecture.md), [post-MVP roadmap](../../post-mvp.md), and the standard [phase documentation requirements](../../phases/README.md#completion-requirements).

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { DevSession } from '../src/index.js';
-import { classifyChange, runDev } from '../src/index.js';
+import { adminSecurityDiagnostics, classifyChange, runDev } from '../src/index.js';
 
 const roots: string[] = [];
 const sessions: DevSession[] = [];
@@ -47,6 +47,18 @@ const paths = async (session: DevSession) =>
 afterEach(async () => {
     await Promise.all(sessions.splice(0).map((session) => session.close()));
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+describe('adminSecurityDiagnostics', () => {
+    it('reports required 2FA, warns on explicit opt-out and stays silent without an admin', () => {
+        expect(adminSecurityDiagnostics({ twoFactor: { required: true } }).join('\n')).toContain(
+            'Admin security\n  2FA required    yes',
+        );
+        const disabled = adminSecurityDiagnostics({ twoFactor: { required: false } }).join('\n');
+        expect(disabled).toContain('2FA required    no');
+        expect(disabled).toContain('WARNING\nAdmin 2FA is disabled for this application.');
+        expect(adminSecurityDiagnostics(undefined)).toEqual([]);
+    });
 });
 
 describe('classifyChange', () => {

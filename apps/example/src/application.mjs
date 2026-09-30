@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
-import { defineAdmin } from '@nestrum/admin';
-import { defineAuth, field } from '@nestrum/auth';
-import { allow, defineApplication, deny } from '@nestrum/core';
+import { defineAdmin, roleBasedAdminPolicies } from '@nestrum/admin';
+import { defineAuth } from '@nestrum/auth';
+import { defineApplication } from '@nestrum/core';
 import mongo, { bindMongoCollection } from '@nestrum/example-mongo';
 import postgres from '@nestrum/example-postgres';
 import { compileModelMetadata } from '@nestrum/prisma';
@@ -25,8 +25,6 @@ export function createExample({
         database: 'identity',
         baseURL,
         secret,
-        extend: { user: { staff: field.boolean().default(false) } },
-        subjectFactory: ({ user }) => ({ id: user.id, anonymous: false, staff: user.staff === true }),
         prisma: () => ({ database: 'identity', collections: clients.get('identity').orm.public }),
     });
     const admin = defineAdmin();
@@ -63,14 +61,8 @@ export function createExample({
         auth,
         admin,
         apps: [articlesApp(events), projectsApp(events)],
-        policies: [
-            {
-                resource: 'admin.access',
-                actions: {
-                    access: { authorize: ({ subject }) => (subject.staff === true ? allow() : deny('NOT_STAFF')) },
-                },
-            },
-        ],
+        // `staff` and `admin` roles enter administration; only `admin` manages users (see the admin interface).
+        policies: roleBasedAdminPolicies(),
         // Contracts are emitted by `nestrum build`/`nestrum dev`; startup only reads them. The application module is
         // bundled into `<build>/server/`, so the build directory is its parent.
         async prepare(app) {

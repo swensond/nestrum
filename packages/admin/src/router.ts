@@ -1,4 +1,4 @@
-import type { AdminRequestContext, Application, QuerySet } from '@nestrum/core';
+import type { AdminRequestContext, AdminTwoFactorPolicy, Application, QuerySet } from '@nestrum/core';
 import { AdminError, AppError, AuthorizationError, QuerySetError, snapshotQueryValue } from '@nestrum/core';
 import type { ScalarTransport } from '@nestrum/hono';
 import {
@@ -17,6 +17,7 @@ import { cors } from 'hono/cors';
 import { z } from 'zod';
 import type { AdminAccess } from '#admin/access';
 import { assertSameOrigin, authorizeAccess, permits } from '#admin/access';
+import { registerAccessRoutes } from '#admin/access-routes';
 import type { AdminResourceMetadata } from '#admin/metadata';
 import { resourceMetadata } from '#admin/metadata';
 import type { AdminEntry, AdminOptions } from '#admin/registry';
@@ -45,6 +46,7 @@ export function createAdminRouter(
     application: Application,
     options: AdminOptions,
     transport: ScalarTransport,
+    twoFactor: AdminTwoFactorPolicy,
 ): Hono<Env> {
     const bySlug = new Map(entries.map((entry) => [entry.slug, entry]));
     const metadata = new Map(
@@ -92,11 +94,13 @@ export function createAdminRouter(
                 context.req.raw,
                 context.env.requestContext,
                 options.allowedOrigins ?? [],
+                twoFactor,
             ),
         );
 
         await next();
     });
+    registerAccessRoutes(router, application);
 
     function entry(slug: string): AdminEntry {
         const found = bySlug.get(slug);

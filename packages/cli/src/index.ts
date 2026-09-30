@@ -1,4 +1,8 @@
 export { CLI_HELP, parseCliArguments } from './arguments.js';
+export type { AuthArguments } from './auth-arguments.js';
+export { AUTH_HELP, parseAuthArguments } from './auth-arguments.js';
+export type { AdministratorResult, AuthCommandOptions } from './auth-command.js';
+export { createAdministratorFor, runAuthCommand } from './auth-command.js';
 export type { BuildOptions, BuildResult } from './build.js';
 export { bundleConfig, runBuild } from './build.js';
 export { CliError } from './cli.errors.js';
@@ -7,7 +11,7 @@ export { CONFIG_CANDIDATES, defineCliConfig, defineConfig, discoverConfig, loadC
 export type { DatabaseCommandDependencies } from './database-command.js';
 export { runDatabaseCommand } from './database-command.js';
 export type { ChangeKind, DevOptions, DevSession } from './dev.js';
-export { classifyChange, runDev } from './dev.js';
+export { adminSecurityDiagnostics, classifyChange, runDev } from './dev.js';
 export { HEALTH_PATH, READY_PATH, withHealth } from './health.js';
 export type { BuildManifest } from './manifest.js';
 export { MANIFEST_VERSION, readManifest } from './manifest.js';

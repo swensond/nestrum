@@ -93,8 +93,13 @@ function fixture(
     const getSession = vi.fn(async (request: Request) =>
         request.headers.get('cookie') === 'session=valid'
             ? {
-                  user: { id: 'alice' },
-                  session: { id: 'session', userId: 'alice', expiresAt: new Date(Date.now() + 60_000) },
+                  user: { id: 'alice', twoFactorEnabled: true, updatedAt: new Date(0) },
+                  session: {
+                      id: 'session',
+                      userId: 'alice',
+                      createdAt: new Date(),
+                      expiresAt: new Date(Date.now() + 60_000),
+                  },
               }
             : null,
     );
@@ -106,6 +111,15 @@ function fixture(
         initialize: async () => ({
             basePath: '/api/auth',
             handle: async () => new Response(null, { status: 404 }),
+            users: {
+                list: async () => ({ users: [], total: 0, limit: 25, offset: 0 }),
+                setRole: async () => {
+                    throw new Error('unused');
+                },
+            },
+            createAdministrator: async () => {
+                throw new Error('unused');
+            },
             getSession,
             resolveSubject: async (request) =>
                 (await getSession(request)) ? { id: 'alice', anonymous: false } : { anonymous: true },
@@ -622,6 +636,7 @@ describe('Private admin backend', () => {
     it('uses a real Better Auth session and SubjectFactory, rejects expired sessions and logout', async () => {
         const memory = storage();
         const { runtime, request, application } = fixture({
+            admin: { security: { twoFactor: { required: false } } },
             auth: defineAuth({
                 database: 'identity',
                 baseURL: BASE_URL,

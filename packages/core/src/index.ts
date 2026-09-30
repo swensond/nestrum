@@ -1,7 +1,7 @@
 export const FRAMEWORK_NAME = 'Nestrum';
 
-export type { AdminErrorCode } from './admin/admin.errors.js';
-export { AdminError } from './admin/admin.errors.js';
+export type { AdminErrorCode, AdminTwoFactorReason } from './admin/admin.errors.js';
+export { AdminError, AdminTwoFactorRequiredError } from './admin/admin.errors.js';
 export type {
     AdminActionConfiguration,
     AdminActionContext,
@@ -11,6 +11,7 @@ export type {
     AdminRequestContext,
     AdminResourceConfiguration,
     AdminResourceRegistration,
+    AdminTwoFactorPolicy,
 } from './admin/admin.types.js';
 export { defineApp } from './application/app.js';
 export { AppRegistry } from './application/app-registry.js';
@@ -26,7 +27,16 @@ export type {
     ApplicationState,
     DatabaseLifecycle,
 } from './application/application.types.js';
-export type { Authentication, AuthenticationDefinition, AuthSession } from './auth/auth.types.js';
+export type {
+    AuthAdministratorInput,
+    Authentication,
+    AuthenticationDefinition,
+    AuthRole,
+    AuthSession,
+    AuthUserPage,
+    AuthUserSummary,
+    AuthUsers,
+} from './auth/auth.types.js';
 export { AuthorizationError, PolicyError } from './authorization/authorization.errors.js';
 export type { PreparedAuthorization } from './authorization/authorization.js';
 export { AuthorizationEngine, allow, definePolicy, deny } from './authorization/authorization.js';

@@ -1,68 +1,134 @@
 import type { PrismaProvider } from '@nestrum/core';
-import type { AuthFieldDescriptor } from './fields.js';
 
-export const AUTH_MODELS = ['User', 'Session', 'Account', 'Verification'] as const;
+/** Better Auth models Nestrum persists, including the `twoFactor` plugin's `TwoFactor` table. */
+export const AUTH_MODELS = ['User', 'Session', 'Account', 'Verification', 'TwoFactor'] as const;
 export type AuthModel = (typeof AUTH_MODELS)[number];
 
-export function authContract(
-    provider: PrismaProvider,
-    extensions: Readonly<Record<string, AuthFieldDescriptor>>,
-): string {
-    const mongo = provider === 'mongodb';
-    const date = mongo ? 'Date' : 'TimestamptzString';
-    const boolean = mongo ? 'Bool' : 'Boolean';
-    const key = `String @id${mongo ? ' @map("_id")' : ''}`;
-    const extensionSource = Object.entries(extensions)
-        .map(
-            ([name, field]) =>
-                `    ${name} ${field.type === 'string' ? 'String' : field.type === 'boolean' ? boolean : mongo ? 'Double' : 'Float'}${field.required ? '' : '?'}`,
-        )
-        .join('\n');
-    const reference = mongo ? '' : '\n    user User @relation(fields: [userId], references: [id], onDelete: Cascade)';
-
-    return `model User {
-    id ${key}
+// The contract is fixed, so it is written out per provider instead of being assembled. `contracts.test.ts` checks
+// each model and field against Better Auth's own schema for the configured plugins, so upgrades cannot drift silently.
+const POSTGRESQL = `model User {
+    id String @id
     name String
     email String @unique
-    emailVerified ${boolean}
+    emailVerified Boolean
     image String?
-    createdAt ${date}
-    updatedAt ${date}
-${extensionSource}
+    createdAt TimestamptzString
+    updatedAt TimestamptzString
+    twoFactorEnabled Boolean?
+    role String?
+    banned Boolean?
+    banReason String?
+    banExpires TimestamptzString?
 }
 model Session {
-    id ${key}
+    id String @id
     token String @unique
     userId String
-    expiresAt ${date}
-    createdAt ${date}
-    updatedAt ${date}
+    expiresAt TimestamptzString
+    createdAt TimestamptzString
+    updatedAt TimestamptzString
     ipAddress String?
-    userAgent String?${reference}
+    userAgent String?
+    impersonatedBy String?
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 model Account {
-    id ${key}
+    id String @id
     accountId String
     providerId String
     userId String
     accessToken String?
     refreshToken String?
     idToken String?
-    accessTokenExpiresAt ${date}?
-    refreshTokenExpiresAt ${date}?
+    accessTokenExpiresAt TimestamptzString?
+    refreshTokenExpiresAt TimestamptzString?
     scope String?
     password String?
-    createdAt ${date}
-    updatedAt ${date}${reference}
+    createdAt TimestamptzString
+    updatedAt TimestamptzString
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
     @@unique([providerId, accountId])
 }
 model Verification {
-    id ${key}
+    id String @id
     identifier String
     value String
-    expiresAt ${date}
-    createdAt ${date}
-    updatedAt ${date}
+    expiresAt TimestamptzString
+    createdAt TimestamptzString
+    updatedAt TimestamptzString
+}
+model TwoFactor {
+    id String @id
+    secret String
+    backupCodes String
+    userId String
+    verified Boolean?
+    failedVerificationCount Int?
+    lockedUntil TimestamptzString?
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 `;
+
+const MONGODB = `model User {
+    id String @id @map("_id")
+    name String
+    email String @unique
+    emailVerified Bool
+    image String?
+    createdAt Date
+    updatedAt Date
+    twoFactorEnabled Bool?
+    role String?
+    banned Bool?
+    banReason String?
+    banExpires Date?
+}
+model Session {
+    id String @id @map("_id")
+    token String @unique
+    userId String
+    expiresAt Date
+    createdAt Date
+    updatedAt Date
+    ipAddress String?
+    userAgent String?
+    impersonatedBy String?
+}
+model Account {
+    id String @id @map("_id")
+    accountId String
+    providerId String
+    userId String
+    accessToken String?
+    refreshToken String?
+    idToken String?
+    accessTokenExpiresAt Date?
+    refreshTokenExpiresAt Date?
+    scope String?
+    password String?
+    createdAt Date
+    updatedAt Date
+    @@unique([providerId, accountId])
+}
+model Verification {
+    id String @id @map("_id")
+    identifier String
+    value String
+    expiresAt Date
+    createdAt Date
+    updatedAt Date
+}
+model TwoFactor {
+    id String @id @map("_id")
+    secret String
+    backupCodes String
+    userId String
+    verified Bool?
+    failedVerificationCount Int?
+    lockedUntil Date?
+}
+`;
+
+export function authContract(provider: PrismaProvider): string {
+    return provider === 'mongodb' ? MONGODB : POSTGRESQL;
 }

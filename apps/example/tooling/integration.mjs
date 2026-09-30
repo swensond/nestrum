@@ -5,8 +5,8 @@ import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
+import { totpCode, totpSecretFromUri, totpStep } from '@nestrum/auth';
 import { runServe } from '@nestrum/cli';
-import postgres from '@nestrum/example-postgres';
 
 const ROOT_DIR = fileURLToPath(new URL('../', import.meta.url));
 const execute = promisify(execFile);
@@ -23,7 +23,6 @@ const freePort = async () => {
 const docker = async (args) =>
     (await execute('docker', [...compose, ...args], { timeout: 90_000, maxBuffer: 1024 * 1024 })).stdout;
 let server;
-let identityClient;
 
 try {
     console.log('Starting dedicated Docker PostgreSQL and MongoDB services.');
@@ -88,6 +87,27 @@ try {
             maxBuffer: 4 * 1024 * 1024,
         },
     );
+    // The first administrator comes from the CLI (against the build), never from signup.
+    await execute(
+        process.execPath,
+        [
+            resolve(ROOT_DIR, '../../packages/cli/dist/bin.js'),
+            'auth',
+            'create-admin',
+            '--email',
+            'staff@example.test',
+            '--name',
+            'Staff',
+            '--config',
+            'nestrum.config.mjs',
+        ],
+        {
+            env: { ...env, NESTRUM_ADMIN_PASSWORD: 'Integration-password-2026!' },
+            cwd: ROOT_DIR,
+            timeout: 120_000,
+            maxBuffer: 4 * 1024 * 1024,
+        },
+    );
     server = await runServe({ cwd: ROOT_DIR, config: 'nestrum.config.mjs', flags: { port }, env: process.env });
     // runServe loaded the built module; importing the same file yields the same instance and its exported handles.
     const { example } = await import(pathToFileURL(join(ROOT_DIR, '.nestrum/server/index.mjs')).href);
@@ -134,27 +154,23 @@ try {
         return data;
     };
     const credentials = (email) => ({ name: email.split('@')[0], email, password: 'Integration-password-2026!' });
-    const staff = await json(
-        await request('/api/auth/sign-up/email', {
-            method: 'POST',
-            body: { ...credentials('staff@example.test'), staff: true },
-        }),
-        200,
+    // Public signup can never assign a role, and administrators come only from the CLI.
+    assert.equal(
+        (
+            await request('/api/auth/sign-up/email', {
+                method: 'POST',
+                body: { ...credentials('sneaky@example.test'), role: 'admin' },
+            })
+        ).status,
+        400,
     );
-    assert.equal(staff.user.staff, false, 'Public signup cannot grant staff.');
-    // A trusted operator promotes staff directly in the identity database, using the same built contract.
-    identityClient = postgres({
-        contractJson: JSON.parse(await readFile(join(ROOT_DIR, '.nestrum/contracts/identity.json'), 'utf8')),
-        url: connections.identity,
-    });
-    await identityClient.connect();
-    await identityClient.orm.public.User.where({ id: staff.user.id }).updateAndCount({ staff: true });
     const signin = await request('/api/auth/sign-in/email', {
         method: 'POST',
         body: credentials('staff@example.test'),
     });
-    await json(signin, 200);
-    const cookie = signin.headers
+    const staff = await json(signin, 200);
+    assert.equal(staff.user.role, 'admin');
+    let cookie = signin.headers
         .getSetCookie()
         .map((value) => value.split(';')[0])
         .join('; ');
@@ -175,6 +191,147 @@ try {
     assert.equal((await request('/__admin/resources')).status, 401);
     assert.equal((await request('/__admin/resources', { cookie: memberCookie })).status, 403);
     assert.equal((await request('/__admin/resources', { cookie, origin: 'https://foreign.invalid' })).status, 403);
+    // Admin 2FA is required by default: a valid login and admin.access are not enough until a second factor is set up.
+    const setupRequired = await json(await request('/__admin/resources', { cookie }), 403);
+    assert.equal(setupRequired.error.code, 'ADMIN_2FA_REQUIRED');
+    assert.equal(setupRequired.error.reason, 'setup-required');
+    const navigate = (path, sessionCookie) =>
+        fetch(`${host.baseURL}${path}`, {
+            redirect: 'manual',
+            headers: { cookie: sessionCookie, accept: 'text/html' },
+        });
+    const setupRedirect = await navigate('/admin/projects', cookie);
+    assert.equal(setupRedirect.status, 303);
+    assert.equal(setupRedirect.headers.get('location'), '/admin/auth/2fa/setup?next=%2Fadmin%2Fprojects');
+    assert.equal((await navigate('/admin/auth/2fa/setup', cookie)).status, 200);
+    const cookieFrom = (response) =>
+        response.headers
+            .getSetCookie()
+            .filter((value) => !/=;|Max-Age=0/i.test(value))
+            .map((value) => value.split(';')[0])
+            .join('; ');
+    // Better Auth's twoFactor plugin owns enrollment: enable (password), then verify a TOTP to activate.
+    const preEnrollment = cookie;
+    const enrollment = await json(
+        await request('/api/auth/two-factor/enable', {
+            method: 'POST',
+            cookie,
+            body: { password: credentials('staff@example.test').password },
+        }),
+        200,
+    );
+    assert.equal(
+        (await request('/__admin/resources', { cookie })).status,
+        403,
+        'An unconfirmed secret grants nothing.',
+    );
+    assert.equal(
+        (await request('/api/auth/two-factor/verify-totp', { method: 'POST', cookie, body: { code: '000000' } }))
+            .status,
+        401,
+    );
+    const totpSecret = totpSecretFromUri(enrollment.totpURI);
+    const activated = await request('/api/auth/two-factor/verify-totp', {
+        method: 'POST',
+        cookie,
+        body: { code: totpCode(totpSecret, totpStep(Date.now())) },
+    });
+    await json(activated, 200);
+    cookie = cookieFrom(activated);
+    assert.equal((await request('/__admin/resources', { cookie })).status, 200);
+    // Activation replaced the enrolling session, so the pre-enrollment cookie is dead.
+    assert.equal((await request('/__admin/resources', { cookie: preEnrollment })).status, 401);
+    // Signing in now yields no session until a code is verified.
+    const signInPending = async () => {
+        const response = await request('/api/auth/sign-in/email', {
+            method: 'POST',
+            body: credentials('staff@example.test'),
+        });
+        assert.equal((await json(response, 200)).twoFactorRedirect, true);
+        return cookieFrom(response);
+    };
+    const pending = await signInPending();
+    assert.equal((await request('/__admin/resources', { cookie: pending })).status, 401);
+    // A pending sign-in has no session, so the browser gets the sign-in shell (no redirect, no admin data).
+    const pendingPage = await navigate('/admin/projects', pending);
+    assert.equal(pendingPage.status, 200);
+    const pendingHtml = await pendingPage.text();
+    assert.ok(pendingHtml.includes('Sign in'));
+    assert.ok(!pendingHtml.includes('href="/admin/projects"'));
+    const backupCodes = enrollment.backupCodes;
+    assert.ok(backupCodes.length > 0);
+    const viaBackup = await request('/api/auth/two-factor/verify-backup-code', {
+        method: 'POST',
+        cookie: pending,
+        body: { code: backupCodes[0] },
+    });
+    await json(viaBackup, 200);
+    assert.equal((await request('/__admin/resources', { cookie: cookieFrom(viaBackup) })).status, 200);
+    assert.equal(
+        (
+            await request('/api/auth/two-factor/verify-backup-code', {
+                method: 'POST',
+                cookie: await signInPending(),
+                body: { code: backupCodes[0] },
+            })
+        ).status,
+        401,
+        'A backup code works once.',
+    );
+    console.log('Real admin 2FA enrollment, challenge, recovery and redirects passed.');
+    // Staff management: an administrator elevates a user to staff in the admin API; nothing is configured by id.
+    const asJson = (path, sessionCookie, method = 'GET', body) =>
+        request(path, { method, cookie: sessionCookie, ...(body === undefined ? {} : { body }) });
+    const elevated = await json(
+        await request('/api/auth/sign-up/email', { method: 'POST', body: credentials('elevate@example.test') }),
+        200,
+    );
+    assert.deepEqual(await json(await asJson('/__admin/access/capabilities', cookie), 200), { users: true });
+    const found = await json(await asJson('/__admin/access/users?email=elevate%40example.test', cookie), 200);
+    assert.equal(found.users[0].id, elevated.user.id);
+    assert.equal(found.users[0].role, 'user');
+    assert.equal(
+        (await asJson(`/__admin/access/users/${elevated.user.id}/role`, cookie, 'POST', { role: 'admin' })).status,
+        400,
+        'The interface cannot create administrators.',
+    );
+    await json(await asJson(`/__admin/access/users/${elevated.user.id}/role`, cookie, 'POST', { role: 'staff' }), 200);
+    const elevatedLogin = await request('/api/auth/sign-in/email', {
+        method: 'POST',
+        body: credentials('elevate@example.test'),
+    });
+    await json(elevatedLogin, 200);
+    let elevatedCookie = cookieFrom(elevatedLogin);
+    assert.equal((await asJson('/__admin/resources', elevatedCookie)).status, 403, 'New staff still need 2FA.');
+    const elevatedEnrollment = await json(
+        await request('/api/auth/two-factor/enable', {
+            method: 'POST',
+            cookie: elevatedCookie,
+            body: { password: credentials('elevate@example.test').password },
+        }),
+        200,
+    );
+    const elevatedActivation = await request('/api/auth/two-factor/verify-totp', {
+        method: 'POST',
+        cookie: elevatedCookie,
+        body: { code: totpCode(totpSecretFromUri(elevatedEnrollment.totpURI), totpStep(Date.now())) },
+    });
+    await json(elevatedActivation, 200);
+    elevatedCookie = cookieFrom(elevatedActivation);
+    assert.equal((await asJson('/__admin/resources', elevatedCookie)).status, 200);
+    assert.deepEqual(await json(await asJson('/__admin/access/capabilities', elevatedCookie), 200), { users: false });
+    assert.equal((await asJson('/__admin/access/users', elevatedCookie)).status, 403, 'Staff cannot manage users.');
+    assert.equal(
+        (await navigate('/admin/access', elevatedCookie)).status,
+        200,
+        'The page renders and reports the missing permission.',
+    );
+    const usersPage = await (await navigate('/admin/access', cookie)).text();
+    assert.ok(usersPage.includes('elevate@example.test'));
+    assert.ok(usersPage.includes('Remove staff access'));
+    await json(await asJson(`/__admin/access/users/${elevated.user.id}/role`, cookie, 'POST', { role: 'user' }), 200);
+    assert.equal((await asJson('/__admin/resources', elevatedCookie)).status, 403, 'Demotion revokes admin access.');
+    console.log('Real CLI administrator creation and staff elevation through the admin API passed.');
     const metadata = await json(await request('/__admin/resources', { cookie }), 200);
     assert.deepEqual(
         metadata.map((resource) => resource.identity),
@@ -247,7 +404,7 @@ try {
     );
     const project = example.application.resources.get('default.Project');
     const article = example.application.resources.get('documents.Article');
-    const subject = { id: staff.user.id, staff: true };
+    const subject = { id: staff.user.id, role: 'admin' };
     assert.equal(await project.managers.active.authorizedFor(subject, 'read').count(), 1);
     assert.equal(await article.managers.published.authorizedFor(subject, 'read').count(), 1);
     assert.equal(
@@ -341,12 +498,9 @@ try {
     assert.equal((await request('/api/projects/project-one', { cookie })).status, 404);
     await json(await request('/api/auth/sign-out', { method: 'POST', cookie, body: {} }), 200);
     assert.equal((await request('/__admin/resources', { cookie })).status, 401);
-    assert.equal((await identityClient.orm.public.User.where({ id: staff.user.id }).first()).staff, true);
     console.log(
         'Real auth/session ABAC, SQL/public CRUD, Mongo/admin CRUD, managers/scopes, OpenAPI and generic Svelte forms passed.',
     );
-    await identityClient.close();
-    identityClient = undefined;
     await server.shutdown();
     assert.deepEqual(events.slice(-5), [
         'shutdown:articles',
@@ -359,7 +513,6 @@ try {
     console.log('Reverse app/DI/database shutdown and traffic gating passed.');
 } finally {
     try {
-        await identityClient?.close();
         await server?.shutdown();
     } finally {
         await docker(['down', '--volumes', '--remove-orphans']);

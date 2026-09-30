@@ -125,7 +125,7 @@ Each operation binds trusted request subject/environment to its read/create/upda
 
 `@nestrum/auth` owns the Better Auth 1.7.6 Prisma 8 adapter and protected `User`, `Session`, `Account`, and `Verification` contracts. `defineAuth` selects one configured database and registers the explicit `nestrum.auth` app, whose inline provider-aware fragment is assembled with app-owned fragments. Auth identities cannot be ordinary resources. The core user stays minimal and authentication-oriented; domain data normally belongs in a separate one-to-one profile.
 
-Only sanctioned `AuthField` extensions are accepted, and core fields cannot be overwritten. The adapter uses Better Auth's `createAdapterFactory`, translates predicates into QuerySpecs, supports selected fields/paging/counts, and rejects unscoped mutations and unsupported operators. It declares sequential transaction behavior; application-owned clients now have explicit lifecycle callbacks, but no atomic auth transaction guarantee is claimed.
+The auth contract is prebaked per provider and User is not extensible; application-specific user data lives in application-owned models keyed by user id. The adapter uses Better Auth's `createAdapterFactory`, translates predicates into QuerySpecs, supports selected fields/paging/counts, and rejects unscoped mutations and unsupported operators. It declares sequential transaction behavior; application-owned clients now have explicit lifecycle callbacks, but no atomic auth transaction guarantee is claimed.
 
 Register, login, logout, and session retrieval are MVP features below `/api/auth`. Foreign origins are rejected. A `SubjectFactory` maps a validated live Better Auth session into an ABAC subject, with anonymous fallback for absent or expired sessions. Explicit runtime subject resolvers take precedence.
 
@@ -159,11 +159,15 @@ The planned package boundary is `@nestrum/runtime` for Node-free adapter/lifecyc
 
 ## Post-MVP admin 2FA
 
-The second post-MVP initiative is documented in the [admin 2FA plan](post-mvp/admin-2fa/README.md). It is planned work: PM2.0 documentation is complete, while PM2.1–PM2.5 have not started and admin 2FA is not currently enforced by the framework.
+The second post-MVP initiative is implemented; see the [admin 2FA plan](post-mvp/admin-2fa/README.md) and its phase records. Admin 2FA is required by default (`admin.security.twoFactor.required`, default `true`) and is enforced by the private admin router for every `/__admin/*` request; the admin UI redirects browser navigation to framework-owned pages.
 
-The target admin boundary becomes Better Auth session → current-session two-factor assurance → `admin.access` ABAC → same-origin policy. A configured factor is not sufficient: the current session must have completed a challenge. TOTP is the initial factor; recovery codes are one-time, cryptographically generated, hashed at rest, shown once, and invalidated on regeneration. Assurance may expire independently from the login session.
+Better Auth's `twoFactor` plugin provides the factor: TOTP, one-time backup codes, encrypted secret storage, and account lockout (`defineAuth({ twoFactor: { issuer, maxFailedAttempts, lockoutSeconds } })`). The plugin creates no session for an enrolled user until a code is verified, so admin derives assurance from the session: `user.twoFactorEnabled` is true, the session is not older than the user's last update (a single-factor session that predates enrollment never counts), and it is younger than `assuranceTtlSeconds` (default 43200). An older session is denied with `challenge-required` and signs in again; the login session itself is unchanged.
 
-The consuming application should not provide MFA middleware or pages. Planned framework routes are `/admin/auth/2fa/setup`, `/admin/auth/2fa`, and `/admin/auth/recovery`, with private API operations under `/__admin/auth/2fa/*`. Browser requests may navigate to framework-owned challenge/setup pages; private API requests return structured `ADMIN_2FA_REQUIRED` errors. Existing session, `admin.access`, resource/action ABAC, and same-origin checks remain mandatory. Passkeys/WebAuthn are future factors, not part of the initial plan.
+The admin boundary is same-origin policy → Better Auth session → `admin.access` ABAC → assurance → resource/action ABAC. `admin.access` is decided before assurance is disclosed so unauthorized users learn nothing about factor state. Admin API requests without assurance receive `403 ADMIN_2FA_REQUIRED` (`reason`: `setup-required` | `challenge-required`), never an HTML redirect. Return URLs are restricted to same-origin `/admin` paths.
+
+Roles use Better Auth's `admin` plugin (`user`, `staff`, `admin`; see [decision 0014](decisions/0014-roles-and-staff-management.md)). Administrators are created with `nestrum auth create-admin`; they promote and demote staff at `/admin/access` (`/__admin/access/*`, gated by the `admin.users` ABAC action on top of the full admin boundary). `roleBasedAdminPolicies()` supplies the standard `admin.access`/`admin.users` policies, and Better Auth's `/admin/*` endpoints are never forwarded over HTTP.
+
+The consuming application writes no MFA middleware or pages. Framework routes are `/admin/auth/2fa/setup`, `/admin/auth/2fa`, and `/admin/auth/recovery`; they call Better Auth's `/api/auth/two-factor/*` endpoints from the browser (JavaScript required). Only `enable`, `disable`, `verify-totp`, `verify-backup-code`, and `generate-backup-codes` are forwarded to the plugin. Passkeys/WebAuthn are future factors.
 
 ## Post-MVP first-class API keys
 

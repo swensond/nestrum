@@ -4,6 +4,7 @@ export class CliError extends AppError {
     constructor(
         code:
             | 'CLI_ARGUMENT_INVALID'
+            | 'CLI_AUTH_NOT_CONFIGURED'
             | 'CLI_CONFIG_INVALID'
             | 'CLI_CONFIG_LOAD_FAILED'
             | 'CLI_DATABASE_EMPTY'

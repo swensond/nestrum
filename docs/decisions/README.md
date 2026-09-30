@@ -24,3 +24,5 @@ Use ADR-style records when future sessions need the reasoning for a durable deci
 - [0012 — Admin extension boundaries](0012-admin-extension-boundaries.md): ordinary ABAC action handlers and build-time widget registration shared by SSR/client.
 
 - [0013 — Database workflow and lifecycle ownership](0013-database-workflow-and-lifecycle.md): named Prisma 8 command delegation, stable migrations, provider seams, and app/DI/database cleanup barriers.
+
+- [0014 — Roles and staff management](0014-roles-and-staff-management.md): Better Auth admin-plugin roles, CLI-created administrators, admin-managed staff, and role-based policies.

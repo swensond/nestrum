@@ -51,18 +51,18 @@ PM3.0 documentation is complete. PM3.1–PM3.5 are Not Started; API keys are not
 
 ## Plan 02 — Admin 2FA enforcement
 
-The [admin 2FA initiative](post-mvp/admin-2fa/README.md) is the second planned post-MVP initiative. It adds a framework-owned current-session assurance layer to the existing Better Auth session + `admin.access` ABAC + same-origin admin boundary.
+The [admin 2FA initiative](post-mvp/admin-2fa/README.md) is the second post-MVP initiative and is implemented. It adds a framework-owned current-session assurance layer to the existing Better Auth session + `admin.access` ABAC + same-origin admin boundary.
 
-PM2.0 documentation is complete. PM2.1–PM2.5 are Not Started; admin 2FA is not currently enforced by this documentation plan. TOTP is the initial factor, with recovery codes, independent assurance expiry, structured API challenge errors, and framework-owned Svelte setup/challenge/recovery routes planned. The remaining MVP atomic object-policy write gate stays open independently.
+PM2.0–PM2.5 are complete: admin 2FA is enforced by default on the admin UI and the private admin API, using Better Auth's `twoFactor` plugin (TOTP, one-time backup codes, account lockout) and framework-owned Svelte setup/challenge/recovery pages. Admin access requires a session that passed the second factor, was created after the user's last update, and is younger than `assuranceTtlSeconds` (default 12 hours); an older session gets `ADMIN_2FA_REQUIRED` (`challenge-required`) and must sign in again. This replaces the plan's independently expiring assurance, because the plugin only verifies at sign-in. The auth contract is now prebaked per provider (`defineAuth({ extend })` was removed), and existing applications must migrate `User.twoFactorEnabled` and the `TwoFactor` table. Roles (`user`/`staff`/`admin`), CLI-created administrators, and admin-managed staff followed in [decision 0014](decisions/0014-roles-and-staff-management.md). The Docker + MongoDB integration suite for the example, which performs real 2FA and staff-elevation flows, was run by the project owner and passes. The remaining MVP atomic object-policy write gate stays open independently.
 
 | Phase | Goal | Status |
 | --- | --- | --- |
 | [PM2.0](post-mvp/admin-2fa/phase-00-contract.md) | Document admin 2FA contract | Complete |
-| [PM2.1](post-mvp/admin-2fa/phase-01-assurance.md) | Session assurance abstraction | Not Started |
-| [PM2.2](post-mvp/admin-2fa/phase-02-enrollment.md) | TOTP enrollment and recovery | Not Started |
-| [PM2.3](post-mvp/admin-2fa/phase-03-challenge.md) | Admin challenge enforcement | Not Started |
-| [PM2.4](post-mvp/admin-2fa/phase-04-admin-ui.md) | Svelte admin 2FA UI | Not Started |
-| [PM2.5](post-mvp/admin-2fa/phase-05-hardening.md) | Expiry, diagnostics, and E2E hardening | Not Started |
+| [PM2.1](post-mvp/admin-2fa/phase-01-assurance.md) | Session assurance abstraction | Complete |
+| [PM2.2](post-mvp/admin-2fa/phase-02-enrollment.md) | TOTP enrollment and recovery | Complete |
+| [PM2.3](post-mvp/admin-2fa/phase-03-challenge.md) | Admin challenge enforcement | Complete |
+| [PM2.4](post-mvp/admin-2fa/phase-04-admin-ui.md) | Svelte admin 2FA UI | Complete |
+| [PM2.5](post-mvp/admin-2fa/phase-05-hardening.md) | Expiry, diagnostics, and E2E hardening | Complete |
 
 ## Plan 01 — Self-serving runtime
 
@@ -112,7 +112,7 @@ Node-specific listener APIs stay in the Node adapter, outside core and CLI. Prod
 - Provider-specific optimizations outside Node.
 - GraphQL, advanced relationship expansion, generated external SDKs, and public arbitrary Prisma expressions.
 - Field-level ABAC is excluded from the MVP; any later adoption requires revisiting stable response and admin contracts.
-- Social auth providers, MFA, email verification delivery, account linking, and broader Better Auth plugin coverage.
+- Social auth providers, non-admin MFA, passkeys/WebAuthn, QR-image enrollment, factor reset and backup-code/disable UI, independently expiring admin assurance, email verification delivery, account linking, and broader Better Auth plugin coverage. (Admin TOTP 2FA shipped in [Plan 02](post-mvp/admin-2fa/README.md).)
 
 ## Implementation follow-ups
 
