@@ -252,8 +252,12 @@ try {
     };
     const pending = await signInPending();
     assert.equal((await request('/__admin/resources', { cookie: pending })).status, 401);
-    const challengeRedirect = await navigate('/admin/projects', pending);
-    assert.equal(challengeRedirect.status, 303, 'A pending sign-in is an unauthenticated browser request.');
+    // A pending sign-in has no session, so the browser gets the sign-in shell (no redirect, no admin data).
+    const pendingPage = await navigate('/admin/projects', pending);
+    assert.equal(pendingPage.status, 200);
+    const pendingHtml = await pendingPage.text();
+    assert.ok(pendingHtml.includes('Sign in'));
+    assert.ok(!pendingHtml.includes('href="/admin/projects"'));
     const backupCodes = enrollment.backupCodes;
     assert.ok(backupCodes.length > 0);
     const viaBackup = await request('/api/auth/two-factor/verify-backup-code', {
