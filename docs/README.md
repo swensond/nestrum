@@ -13,6 +13,7 @@ This documentation is the durable project memory for future implementation sessi
 - [Phases](phases/README.md): bounded implementation tasks and validation records.
 - [Decisions](decisions/README.md): rationale for decisions that need to survive future sessions.
 - [Admin extensions](admin-extensions.md): custom action handlers, field overrides, and compiled widget registration.
+- [Admin design system](design-system/README.md): the Soft Modular brand book, light/dark tokens, accessibility rules, and component guidance for the admin shell (not yet applied to the shipped shell).
 - [Database workflow](database-workflow.md): commands, provider extensions, and lifecycle ownership.
 - [Extension seams](extension-seams.md): contribution ownership, conflicts, and CLI/database extension boundaries.
 - [Domain glossary](../CONTEXT.md): database definition, database name, default database, and model identity.
