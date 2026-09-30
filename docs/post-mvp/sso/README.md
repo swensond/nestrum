@@ -129,7 +129,7 @@ Vitest: provider registry and ID collisions, enable/disable, OIDC configuration 
 - [x] Nestrum ships a complete Svelte admin for provider management.
 - [x] SSO management requires admin 2FA and ABAC.
 - [x] SSO users pass through SubjectFactory and ABAC; external claims cannot bypass Nestrum authorization.
-- [ ] Better Auth provisioning and `resolveUser` are exposed through Nestrum. (Provisioning options are; `resolveUser` is wired but fails closed until the auth adapter has native transactions.)
+- [x] Better Auth provisioning and `resolveUser` are exposed through Nestrum. (`resolveUser` needs the binding's optional `transaction` hook, available for PostgreSQL; it fails closed without it.)
 - [x] Applications need no SSO protocol handlers or custom management UI.
 - [x] Documentation reflects the implementation.
 

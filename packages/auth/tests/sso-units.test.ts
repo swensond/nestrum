@@ -134,10 +134,10 @@ describe('SSO configuration', () => {
     });
 });
 
-async function provisioned(provisioning: object) {
+async function provisioned(provisioning: object, transactions = false) {
     const idp = await startFakeOidc({ email: 'new.person@acme.test' });
     idps.push(idp);
-    const memory = storage();
+    const memory = storage('identity', { transactions });
     const application = defineApplication({
         apps: [],
         databases: {
@@ -223,6 +223,38 @@ describe('SSO provisioning policy', () => {
         expect(resolveUser).not.toHaveBeenCalled();
         expect(memory.records.User).toHaveLength(0);
         expect(memory.records.Session).toHaveLength(0);
+    });
+
+    it('runs resolveUser atomically when the binding provides transactions', async () => {
+        const seen = vi.fn(async () => ({ action: 'continue' as const }));
+        const ok = await provisioned({ resolveUser: seen }, true);
+        const callback = await ok.signIn();
+        expect(callback.headers.get('location')).toBe(`${BASE_URL}/done`);
+        expect(seen).toHaveBeenCalledTimes(1);
+        expect(ok.memory.records.User).toHaveLength(1);
+        expect(ok.memory.records.Session).toHaveLength(1);
+
+        const rejecting = await provisioned(
+            { resolveUser: async () => ({ action: 'reject' as const, code: 'not_allowed' }) },
+            true,
+        );
+        const refused = await rejecting.signIn();
+        expect(refused.headers.get('location')).toContain('/failed');
+        expect(rejecting.memory.records.User).toHaveLength(0);
+        expect(rejecting.memory.records.Session).toHaveLength(0);
+        expect(rejecting.memory.records.Account).toHaveLength(0);
+
+        const throwing = await provisioned(
+            {
+                resolveUser: async () => {
+                    throw new Error('resolver failed');
+                },
+            },
+            true,
+        );
+        await throwing.signIn();
+        expect(throwing.memory.records.User).toHaveLength(0);
+        expect(throwing.memory.records.Session).toHaveLength(0);
     });
 
     it('never derives a role from IdP attributes', async () => {

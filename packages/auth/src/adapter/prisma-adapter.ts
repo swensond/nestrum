@@ -10,6 +10,13 @@ import { AUTH_MODELS } from '#auth/contracts/contracts';
 export type AuthPrismaBinding = {
     readonly database: string;
     readonly collections: Readonly<Record<AuthModel, Parameters<typeof createPrismaQueryBackend>[0]>>;
+    /**
+     * Optional atomic unit of work: runs `run` with collections bound to one database transaction, committing when it
+     * resolves and rolling back when it throws. Without it the adapter reports no transaction support, which makes
+     * features that need atomicity (such as SSO `resolveUser`) fail closed. PostgreSQL clients provide it through
+     * `client.transaction((tx) => run(tx.orm.public))`.
+     */
+    readonly transaction?: <R>(run: (collections: AuthPrismaBinding['collections']) => Promise<R>) => Promise<R>;
     readonly counts?: Readonly<Record<AuthModel, Extract<PrismaQueryBackendOptions, { provider: 'mongodb' }>['count']>>;
 };
 
@@ -53,6 +60,29 @@ export function createPrismaAuthAdapter(
     provider: PrismaProvider,
     codec?: AuthRowCodec,
 ): DBAdapterInstance {
+    let instanceOptions: Parameters<DBAdapterInstance>[0];
+    const factory = buildAdapter(binding, provider, codec, (run) =>
+        // biome-ignore lint/style/noNonNullAssertion: only reachable when the binding provides transactions
+        binding.transaction!((collections) =>
+            run(buildAdapter({ ...binding, collections }, provider, codec, false)(instanceOptions)),
+        ),
+    );
+
+    return (options) => {
+        instanceOptions = options;
+
+        return factory(options);
+    };
+}
+
+type TransactionConfig = NonNullable<Parameters<typeof createAdapterFactory>[0]['config']['transaction']>;
+
+function buildAdapter(
+    binding: AuthPrismaBinding,
+    provider: PrismaProvider,
+    codec: AuthRowCodec | undefined,
+    transaction: TransactionConfig,
+): DBAdapterInstance {
     const backends: Record<string, QueryBackend> = Object.create(null) as Record<string, QueryBackend>;
     for (const model of AUTH_MODELS) {
         const collection = binding.collections[model];
@@ -77,7 +107,7 @@ export function createPrismaAuthAdapter(
             supportsUUIDs: false,
             supportsJSON: false,
             supportsArrays: false,
-            transaction: false,
+            transaction: binding.transaction ? transaction : false,
         },
         adapter: ({ schema, getDefaultModelName, getFieldName }) => {
             const backend = (model: string): QueryBackend => {

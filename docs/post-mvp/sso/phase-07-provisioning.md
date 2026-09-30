@@ -39,13 +39,13 @@ Depends on [PM6.6](phase-06-admin-ui.md). IdP attributes never become Nestrum au
 
 ## Tests
 
-Provisioning (callback, disabled sign-up, explicit sign-up, role stays `user`), resolveUser fail-closed behavior, discovery by domain/ID/organization with explicit choice over the API, domain verification through unverified, pending and verified with a DNS fake and reset on domain change, sign-in blocked while unverified, the SSO subject context, and admin tests proving an SSO session (enrolled or not, even promoted to admin) still gets `ADMIN_2FA_REQUIRED`.
+Provisioning (callback, disabled sign-up, explicit sign-up, role stays `user`), `resolveUser` fail-closed behavior without a transaction hook and atomic commit/rollback with one (accept, reject, throw; also on real PostgreSQL), discovery by domain/ID/organization with explicit choice over the API, domain verification through unverified, pending and verified with a DNS fake and reset on domain change, sign-in blocked while unverified, the SSO subject context, and admin tests proving an SSO session (enrolled or not, even promoted to admin) still gets `ADMIN_2FA_REQUIRED`.
 
 ## Acceptance Criteria
 
 - [x] New SSO users can be provisioned.
 - [x] Signup can be disabled.
-- [ ] Existing users can be safely resolved. (`resolveUser` is exposed but fails closed until the auth adapter has native transactions; see Known Limitations.)
+- [x] Existing users can be safely resolved. (`resolveUser` runs atomically when the binding provides `transaction`; PostgreSQL only.)
 - [ ] Organization provisioning works. (Options pass through, but Nestrum does not install Better Auth's organization plugin, so it is inactive.)
 - [x] IdP role claims do not directly grant Nestrum privilege.
 - [x] Docs updated.
@@ -56,7 +56,7 @@ Run provisioning/auth tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm 
 
 ## Known Limitations
 
-`resolveUser` is wired but the plugin runs it inside a native database transaction, which Nestrum's Prisma adapter does not provide, so it currently fails closed with `SSO_USER_RESOLUTION_REQUIRES_NATIVE_TRANSACTIONS` and creates no user or session. Nestrum does not install Better Auth's organization plugin, so organization membership provisioning and domain-based organization assignment are not active (`organizationId` is an opaque identifier). An SSO-only administrator cannot complete the password-based second factor and so cannot reach admin.
+`resolveUser` needs the optional `transaction` hook on the auth Prisma binding (PostgreSQL only; the MongoDB client has no transaction API). Without it, it fails closed with `SSO_USER_RESOLUTION_REQUIRES_NATIVE_TRANSACTIONS` and creates no user or session. Nestrum does not install Better Auth's organization plugin, so organization membership provisioning and domain-based organization assignment are not active (`organizationId` is an opaque identifier). An SSO-only administrator cannot complete the password-based second factor and so cannot reach admin.
 
 ## Follow-Ups
 

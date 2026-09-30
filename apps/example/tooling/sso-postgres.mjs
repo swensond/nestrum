@@ -42,7 +42,7 @@ const idp = createServer(async (request, response) => {
         return send({ keys: [jwk] });
     }
     if (path === '/userinfo') {
-        return send({ sub: 'subject-1', email, email_verified: true, name: 'Verifier' });
+        return send({ sub: `subject-of-${email}`, email, email_verified: true, name: 'Verifier' });
     }
     if (path === '/token') {
         for await (const _ of request);
@@ -51,7 +51,7 @@ const idp = createServer(async (request, response) => {
         const body = b64({
             iss: issuer,
             aud: 'client-1',
-            sub: 'subject-1',
+            sub: `subject-of-${email}`,
             iat: now,
             exp: now + 300,
             email,
@@ -70,7 +70,10 @@ const idp = createServer(async (request, response) => {
 });
 await new Promise((resolve) => idp.listen(0, '127.0.0.1', resolve));
 issuer = `http://127.0.0.1:${idp.address().port}`;
-const email = `sso-${Date.now()}@verify.test`;
+let email = `sso-${Date.now()}@verify.test`;
+
+let resolution = { action: 'continue' };
+const resolveUser = async () => resolution;
 
 const application = defineApplication({
     apps: [],
@@ -82,8 +85,12 @@ const application = defineApplication({
         database: 'identity',
         baseURL: BASE,
         secret: 'local-verification-secret-with-at-least-32-chars',
-        prisma: () => ({ database: 'identity', collections: client.orm.public }),
-        sso: { enabled: true, trustedIdpOrigins: [issuer] },
+        prisma: () => ({
+            database: 'identity',
+            collections: client.orm.public,
+            transaction: (run) => client.transaction((tx) => run(tx.orm.public)),
+        }),
+        sso: { enabled: true, trustedIdpOrigins: [issuer], provisioning: { resolveUser } },
     }),
     databaseLifecycle: {
         default: { connect: async () => {}, disconnect: async () => {} },
@@ -135,7 +142,7 @@ try {
         new Request(`${BASE}/api/auth/sign-in/sso`, {
             method: 'POST',
             headers: { 'content-type': 'application/json', origin: BASE },
-            body: JSON.stringify({ email, callbackURL: `${BASE}/done` }),
+            body: JSON.stringify({ providerId, email, callbackURL: `${BASE}/done` }),
         }),
     );
     assert.equal(start.status, 200);
@@ -171,6 +178,48 @@ try {
         },
     );
     assert.ok((await sso.get(providerId)).lastSuccessfulLoginAt, 'The last successful sign-in is recorded.');
+
+    // resolveUser runs inside a real transaction: a rejection leaves no user, account or session behind.
+    const signIn = async (address) => {
+        const begun = await runtime.fetch(
+            new Request(`${BASE}/api/auth/sign-in/sso`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', origin: BASE },
+                body: JSON.stringify({
+                    email: address,
+                    callbackURL: `${BASE}/done`,
+                    errorCallbackURL: `${BASE}/failed`,
+                }),
+            }),
+        );
+        const state = new URL((await begun.json()).url).searchParams.get('state');
+        const jar = begun.headers
+            .getSetCookie()
+            .map((value) => value.split(';')[0])
+            .join('; ');
+
+        return runtime.fetch(
+            new Request(`${BASE}/api/auth/sso/callback/${providerId}?code=abc&state=${state}`, {
+                headers: { cookie: jar },
+            }),
+        );
+    };
+    const before = (await client.orm.public.User.all()).length;
+    const sessionsBefore = (await client.orm.public.Session.all()).length;
+    email = `rejected-${Date.now()}@verify.test`;
+    resolution = { action: 'reject', code: 'not_allowed' };
+    const rejected = await signIn(email);
+    assert.match(rejected.headers.get('location'), /\/failed/);
+    assert.equal((await client.orm.public.User.all()).length, before, 'A rejected resolution creates no user.');
+    assert.equal(
+        (await client.orm.public.Session.all()).length,
+        sessionsBefore,
+        'A rejected resolution creates no session.',
+    );
+    resolution = { action: 'continue' };
+    const allowed = await signIn(email);
+    assert.equal(allowed.headers.get('location'), `${BASE}/done`);
+    assert.equal((await client.orm.public.User.where({ email }).all()).length, 1);
 
     // Disabled providers reject new sign-ins; existing sessions keep working.
     await sso.setEnabled(providerId, false, { actorId: 'verifier' });

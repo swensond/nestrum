@@ -33,7 +33,12 @@ export function createExample({
         database: 'identity',
         baseURL,
         secret,
-        prisma: () => ({ database: 'identity', collections: clients.get('identity').orm.public }),
+        prisma: () => ({
+            database: 'identity',
+            collections: clients.get('identity').orm.public,
+            // Atomic units of work (SSO resolveUser needs them); PostgreSQL clients provide transactions.
+            transaction: (run) => clients.get('identity').transaction((tx) => run(tx.orm.public)),
+        }),
         // Enterprise SSO (OIDC and SAML 2.0): providers are managed at /admin/auth/sso. The identity migration adds
         // the SsoProvider table. Identity providers on private networks would be listed in `trustedIdpOrigins`.
         sso: { enabled: true },
