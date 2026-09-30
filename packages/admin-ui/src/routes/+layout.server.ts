@@ -4,6 +4,7 @@ import { ApiKeyClient } from '$lib/api-keys.server.js';
 import { FeatureAdminClient } from '$lib/features.server.js';
 import { loadAdminState } from '$lib/metadata.js';
 import { isAuthPath, twoFactorHref } from '$lib/return-to.js';
+import { SsoAdminClient } from '$lib/sso.server.js';
 import type { LayoutServerLoad } from './$types';
 
 export const load = (async ({ fetch, depends, url }) => {
@@ -21,5 +22,7 @@ export const load = (async ({ fetch, depends, url }) => {
     const canViewFeatures =
         admin.status === 'ready' && (await new FeatureAdminClient(fetch).capabilities())?.read === true;
 
-    return { admin, path: url.pathname, canManageUsers, canManageApiKeys, canViewFeatures };
+    const canManageSso = admin.status === 'ready' && (await new SsoAdminClient(fetch).capabilities())?.read === true;
+
+    return { admin, path: url.pathname, canManageUsers, canManageApiKeys, canViewFeatures, canManageSso };
 }) satisfies LayoutServerLoad;

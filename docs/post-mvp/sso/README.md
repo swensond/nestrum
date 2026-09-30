@@ -2,19 +2,19 @@
 
 ## Status and navigation
 
-This is the sixth post-MVP initiative. PM6.0 records the SSO contract; PM6.1–PM6.8 are Not Started. Nothing described here is implemented unless a phase records implementation evidence.
+This is the sixth post-MVP initiative and is implemented (PM6.0–PM6.8). Where the original plan and the implementation differ, the phase records and [decision 0017](../../decisions/0017-enterprise-sso.md) describe the implemented behavior; known gaps are listed under each phase's Known Limitations and in the definition of done below.
 
 | Phase | Goal | Primary surface | Status |
 | --- | --- | --- | --- |
 | [PM6.0 — SSO Contract](phase-00-contract.md) | Document SSO contract | docs/core contracts | Complete |
-| [PM6.1 — Better Auth SSO Plugin Integration](phase-01-better-auth-integration.md) | Better Auth SSO plugin integration | auth | Not Started |
-| [PM6.2 — Provider Registry and Secure Persistence](phase-02-provider-registry.md) | Provider registry and secure persistence | auth/core | Not Started |
-| [PM6.3 — OpenID Connect](phase-03-oidc.md) | OIDC | auth | Not Started |
-| [PM6.4 — SAML 2.0](phase-04-saml.md) | SAML 2.0 | auth | Not Started |
-| [PM6.5 — Private Admin Management API](phase-05-admin-backend.md) | Private admin management API | admin | Not Started |
-| [PM6.6 — Prebuilt Svelte SSO Admin](phase-06-admin-ui.md) | Prebuilt Svelte SSO admin | admin-ui | Not Started |
-| [PM6.7 — Provisioning, Organization and Domain Mapping](phase-07-provisioning.md) | Provisioning and organization/domain mapping | auth/admin | Not Started |
-| [PM6.8 — SSO Hardening](phase-08-hardening.md) | Diagnostics, testing, hardening | integration/security | Not Started |
+| [PM6.1 — Better Auth SSO Plugin Integration](phase-01-better-auth-integration.md) | Better Auth SSO plugin integration | auth | Complete |
+| [PM6.2 — Provider Registry and Secure Persistence](phase-02-provider-registry.md) | Provider registry and secure persistence | auth/core | Complete |
+| [PM6.3 — OpenID Connect](phase-03-oidc.md) | OIDC | auth | Complete |
+| [PM6.4 — SAML 2.0](phase-04-saml.md) | SAML 2.0 | auth | Complete |
+| [PM6.5 — Private Admin Management API](phase-05-admin-backend.md) | Private admin management API | admin | Complete |
+| [PM6.6 — Prebuilt Svelte SSO Admin](phase-06-admin-ui.md) | Prebuilt Svelte SSO admin | admin-ui | Complete |
+| [PM6.7 — Provisioning, Organization and Domain Mapping](phase-07-provisioning.md) | Provisioning and organization/domain mapping | auth/admin | Complete |
+| [PM6.8 — SSO Hardening](phase-08-hardening.md) | Diagnostics, testing, hardening | integration/security | Complete |
 
 ## Purpose
 
@@ -33,7 +33,7 @@ export default defineConfig({
 });
 ```
 
-Administrators then manage providers at `/admin/auth/sso` and configure OIDC and SAML without application-owned UI. (The final configuration location follows the existing `defineAuth` pattern and is fixed in PM6.1.)
+Administrators then manage providers at `/admin/auth/sso` and configure OIDC and SAML without application-owned UI. (The configuration lives on `defineAuth`, like the other Better Auth plugin settings.)
 
 ## Responsibility boundary
 
@@ -119,18 +119,18 @@ Vitest: provider registry and ID collisions, enable/disable, OIDC configuration 
 
 ## Definition of done
 
-- [ ] Nestrum uses Better Auth's official SSO plugin.
-- [ ] OIDC and SAML 2.0 are supported from the first release.
-- [ ] Multiple providers coexist and attach to organizations with one or more domains.
-- [ ] Sensitive provider data is encrypted and redacted.
-- [ ] OIDC discovery and SAML IdP metadata are supported; SAML SP values are shown in admin.
-- [ ] SP-initiated and configured IdP-initiated SAML work.
-- [ ] Providers can be tested/validated and enabled/disabled.
-- [ ] Nestrum ships a complete Svelte admin for provider management.
-- [ ] SSO management requires admin 2FA and ABAC.
-- [ ] SSO users pass through SubjectFactory and ABAC; external claims cannot bypass Nestrum authorization.
-- [ ] Better Auth provisioning and `resolveUser` are exposed through Nestrum.
-- [ ] Applications need no SSO protocol handlers or custom management UI.
-- [ ] Documentation reflects the implementation.
+- [x] Nestrum uses Better Auth's official SSO plugin.
+- [x] OIDC and SAML 2.0 are supported from the first release.
+- [x] Multiple providers coexist and attach to organizations with one or more domains. (`organizationId` is an opaque application identifier.)
+- [x] Sensitive provider data is encrypted and redacted.
+- [x] OIDC discovery and SAML IdP metadata are supported; SAML SP values are shown in admin.
+- [x] SP-initiated and configured IdP-initiated SAML work.
+- [x] Providers can be tested/validated and enabled/disabled.
+- [x] Nestrum ships a complete Svelte admin for provider management.
+- [x] SSO management requires admin 2FA and ABAC.
+- [x] SSO users pass through SubjectFactory and ABAC; external claims cannot bypass Nestrum authorization.
+- [x] Better Auth provisioning and `resolveUser` are exposed through Nestrum. (`resolveUser` needs the binding's optional `transaction` hook, available for PostgreSQL; it fails closed without it.)
+- [x] Applications need no SSO protocol handlers or custom management UI.
+- [x] Documentation reflects the implementation.
 
 Every phase updates documentation and leaves the repository green. See [architecture](../../architecture.md), [post-MVP roadmap](../../post-mvp.md), and [phase requirements](../../phases/README.md#completion-requirements).

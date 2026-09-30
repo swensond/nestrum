@@ -1,4 +1,5 @@
 import { apiKey } from '@better-auth/api-key';
+import { sso } from '@better-auth/sso';
 import type {
     Application,
     AuthAdministratorInput,
@@ -11,7 +12,7 @@ import { AppError, defineApp, modelIdentity } from '@nestrum/core';
 import { betterAuth } from 'better-auth';
 import type { DBAdapterInstance } from 'better-auth/adapters';
 import { admin, twoFactor } from 'better-auth/plugins';
-import type { AuthPrismaBinding } from '#auth/adapter/prisma-adapter';
+import type { AuthPrismaBinding, AuthRowCodec } from '#auth/adapter/prisma-adapter';
 import { createPrismaAuthAdapter } from '#auth/adapter/prisma-adapter';
 import type { ApiKeyOptions, ResolvedApiKeyOptions } from '#auth/api-keys/options';
 import { resolveApiKeyOptions } from '#auth/api-keys/options';
@@ -21,6 +22,11 @@ import { AUTH_ROLE_DEFINITIONS } from '#auth/roles/roles';
 import { createAdministrator, createUserManagement } from '#auth/roles/users';
 import type { SubjectMapper } from '#auth/session/subject-factory';
 import { SubjectFactory } from '#auth/session/subject-factory';
+import type { ResolvedSsoOptions, SsoConfig } from '#auth/sso/options';
+import { resolveSsoOptions } from '#auth/sso/options';
+import { handleSso, isSamlAcsPost } from '#auth/sso/routes';
+import { openProviderConfig, SecretBox, sealProviderConfig } from '#auth/sso/secrets';
+import { SsoRegistry } from '#auth/sso/service';
 
 export type AuthConfig = {
     readonly database?: string;
@@ -36,6 +42,8 @@ export type AuthConfig = {
     /** Better Auth `twoFactor` plugin settings that Nestrum exposes. */
     /** Better Auth `apiKey` plugin settings that Nestrum exposes. */
     readonly apiKeys?: ApiKeyOptions;
+    /** Enterprise SSO (OIDC and SAML 2.0) on Better Auth's SSO plugin. Off unless `enabled` is true. */
+    readonly sso?: SsoConfig;
     readonly twoFactor?: {
         /** Authenticator-app issuer label. Defaults to "Nestrum". */
         readonly issuer?: string;
@@ -82,6 +90,10 @@ type AuthInstanceOptions = {
     readonly maxFailedAttempts: number;
     readonly lockoutSeconds: number;
     readonly apiKeys: ResolvedApiKeyOptions;
+    readonly sso?: {
+        readonly options: ResolvedSsoOptions;
+        readonly registry: () => SsoRegistry | undefined;
+    };
 };
 
 /** The one place Better Auth is configured, so tests can compare its schema with the prebaked contract. */
@@ -90,7 +102,10 @@ export function createAuthInstance(options: AuthInstanceOptions) {
         baseURL: options.baseURL,
         basePath: '/api/auth',
         secret: options.secret,
-        trustedOrigins: [...options.trustedOrigins],
+        // IdP origins of enabled SSO providers are trusted dynamically; browser-facing origin checks stay static in `handle`.
+        trustedOrigins: options.sso
+            ? async () => [...options.trustedOrigins, ...((await options.sso?.registry()?.idpOrigins()) ?? [])]
+            : [...options.trustedOrigins],
         database: options.database,
         emailAndPassword: { enabled: true },
         user: { modelName: 'User' },
@@ -124,6 +139,36 @@ export function createAuthInstance(options: AuthInstanceOptions) {
                 },
                 schema: { apikey: { modelName: 'ApiKey' } },
             }),
+            ...(options.sso
+                ? [
+                      // Provider writes go through Nestrum's registry, so the plugin's own registration endpoint is off
+                      // (`providersLimit: 0`) and none of its management endpoints are forwarded over HTTP.
+                      sso({
+                          modelName: 'SsoProvider',
+                          providersLimit: 0,
+                          ...options.sso.options.provisioning,
+                          saml: { allowIdpInitiated: options.sso.options.allowIdpInitiated },
+                          domainVerification: options.sso.options.domainVerification.enabled
+                              ? { enabled: true, tokenPrefix: 'nestrum-sso' }
+                              : { enabled: false },
+                          schema: {
+                              ssoProvider: {
+                                  additionalFields: {
+                                      displayName: { type: 'string', required: false, input: false },
+                                      enabled: { type: 'boolean', required: false, input: false },
+                                      createdBy: { type: 'string', required: false, input: false },
+                                      updatedBy: { type: 'string', required: false, input: false },
+                                      lastValidatedAt: { type: 'date', required: false, input: false },
+                                      lastValidationStatus: { type: 'string', required: false, input: false },
+                                      lastSuccessfulLoginAt: { type: 'date', required: false, input: false },
+                                      createdAt: { type: 'date', required: true, input: false },
+                                      updatedAt: { type: 'date', required: true, input: false },
+                                  },
+                              },
+                          },
+                      }),
+                  ]
+                : []),
             twoFactor({
                 issuer: options.issuer,
                 twoFactorTable: 'TwoFactor',
@@ -134,7 +179,43 @@ export function createAuthInstance(options: AuthInstanceOptions) {
                 },
             }),
         ],
-        session: { modelName: 'Session', cookieCache: { enabled: false } },
+        session: {
+            modelName: 'Session',
+            cookieCache: { enabled: false },
+            // How the session began. Set only by the SSO callbacks below, never from client input.
+            additionalFields: {
+                authMethod: { type: 'string', required: false, input: false },
+                ssoProviderId: { type: 'string', required: false, input: false },
+            },
+        },
+        databaseHooks: {
+            session: {
+                create: {
+                    before: async (session, context) => {
+                        const path = context?.path ?? '';
+                        const providerId = (context?.params as { providerId?: string } | undefined)?.providerId;
+                        if (
+                            options.sso &&
+                            providerId &&
+                            (path.startsWith('/sso/callback/') || path.startsWith('/sso/saml2/sp/acs/'))
+                        ) {
+                            return { data: { ...session, authMethod: 'sso', ssoProviderId: providerId } };
+                        }
+
+                        return { data: session };
+                    },
+                    after: async (session) => {
+                        const record = session as { authMethod?: string; ssoProviderId?: string };
+                        if (options.sso && record.authMethod === 'sso' && record.ssoProviderId) {
+                            await options.sso
+                                .registry()
+                                ?.recordLogin(record.ssoProviderId)
+                                .catch(() => {});
+                        }
+                    },
+                },
+            },
+        },
         account: { modelName: 'Account' },
         verification: { modelName: 'Verification' },
         advanced: { database: { generateId: () => crypto.randomUUID() } },
@@ -180,6 +261,7 @@ export function defineAuth(config: AuthConfig): AuthenticationDefinition {
         );
     }
     const apiKeys = resolveApiKeyOptions(config.apiKeys);
+    const ssoOptions = resolveSsoOptions(config.sso);
     const subjectFactory = new SubjectFactory(config.subjectFactory);
     const secret = config.secret;
     const prisma = config.prisma;
@@ -196,17 +278,39 @@ export function defineAuth(config: AuthConfig): AuthenticationDefinition {
             if (binding.database !== database) {
                 throw new AppError('AUTH_DATABASE_MISMATCH', 'Auth storage must bind its selected named database.');
             }
+            const box = new SecretBox(secret);
+            const isSsoModel = (model: string) => model.toLowerCase() === 'ssoprovider';
+            const codec: AuthRowCodec | undefined = ssoOptions
+                ? {
+                      seal: async (model, row) => (isSsoModel(model) ? sealProviderConfig(box, row) : row),
+                      open: async (model, row) => (isSsoModel(model) ? openProviderConfig(box, row) : row),
+                  }
+                : undefined;
+            let registry: SsoRegistry | undefined;
             const instance = createAuthInstance({
                 baseURL,
                 secret,
                 trustedOrigins,
-                database: createPrismaAuthAdapter(binding, definition.provider),
+                database: createPrismaAuthAdapter(binding, definition.provider, codec),
                 issuer,
                 maxFailedAttempts,
                 lockoutSeconds,
                 apiKeys,
+                ...(ssoOptions
+                    ? {
+                          sso: { options: ssoOptions, registry: () => registry },
+                      }
+                    : {}),
             });
             await instance.$context;
+            if (ssoOptions) {
+                registry = new SsoRegistry({
+                    // biome-ignore lint/suspicious/noExplicitAny: the registry uses a narrow structural slice of the context
+                    store: async () => (await instance.$context) as any,
+                    baseURL,
+                    options: ssoOptions,
+                });
+            }
             const getSession = async (request: Request): Promise<AuthSession | null> => {
                 const session = await instance.api.getSession({
                     headers: request.headers,
@@ -219,12 +323,30 @@ export function defineAuth(config: AuthConfig): AuthenticationDefinition {
                 basePath: '/api/auth' as const,
                 users: createUserManagement(instance),
                 apiKeys: createApiKeys(instance, apiKeys),
+                ...(registry ? { sso: registry } : {}),
                 createAdministrator: (input: AuthAdministratorInput) => createAdministrator(instance, input),
                 async handle(request: Request): Promise<Response> {
                     const path = new URL(request.url).pathname;
                     const requestOrigin = request.headers.get('origin');
-                    if (requestOrigin && requestOrigin !== baseURL && !trustedOrigins.includes(requestOrigin)) {
+                    if (
+                        requestOrigin &&
+                        requestOrigin !== baseURL &&
+                        !trustedOrigins.includes(requestOrigin) &&
+                        !(registry && isSamlAcsPost(request, path))
+                    ) {
                         return Response.json({ message: 'Invalid origin', code: 'INVALID_ORIGIN' }, { status: 403 });
+                    }
+                    if (registry) {
+                        const handled = await handleSso(
+                            request,
+                            path,
+                            registry,
+                            (forwarded) => instance.handler(forwarded),
+                            { origins: [baseURL, ...trustedOrigins] },
+                        );
+                        if (handled) {
+                            return handled;
+                        }
                     }
                     const allowed =
                         request.method === 'POST'

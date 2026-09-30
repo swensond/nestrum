@@ -12,10 +12,14 @@ export type SubjectMapper = (session: AuthSession) => Subject | Promise<Subject>
 
 export class SubjectFactory {
     constructor(
-        private readonly map: SubjectMapper = ({ user }) => ({
+        private readonly map: SubjectMapper = ({ user, session }) => ({
             id: user.id,
             anonymous: false,
             role: effectiveRole(user.role),
+            // Trusted context set by Nestrum's SSO callbacks. It says how the session began, never what it may do.
+            ...(session.authMethod === 'sso' && typeof session.ssoProviderId === 'string'
+                ? { authMethod: 'sso', ssoProviderId: session.ssoProviderId }
+                : {}),
         }),
     ) {}
 

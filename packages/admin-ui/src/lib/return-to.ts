@@ -3,7 +3,12 @@ import type { TwoFactorReason } from './metadata.js';
 const ORIGIN = 'http://admin.invalid';
 export const ADMIN_HOME = '/admin';
 
+/** The framework-owned sign-in challenge pages. SSO management lives under `/admin/auth/sso` but is an ordinary page. */
 export function isAuthPath(pathname: string): boolean {
+    if (pathname === '/admin/auth/sso' || pathname.startsWith('/admin/auth/sso/')) {
+        return false;
+    }
+
     return pathname === '/admin/auth' || pathname.startsWith('/admin/auth/');
 }
 

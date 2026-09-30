@@ -3,6 +3,7 @@ import type { AppDefinition } from '#core/application/application.types';
 import type { Subject } from '#core/authorization/authorization.types';
 import type { ModelIdentity, PrismaProvider } from '#core/database/database.types';
 import type { ApiKeys } from './api-key.js';
+import type { SsoProviders } from './sso.js';
 
 export type AuthSession = {
     readonly user: Readonly<Record<string, unknown> & { id: string }>;
@@ -50,6 +51,8 @@ export type AuthAdministratorInput = {
 export type Authentication = {
     readonly users: AuthUsers;
     readonly apiKeys: ApiKeys;
+    /** Present only when `sso.enabled` is configured. */
+    readonly sso?: SsoProviders;
     /** Operator bootstrap (CLI): create or promote an administrator without a session. Never reachable over HTTP. */
     createAdministrator(
         input: AuthAdministratorInput,

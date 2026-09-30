@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -27,28 +27,28 @@ Depends on [PM6.6](phase-06-admin-ui.md). IdP attributes never become Nestrum au
 
 ## Implementation
 
-Planned provisioning configuration, resolver hooks, discovery endpoint, domain trust rules, and SubjectFactory integration.
+`sso.provisioning` passes Better Auth's `disableImplicitSignUp`, `provisionUser`, `provisionUserOnEveryLogin`, `organizationProvisioning`, `resolveUser` and `trustEmailVerified` to the plugin unchanged. New SSO users are created with the ordinary `user` role; `provisionUser` runs for them and, with `provisionUserOnEveryLogin`, on every login. `disableImplicitSignUp` blocks creating users (a sign-in may still request sign-up explicitly). Login discovery (`GET /api/auth/sso/discover`, `discover()`) resolves an enabled provider by email domain, `domain`, `providerId` or `organizationSlug` (via `sso.resolveOrganization`), returns an explicit choice when several match and only routes verified domains when domain verification is on. Domain verification is opt-in: the admin requests a DNS TXT record (`_nestrum-sso-<providerId>.<domain>`) and verifies it; changing domains resets trust; status is verified, pending, unverified or not-required. The default SubjectFactory adds `authMethod: 'sso'` and `ssoProviderId` to SSO subjects, and attribute mapping to profile fields is explicit per provider. `sessionAssurance` treats any SSO session as lacking the second factor.
 
 ## Public API
 
-Planned provisioning options, `resolveUser`, role resolver, discovery flow, and subject attributes.
+`SsoConfig.provisioning`, `resolveOrganization`, `domainVerification`, `SsoDiscoveryResult`, `SsoDomainVerificationInstructions`, the SSO subject attributes.
 
 ## Files / Packages Changed
 
-Planned auth/admin/admin-ui packages, tests, architecture, initiative index, and this record.
+`packages/auth/src/sso/{options,service,routes}.ts`, `packages/auth/src/session/subject-factory.ts`, `packages/admin/src/security.ts`, tests, and this record.
 
 ## Tests
 
-Cover new-user provisioning, disabled signup, safe resolution of existing users, organization provisioning, role resolver, unverified-domain refusal, multi-provider discovery choice, IdP role claims granting nothing, SSO subject context, and admin 2FA still required after SSO.
+Provisioning (callback, disabled sign-up, explicit sign-up, role stays `user`), `resolveUser` fail-closed behavior without a transaction hook and atomic commit/rollback with one (accept, reject, throw; also on real PostgreSQL), discovery by domain/ID/organization with explicit choice over the API, domain verification through unverified, pending and verified with a DNS fake and reset on domain change, sign-in blocked while unverified, the SSO subject context, and admin tests proving an SSO session (enrolled or not, even promoted to admin) still gets `ADMIN_2FA_REQUIRED`.
 
 ## Acceptance Criteria
 
-- [ ] New SSO users can be provisioned.
-- [ ] Signup can be disabled.
-- [ ] Existing users can be safely resolved.
-- [ ] Organization provisioning works.
-- [ ] IdP role claims do not directly grant Nestrum privilege.
-- [ ] Docs updated.
+- [x] New SSO users can be provisioned.
+- [x] Signup can be disabled.
+- [x] Existing users can be safely resolved. (`resolveUser` runs atomically when the binding provides `transaction`; PostgreSQL only.)
+- [ ] Organization provisioning works. (Options pass through, but Nestrum does not install Better Auth's organization plugin, so it is inactive.)
+- [x] IdP role claims do not directly grant Nestrum privilege.
+- [x] Docs updated.
 
 ## Validation
 
@@ -56,7 +56,7 @@ Run provisioning/auth tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm 
 
 ## Known Limitations
 
-Trusting upstream MFA is future work.
+`resolveUser` needs the optional `transaction` hook on the auth Prisma binding (PostgreSQL only; the MongoDB client has no transaction API). Without it, it fails closed with `SSO_USER_RESOLUTION_REQUIRES_NATIVE_TRANSACTIONS` and creates no user or session. Nestrum does not install Better Auth's organization plugin, so organization membership provisioning and domain-based organization assignment are not active (`organizationId` is an opaque identifier). An SSO-only administrator cannot complete the password-based second factor and so cannot reach admin.
 
 ## Follow-Ups
 
@@ -64,4 +64,4 @@ Trusting upstream MFA is future work.
 
 ## Completion Notes
 
-Pending implementation and validation.
+Upstream MFA assurance is deliberately not trusted.

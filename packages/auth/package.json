@@ -26,12 +26,15 @@
     "dependencies": {
         "@better-auth/api-key": "1.7.6",
         "@better-auth/core": "1.7.6",
+        "@better-auth/sso": "1.7.6",
         "@nestrum/core": "workspace:*",
         "@nestrum/prisma": "workspace:*",
         "better-auth": "1.7.6",
         "zod": "4.6.5"
     },
     "devDependencies": {
-        "@nestrum/hono": "workspace:*"
+        "@nestrum/hono": "workspace:*",
+        "jose": "^6.2.12",
+        "samlify": "^2.13.1"
     }
 }

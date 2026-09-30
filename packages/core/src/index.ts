@@ -60,6 +60,36 @@ export type {
     AuthUserSummary,
     AuthUsers,
 } from './auth/auth.types.js';
+export type {
+    CreateSsoProviderInput,
+    SsoAction,
+    SsoActor,
+    SsoAttributeMapping,
+    SsoAuditEvent,
+    SsoAuditEventType,
+    SsoDiagnostic,
+    SsoDiagnosticCode,
+    SsoDiscoveryChoice,
+    SsoDiscoveryQuery,
+    SsoDiscoveryResult,
+    SsoDomainVerification,
+    SsoDomainVerificationInstructions,
+    SsoErrorCode,
+    SsoOidcAdvanced,
+    SsoOidcInput,
+    SsoOidcSummary,
+    SsoProtocol,
+    SsoProviderSummary,
+    SsoProviders,
+    SsoSamlAdvanced,
+    SsoSamlInput,
+    SsoSamlServiceProvider,
+    SsoSamlSummary,
+    SsoTestResult,
+    SsoTokenEndpointAuthentication,
+    UpdateSsoProviderInput,
+} from './auth/sso.js';
+export { SSO_ACTIONS, SSO_PROVIDER_ID_PATTERN, SsoError } from './auth/sso.js';
 export { AuthorizationError, PolicyError } from './authorization/authorization.errors.js';
 export type { PreparedAuthorization } from './authorization/authorization.js';
 export { AuthorizationEngine, allow, definePolicy, deny } from './authorization/authorization.js';

@@ -49,7 +49,7 @@ function expression(kind: string, field?: string, value?: unknown): Predicate {
     };
 }
 
-export function storage(database = 'identity') {
+export function storage(database = 'identity', options: { transactions?: boolean } = {}) {
     const records: Record<AuthModel, Row[]> = {
         User: [],
         Account: [],
@@ -57,6 +57,7 @@ export function storage(database = 'identity') {
         Verification: [],
         TwoFactor: [],
         ApiKey: [],
+        SsoProvider: [],
     };
     const operations: { model: AuthModel; operation: string }[] = [];
     const collection = (model: AuthModel, filters: Predicate[] = [], limit?: number, orders: Predicate[] = []) => {
@@ -114,6 +115,7 @@ export function storage(database = 'identity') {
                         (existing) =>
                             existing.id === row.id ||
                             (model === 'User' && existing.email === row.email) ||
+                            (model === 'SsoProvider' && existing.providerId === row.providerId) ||
                             (model === 'Session' && existing.token === row.token) ||
                             (model === 'Account' &&
                                 existing.providerId === row.providerId &&
@@ -152,5 +154,24 @@ export function storage(database = 'identity') {
         ReturnType<typeof collection>
     >;
 
-    return { binding: { database, collections }, records, operations };
+    // Snapshot-and-restore stands in for a database transaction: a throwing unit of work leaves no trace.
+    const transaction = async <R>(run: (inner: typeof collections) => Promise<R>): Promise<R> => {
+        const snapshot = Object.fromEntries(
+            Object.entries(records).map(([model, rows]) => [model, rows.map((row) => ({ ...row }))]),
+        ) as typeof records;
+        try {
+            return await run(collections);
+        } catch (error) {
+            for (const model of Object.keys(records) as AuthModel[]) {
+                records[model] = snapshot[model];
+            }
+            throw error;
+        }
+    };
+
+    return {
+        binding: { database, collections, ...(options.transactions ? { transaction } : {}) },
+        records,
+        operations,
+    };
 }

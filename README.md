@@ -146,7 +146,7 @@ const auth = defineAuth({
 });
 ```
 
-`auth.database` selects the configured store. Nestrum contributes prebaked, protected User, Session, Account, Verification, TwoFactor, and ApiKey contracts (Better Auth's `twoFactor`, `admin`, and `apiKey` plugins are enabled) and owns the Better Auth Prisma 8 adapter. The User model is not extensible. Users have a role (`user`, `staff`, `admin`); create the first administrator with `nestrum auth create-admin --email you@example.com` (password from `NESTRUM_ADMIN_PASSWORD` or a prompt, run against a previous `nestrum build`), then manage staff in the admin interface at `/admin/access`. `roleBasedAdminPolicies()` from `@nestrum/admin` provides the standard admin policies. Email/password, session, logout, and session retrieval are available under `/api/auth`. Valid sessions become ABAC subjects; absent, expired, or invalid sessions are anonymous. Domain profile data remains separate from the core auth user. See [Phase 10](docs/phases/phase-10-auth.md).
+`auth.database` selects the configured store. Nestrum contributes prebaked, protected User, Session, Account, Verification, TwoFactor, and ApiKey contracts (Better Auth's `twoFactor`, `admin`, and `apiKey` plugins are enabled; `SsoProvider` is added for enterprise SSO) and owns the Better Auth Prisma 8 adapter. The User model is not extensible. Users have a role (`user`, `staff`, `admin`); create the first administrator with `nestrum auth create-admin --email you@example.com` (password from `NESTRUM_ADMIN_PASSWORD` or a prompt, run against a previous `nestrum build`), then manage staff in the admin interface at `/admin/access`. `roleBasedAdminPolicies()` from `@nestrum/admin` provides the standard admin policies. Email/password, session, logout, and session retrieval are available under `/api/auth`. Valid sessions become ABAC subjects; absent, expired, or invalid sessions are anonymous. Domain profile data remains separate from the core auth user. See [Phase 10](docs/phases/phase-10-auth.md).
 
 ## API keys
 
@@ -188,6 +188,19 @@ await features.newDashboard.enabled({ subject, organizationId });
 ```
 
 Overrides persist in Nestrum's `FeatureOverride` model (migrate it like any contract) and resolve in this order: subject, organization, percentage rollout, environment, global, source default. Rollouts hash flag + stable subject key, so they are deterministic; anonymous actors roll out only through an application-provided `environment.featureKey`. Request scopes inject a `features` service bound to the trusted subject and environment (`scope.get('features')`, `context.var.nestrum.features`). Administrators manage overrides at `/admin/features` (admin 2FA plus the `features` ABAC actions `read` and `manage`) and can explain any decision. Flags marked `exposeToClient: true` are evaluated on the server and served as booleans at `/__nestrum/features`; the consumer UI reads them with `createFeatureClient()` from `@nestrum/web/client`. Tests use `withFeatureFlags(features, { newDashboard: true }, callback)`; `nestrum dev --feature newDashboard=true` overrides a flag for that process only. See [decision 0016](docs/decisions/0016-feature-flags.md).
+
+## Enterprise SSO
+
+OpenID Connect and SAML 2.0 sign-in run on Better Auth's official SSO plugin; Nestrum adds the provider registry, encrypted secrets, enable/disable, domain verification and a prebuilt admin. Applications write no protocol handlers or management pages.
+
+```ts
+defineAuth({
+    // ...
+    sso: { enabled: true }, // trustedIdpOrigins, domainVerification, provisioning, saml.allowIdpInitiated, onAudit
+});
+```
+
+Administrators manage providers at `/admin/auth/sso` (admin 2FA plus the `sso` ABAC actions `read`, `create`, `update`, `delete`, `enable`, `disable` and `test`). OIDC needs an issuer, client ID and secret; SAML takes IdP metadata XML and shows the ACS URL and entity ID to enter at the IdP. Client secrets and private keys are sealed at rest and never shown again; identity-provider URLs must be public HTTPS unless listed in `trustedIdpOrigins`. Users sign in with `POST /api/auth/sign-in/sso` (by `email`, `domain`, `providerId` or `organizationSlug`; several matches return `409` with a choice list). An SSO session is tagged `authMethod: 'sso'`, its ABAC subject carries `authMethod` and `ssoProviderId`, and it never satisfies admin 2FA; identity-provider claims are never roles. Existing applications migrate the `SsoProvider` table and two `Session` columns. See [decision 0017](docs/decisions/0017-enterprise-sso.md).
 
 ## Private admin API
 

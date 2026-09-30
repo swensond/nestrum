@@ -11,6 +11,7 @@ let {
     canManageUsers = false,
     canManageApiKeys = false,
     canViewFeatures = false,
+    canManageSso = false,
     onretry,
     ontwofactor,
     children,
@@ -24,6 +25,7 @@ let {
     canManageApiKeys?: boolean;
     /** Show the feature-flags link; the API still authorizes every request. */
     canViewFeatures?: boolean;
+    canManageSso?: boolean;
     onretry?: () => void | Promise<void>;
     /** Called when sign-in succeeded but a second factor must be verified before a session exists. */
     ontwofactor?: () => void | Promise<void>;
@@ -100,6 +102,9 @@ async function authenticate(path: string, body: object) {
             {/if}
             {#if canManageApiKeys}
                 <a href="/admin/api-keys" aria-current={activePath.startsWith('/admin/api-keys') ? 'page' : undefined}>API keys</a>
+            {/if}
+            {#if canManageSso}
+                <a href="/admin/auth/sso" aria-current={activePath.startsWith('/admin/auth/sso') ? 'page' : undefined}>Single sign-on</a>
             {/if}
             {#if canViewFeatures}
                 <a href="/admin/features" aria-current={activePath.startsWith('/admin/features') ? 'page' : undefined}>Feature flags</a>

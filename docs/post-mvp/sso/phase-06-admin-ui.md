@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -26,29 +26,29 @@ Depends on [PM6.5](phase-05-admin-backend.md). Follows the existing admin-ui ser
 
 ## Implementation
 
-Planned SvelteKit routes, server modules, shell navigation, and component tests.
+`packages/admin-ui` adds `/admin/auth/sso` (list with name, ID, protocol, organization, domains, status, domain verification, last validation and last sign-in, plus Edit, Test, Enable/Disable and Delete), `/admin/auth/sso/new` (OIDC or SAML form chosen by `?type=`, advanced sections in native `<details>`) and `/admin/auth/sso/[providerId]` (settings, the redirect URI or SAML service-provider values, test panel, domain-verification DNS record, typed-ID delete confirmation). A server module (`sso.server.ts`) validates every payload with zod, allowlists form fields, maps failures to fixed safe messages, and never echoes response bodies. Controls appear only when the capability is granted, secrets render only as "Configured — leave blank to keep", and the test panel states that a passing test is not a sign-in. The shell adds a "Single sign-on" link for subjects who can read. `/admin/auth/sso*` is an ordinary page, not one of the challenge pages under `/admin/auth`.
 
 ## Public API
 
-Planned admin routes and layout capability flag.
+`SsoAdminClient`, page data loaders and form actions, layout `canManageSso`.
 
 ## Files / Packages Changed
 
-Planned `packages/admin-ui`, tests, architecture, initiative index, and this record.
+`packages/admin-ui/src/lib/{sso.server.ts,return-to.ts,AdminShell.svelte}`, `packages/admin-ui/src/routes/auth/sso/**`, layout, tests, and this record.
 
 ## Tests
 
-Cover list, both forms, secret non-redisplay, unchanged-secret edit, SP value rendering, test panel, enable/disable, delete confirmation, permissions, and `svelte-check-native`.
+`packages/admin-ui/tests/sso.test.ts`: client credentialing and payload validation, fixed messages, loaders for off/denied/ready, exact request bodies (including the write-only secret and omitted blank secret), forged-field rejection, toggle/test/verify/delete, typed delete confirmation, and page rendering with and without capabilities. `svelte-check-native` and the prebuilt-admin verification pass. `apps/example/tooling/sso-admin-browser.mjs` drives the lifecycle in Chromium.
 
 ## Acceptance Criteria
 
-- [ ] OIDC can be fully configured in admin.
-- [ ] SAML can be fully configured in admin.
-- [ ] Application needs no custom Svelte.
-- [ ] Secrets never redisplayed.
-- [ ] Test action available.
-- [ ] `svelte-check-native` passes.
-- [ ] Docs updated.
+- [x] OIDC can be fully configured in admin.
+- [x] SAML can be fully configured in admin.
+- [x] Application needs no custom Svelte.
+- [x] Secrets never redisplayed.
+- [x] Test action available.
+- [x] `svelte-check-native` passes.
+- [x] Docs updated.
 
 ## Validation
 
@@ -56,7 +56,7 @@ Run admin-ui tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, `
 
 ## Known Limitations
 
-Playwright lifecycle coverage lands in PM6.8.
+Forms use native submission, so pages reload on each action. The organization field is a free-text identifier rather than a selector because Nestrum has no organization registry.
 
 ## Follow-Ups
 
@@ -64,4 +64,4 @@ Playwright lifecycle coverage lands in PM6.8.
 
 ## Completion Notes
 
-Pending implementation and validation.
+The application writes no SSO pages.

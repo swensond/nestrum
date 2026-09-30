@@ -23,6 +23,7 @@ import { registerFeatureRoutes } from '#admin/feature-routes';
 import type { AdminResourceMetadata } from '#admin/metadata';
 import { resourceMetadata } from '#admin/metadata';
 import type { AdminEntry, AdminOptions } from '#admin/registry';
+import { registerSsoRoutes } from '#admin/sso-routes';
 
 export const ADMIN_BASE_PATH = '/__admin';
 type Env = { Bindings: { readonly requestContext: AdminRequestContext }; Variables: { access: AdminAccess } };
@@ -105,6 +106,7 @@ export function createAdminRouter(
     registerAccessRoutes(router, application);
     registerApiKeyRoutes(router, application);
     registerFeatureRoutes(router, application);
+    registerSsoRoutes(router, application);
 
     function entry(slug: string): AdminEntry {
         const found = bySlug.get(slug);
