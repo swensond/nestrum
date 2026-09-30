@@ -1,0 +1,28 @@
+{
+    "name": "@nestrum/runtime-node",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "exports": {
+        ".": {
+            "nestrum-source": "./src/index.ts",
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc -p tsconfig.json"
+    },
+    "dependencies": {
+        "@hono/node-server": "1.19.9",
+        "@nestrum/runtime": "workspace:*"
+    },
+    "devDependencies": {
+        "@nestrum/core": "workspace:*",
+        "@nestrum/hono": "workspace:*",
+        "hono": "4.13.11"
+    }
+}

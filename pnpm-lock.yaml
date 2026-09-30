@@ -359,6 +359,25 @@ importers:
 
   packages/runtime: {}
 
+  packages/runtime-node:
+    dependencies:
+      '@hono/node-server':
+        specifier: 1.19.9
+        version: 1.19.9(hono@4.13.11)
+      '@nestrum/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+    devDependencies:
+      '@nestrum/core':
+        specifier: workspace:*
+        version: link:../core
+      '@nestrum/hono':
+        specifier: workspace:*
+        version: link:../hono
+      hono:
+        specifier: 4.13.11
+        version: 4.13.11
+
   packages/zod:
     dependencies:
       '@nestrum/prisma':
@@ -4237,6 +4256,10 @@ snapshots:
   '@hono/node-server@1.19.9(hono@4.11.4)':
     dependencies:
       hono: 4.11.4
+
+  '@hono/node-server@1.19.9(hono@4.13.11)':
+    dependencies:
+      hono: 4.13.11
 
   '@hono/zod-openapi@1.6.3(hono@4.13.11)(zod@4.6.5)':
     dependencies:
