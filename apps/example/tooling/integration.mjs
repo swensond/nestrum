@@ -87,6 +87,27 @@ try {
             maxBuffer: 4 * 1024 * 1024,
         },
     );
+    // The first administrator comes from the CLI (against the build), never from signup.
+    await execute(
+        process.execPath,
+        [
+            resolve(ROOT_DIR, '../../packages/cli/dist/bin.js'),
+            'auth',
+            'create-admin',
+            '--email',
+            'staff@example.test',
+            '--name',
+            'Staff',
+            '--config',
+            'nestrum.config.mjs',
+        ],
+        {
+            env: { ...env, NESTRUM_ADMIN_PASSWORD: 'Integration-password-2026!' },
+            cwd: ROOT_DIR,
+            timeout: 120_000,
+            maxBuffer: 4 * 1024 * 1024,
+        },
+    );
     server = await runServe({ cwd: ROOT_DIR, config: 'nestrum.config.mjs', flags: { port }, env: process.env });
     // runServe loaded the built module; importing the same file yields the same instance and its exported handles.
     const { example } = await import(pathToFileURL(join(ROOT_DIR, '.nestrum/server/index.mjs')).href);
@@ -133,22 +154,22 @@ try {
         return data;
     };
     const credentials = (email) => ({ name: email.split('@')[0], email, password: 'Integration-password-2026!' });
-    const staff = await json(
-        await request('/api/auth/sign-up/email', {
-            method: 'POST',
-            body: { ...credentials('staff@example.test'), staff: true },
-        }),
-        200,
+    // Public signup can never assign a role, and administrators come only from the CLI.
+    assert.equal(
+        (
+            await request('/api/auth/sign-up/email', {
+                method: 'POST',
+                body: { ...credentials('sneaky@example.test'), role: 'admin' },
+            })
+        ).status,
+        400,
     );
-    assert.equal(staff.user.staff, undefined, 'Public signup cannot set staff.');
-    assert.equal(staff.user.twoFactorEnabled, false);
-    // A trusted operator lists staff user ids (STAFF_USER_IDS); signup itself grants nothing.
-    example.staffUserIds.add(staff.user.id);
     const signin = await request('/api/auth/sign-in/email', {
         method: 'POST',
         body: credentials('staff@example.test'),
     });
-    await json(signin, 200);
+    const staff = await json(signin, 200);
+    assert.equal(staff.user.role, 'admin');
     let cookie = signin.headers
         .getSetCookie()
         .map((value) => value.split(';')[0])
@@ -254,6 +275,59 @@ try {
         'A backup code works once.',
     );
     console.log('Real admin 2FA enrollment, challenge, recovery and redirects passed.');
+    // Staff management: an administrator elevates a user to staff in the admin API; nothing is configured by id.
+    const asJson = (path, sessionCookie, method = 'GET', body) =>
+        request(path, { method, cookie: sessionCookie, ...(body === undefined ? {} : { body }) });
+    const elevated = await json(
+        await request('/api/auth/sign-up/email', { method: 'POST', body: credentials('elevate@example.test') }),
+        200,
+    );
+    assert.deepEqual(await json(await asJson('/__admin/access/capabilities', cookie), 200), { users: true });
+    const found = await json(await asJson('/__admin/access/users?email=elevate%40example.test', cookie), 200);
+    assert.equal(found.users[0].id, elevated.user.id);
+    assert.equal(found.users[0].role, 'user');
+    assert.equal(
+        (await asJson(`/__admin/access/users/${elevated.user.id}/role`, cookie, 'POST', { role: 'admin' })).status,
+        400,
+        'The interface cannot create administrators.',
+    );
+    await json(await asJson(`/__admin/access/users/${elevated.user.id}/role`, cookie, 'POST', { role: 'staff' }), 200);
+    const elevatedLogin = await request('/api/auth/sign-in/email', {
+        method: 'POST',
+        body: credentials('elevate@example.test'),
+    });
+    await json(elevatedLogin, 200);
+    let elevatedCookie = cookieFrom(elevatedLogin);
+    assert.equal((await asJson('/__admin/resources', elevatedCookie)).status, 403, 'New staff still need 2FA.');
+    const elevatedEnrollment = await json(
+        await request('/api/auth/two-factor/enable', {
+            method: 'POST',
+            cookie: elevatedCookie,
+            body: { password: credentials('elevate@example.test').password },
+        }),
+        200,
+    );
+    const elevatedActivation = await request('/api/auth/two-factor/verify-totp', {
+        method: 'POST',
+        cookie: elevatedCookie,
+        body: { code: totpCode(totpSecretFromUri(elevatedEnrollment.totpURI), totpStep(Date.now())) },
+    });
+    await json(elevatedActivation, 200);
+    elevatedCookie = cookieFrom(elevatedActivation);
+    assert.equal((await asJson('/__admin/resources', elevatedCookie)).status, 200);
+    assert.deepEqual(await json(await asJson('/__admin/access/capabilities', elevatedCookie), 200), { users: false });
+    assert.equal((await asJson('/__admin/access/users', elevatedCookie)).status, 403, 'Staff cannot manage users.');
+    assert.equal(
+        (await navigate('/admin/access', elevatedCookie)).status,
+        200,
+        'The page renders and reports the missing permission.',
+    );
+    const usersPage = await (await navigate('/admin/access', cookie)).text();
+    assert.ok(usersPage.includes('elevate@example.test'));
+    assert.ok(usersPage.includes('Remove staff access'));
+    await json(await asJson(`/__admin/access/users/${elevated.user.id}/role`, cookie, 'POST', { role: 'user' }), 200);
+    assert.equal((await asJson('/__admin/resources', elevatedCookie)).status, 403, 'Demotion revokes admin access.');
+    console.log('Real CLI administrator creation and staff elevation through the admin API passed.');
     const metadata = await json(await request('/__admin/resources', { cookie }), 200);
     assert.deepEqual(
         metadata.map((resource) => resource.identity),
@@ -326,7 +400,7 @@ try {
     );
     const project = example.application.resources.get('default.Project');
     const article = example.application.resources.get('documents.Article');
-    const subject = { id: staff.user.id, staff: true };
+    const subject = { id: staff.user.id, role: 'admin' };
     assert.equal(await project.managers.active.authorizedFor(subject, 'read').count(), 1);
     assert.equal(await article.managers.published.authorizedFor(subject, 'read').count(), 1);
     assert.equal(

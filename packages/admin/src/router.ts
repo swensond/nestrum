@@ -17,6 +17,7 @@ import { cors } from 'hono/cors';
 import { z } from 'zod';
 import type { AdminAccess } from '#admin/access';
 import { assertSameOrigin, authorizeAccess, permits } from '#admin/access';
+import { registerAccessRoutes } from '#admin/access-routes';
 import type { AdminResourceMetadata } from '#admin/metadata';
 import { resourceMetadata } from '#admin/metadata';
 import type { AdminEntry, AdminOptions } from '#admin/registry';
@@ -99,6 +100,7 @@ export function createAdminRouter(
 
         await next();
     });
+    registerAccessRoutes(router, application);
 
     function entry(slug: string): AdminEntry {
         const found = bySlug.get(slug);

@@ -111,6 +111,15 @@ function fixture(
         initialize: async () => ({
             basePath: '/api/auth',
             handle: async () => new Response(null, { status: 404 }),
+            users: {
+                list: async () => ({ users: [], total: 0, limit: 25, offset: 0 }),
+                setRole: async () => {
+                    throw new Error('unused');
+                },
+            },
+            createAdministrator: async () => {
+                throw new Error('unused');
+            },
             getSession,
             resolveSubject: async (request) =>
                 (await getSession(request)) ? { id: 'alice', anonymous: false } : { anonymous: true },

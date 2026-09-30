@@ -1,5 +1,6 @@
 import type {
     Application,
+    AuthAdministratorInput,
     Authentication,
     AuthenticationDefinition,
     AuthSession,
@@ -8,10 +9,12 @@ import type {
 import { AppError, defineApp, modelIdentity } from '@nestrum/core';
 import { betterAuth } from 'better-auth';
 import type { DBAdapterInstance } from 'better-auth/adapters';
-import { twoFactor } from 'better-auth/plugins';
+import { admin, twoFactor } from 'better-auth/plugins';
 import type { AuthPrismaBinding } from '#auth/adapter/prisma-adapter';
 import { createPrismaAuthAdapter } from '#auth/adapter/prisma-adapter';
 import { AUTH_MODELS, authContract } from '#auth/contracts/contracts';
+import { AUTH_ROLE_DEFINITIONS } from '#auth/roles/roles';
+import { createAdministrator, createUserManagement } from '#auth/roles/users';
 import type { SubjectMapper } from '#auth/session/subject-factory';
 import { SubjectFactory } from '#auth/session/subject-factory';
 
@@ -85,6 +88,11 @@ export function createAuthInstance(options: AuthInstanceOptions) {
         emailAndPassword: { enabled: true },
         user: { modelName: 'User' },
         plugins: [
+            admin({
+                roles: AUTH_ROLE_DEFINITIONS,
+                adminRoles: ['admin'],
+                defaultRole: 'user',
+            }),
             twoFactor({
                 issuer: options.issuer,
                 twoFactorTable: 'TwoFactor',
@@ -176,6 +184,8 @@ export function defineAuth(config: AuthConfig): AuthenticationDefinition {
             };
             return Object.freeze({
                 basePath: '/api/auth' as const,
+                users: createUserManagement(instance),
+                createAdministrator: (input: AuthAdministratorInput) => createAdministrator(instance, input),
                 async handle(request: Request): Promise<Response> {
                     const path = new URL(request.url).pathname;
                     const requestOrigin = request.headers.get('origin');

@@ -1,4 +1,5 @@
 import { redirect } from '@sveltejs/kit';
+import { AccessClient } from '$lib/access.server.js';
 import { loadAdminState } from '$lib/metadata.js';
 import { isAuthPath, twoFactorHref } from '$lib/return-to.js';
 import type { LayoutServerLoad } from './$types';
@@ -11,5 +12,7 @@ export const load = (async ({ fetch, depends, url }) => {
         redirect(303, twoFactorHref(admin.reason, url));
     }
 
-    return { admin, path: url.pathname };
+    const canManageUsers = admin.status === 'ready' && (await new AccessClient(fetch).canManage());
+
+    return { admin, path: url.pathname, canManageUsers };
 }) satisfies LayoutServerLoad;

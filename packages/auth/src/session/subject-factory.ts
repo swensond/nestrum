@@ -1,6 +1,7 @@
 import type { AuthSession, Subject } from '@nestrum/core';
 import { AppError, snapshotQueryValue } from '@nestrum/core';
 import { z } from 'zod';
+import { effectiveRole } from '#auth/roles/roles';
 
 const SESSION_SCHEMA = z.object({
     user: z.object({ id: z.string().min(1) }).passthrough(),
@@ -10,7 +11,13 @@ const SESSION_SCHEMA = z.object({
 export type SubjectMapper = (session: AuthSession) => Subject | Promise<Subject>;
 
 export class SubjectFactory {
-    constructor(private readonly map: SubjectMapper = ({ user }) => ({ id: user.id, anonymous: false })) {}
+    constructor(
+        private readonly map: SubjectMapper = ({ user }) => ({
+            id: user.id,
+            anonymous: false,
+            role: effectiveRole(user.role),
+        }),
+    ) {}
 
     async create(value: AuthSession | null): Promise<Subject> {
         if (value === null) {

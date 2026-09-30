@@ -165,6 +165,8 @@ Better Auth's `twoFactor` plugin provides the factor: TOTP, one-time backup code
 
 The admin boundary is same-origin policy → Better Auth session → `admin.access` ABAC → assurance → resource/action ABAC. `admin.access` is decided before assurance is disclosed so unauthorized users learn nothing about factor state. Admin API requests without assurance receive `403 ADMIN_2FA_REQUIRED` (`reason`: `setup-required` | `challenge-required`), never an HTML redirect. Return URLs are restricted to same-origin `/admin` paths.
 
+Roles use Better Auth's `admin` plugin (`user`, `staff`, `admin`; see [decision 0014](decisions/0014-roles-and-staff-management.md)). Administrators are created with `nestrum auth create-admin`; they promote and demote staff at `/admin/access` (`/__admin/access/*`, gated by the `admin.users` ABAC action on top of the full admin boundary). `roleBasedAdminPolicies()` supplies the standard `admin.access`/`admin.users` policies, and Better Auth's `/admin/*` endpoints are never forwarded over HTTP.
+
 The consuming application writes no MFA middleware or pages. Framework routes are `/admin/auth/2fa/setup`, `/admin/auth/2fa`, and `/admin/auth/recovery`; they call Better Auth's `/api/auth/two-factor/*` endpoints from the browser (JavaScript required). Only `enable`, `disable`, `verify-totp`, `verify-backup-code`, and `generate-backup-codes` are forwarded to the plugin. Passkeys/WebAuthn are future factors.
 
 ## Post-MVP first-class API keys

@@ -35,6 +35,7 @@ All of these are always enforced, in this order: authentication, `admin.access` 
 - **Assurance is derived from the session.** The plugin creates no session for an enrolled user until a code is verified, so admin checks `user.twoFactorEnabled`, that the session is not older than the user's last update (so pre-enrollment sessions never count), and that the session is younger than `assuranceTtlSeconds`. There is no separate assurance table, and re-verification means signing in again rather than re-challenging a live session.
 - **Prebaked auth contract.** `authContract(provider)` is a fixed source per provider, checked against Better Auth's schema by a test. `defineAuth({ extend })`, `field`, and `AuthField` were removed.
 - **No private 2FA routes**, and the setup, challenge, and recovery pages require JavaScript.
+- **Roles and staff management** (follow-up, [decision 0014](../../decisions/0014-roles-and-staff-management.md)): administrators come from `nestrum auth create-admin` and must enroll 2FA at first sign-in; they manage staff at `/admin/access`. Changing a user's role updates the user, so that user's existing sessions must sign in again.
 
 ## 1. Default security rule
 

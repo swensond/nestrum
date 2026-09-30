@@ -8,6 +8,7 @@ let {
     state: shellState,
     activePath = '/admin',
     loading = false,
+    canManageUsers = false,
     onretry,
     ontwofactor,
     children,
@@ -15,6 +16,8 @@ let {
     state: AdminShellState;
     activePath?: string;
     loading?: boolean;
+    /** Show the user-access link; the API still authorizes every request. */
+    canManageUsers?: boolean;
     onretry?: () => void | Promise<void>;
     /** Called when sign-in succeeded but a second factor must be verified before a session exists. */
     ontwofactor?: () => void | Promise<void>;
@@ -86,6 +89,9 @@ async function authenticate(path: string, body: object) {
                 {@const href = resourceHref(resource)}
                 <a {href} aria-current={activePath === href || activePath.startsWith(`${href}/`) ? 'page' : undefined}>{resource.label}</a>
             {/each}
+            {#if canManageUsers}
+                <a href="/admin/access" aria-current={activePath.startsWith('/admin/access') ? 'page' : undefined}>User access</a>
+            {/if}
         </nav>
     {/if}
     <main id="admin-content" aria-busy={loading || pending} tabindex="-1">

@@ -10,10 +10,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { defineAdmin } from '@nestrum/admin';
+import { defineAdmin, roleBasedAdminPolicies } from '@nestrum/admin';
 import { createAdminShell } from '@nestrum/admin-ui/node';
 import { defineAuth, totpCode, totpStep } from '@nestrum/auth';
-import { allow, defineApplication } from '@nestrum/core';
+import { defineApplication } from '@nestrum/core';
 import postgres from '@nestrum/example-postgres';
 import { createHonoRuntime } from '@nestrum/hono';
 import { nodeRuntime } from '../../../packages/runtime-node/dist/index.js';
@@ -36,7 +36,7 @@ const application = defineApplication({
         prisma: () => ({ database: 'identity', collections: client.orm.public }),
     }),
     admin: defineAdmin({ security: { twoFactor: { assuranceTtlSeconds: 60 } } }),
-    policies: [{ resource: 'admin.access', actions: { access: { authorize: () => allow() } } }],
+    policies: roleBasedAdminPolicies(),
     databaseLifecycle: {
         default: { connect: async () => {}, disconnect: async () => {} },
         identity: { connect: async () => client.connect(), disconnect: async () => client.close() },
@@ -52,12 +52,15 @@ const runtime = createHonoRuntime({
 await runtime.start();
 handle = await nodeRuntime.serve(runtime, { host: '127.0.0.1', port: 3199 });
 const email = `e2e-${Date.now()}@example.test`;
-const up = await fetch(`${BASE}/api/auth/sign-up/email`, {
+// The administrator is created the way the CLI creates one; ordinary users sign up publicly.
+await application.auth.createAdministrator({ email, name: 'E2E Admin', password: PASSWORD });
+const otherEmail = `other-${Date.now()}@example.test`;
+const other = await fetch(`${BASE}/api/auth/sign-up/email`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: BASE },
-    body: JSON.stringify({ name: 'E2E', email, password: PASSWORD }),
+    body: JSON.stringify({ name: 'Other', email: otherEmail, password: PASSWORD }),
 });
-assert.equal(up.status, 200);
+assert.equal(other.status, 200);
 
 const browser = await chromium.launch({
     ...(process.env.PLAYWRIGHT_CHROMIUM ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM } : {}),
@@ -169,6 +172,20 @@ try {
     await p2.getByRole('button', { name: 'Verify' }).click();
     await p2.waitForURL(`${BASE}/admin/intended`);
     console.log('browser session-limit re-challenge ok');
+
+    // 6. The administrator elevates a user to staff and removes it again, with native forms.
+    await p2.goto(`${BASE}/admin`);
+    await p2.getByRole('link', { name: 'User access' }).click();
+    await p2.waitForURL(`${BASE}/admin/access`);
+    await p2.getByLabel('Find by exact email').fill(otherEmail);
+    await p2.getByRole('button', { name: 'Find' }).click();
+    await p2.getByRole('cell', { name: otherEmail }).waitFor();
+    await p2.getByRole('button', { name: 'Make staff' }).click();
+    await p2.getByRole('status').getByText('User is now staff.').waitFor();
+    await p2.getByRole('button', { name: 'Remove staff access' }).click();
+    await p2.getByRole('status').getByText('Staff access removed.').waitFor();
+    await p2.getByRole('button', { name: 'Make staff' }).waitFor();
+    console.log('browser staff elevation ok');
     console.log('ALL BROWSER CHECKS PASSED');
 } finally {
     await browser.close();

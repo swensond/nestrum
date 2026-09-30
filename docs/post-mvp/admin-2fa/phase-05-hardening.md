@@ -39,7 +39,7 @@ Final configuration: `admin.security.twoFactor.{required, assuranceTtlSeconds}` 
 
 ## Files / Packages Changed
 
-`packages/cli` (`adminSecurityDiagnostics`), `apps/example` (staff by user-id list, integration runner, browser script), earlier-phase code, [architecture](../../architecture.md), [post-MVP roadmap](../../post-mvp.md), and all PM2 records.
+`packages/cli` (`adminSecurityDiagnostics`), `apps/example` (role-based staff via the admin interface, integration runner, browser script), earlier-phase code, [architecture](../../architecture.md), [post-MVP roadmap](../../post-mvp.md), and all PM2 records.
 
 ## Tests
 

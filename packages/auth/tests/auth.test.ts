@@ -96,6 +96,7 @@ describe('Framework-owned Better Auth', () => {
         expect(await (await runtime.fetch(request('/private', undefined, cookie))).json()).toEqual({
             id: registered.user.id,
             anonymous: false,
+            role: 'user',
         });
         const spoofed = await runtime.fetch(
             new Request(`${BASE_URL}/private`, {

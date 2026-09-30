@@ -1,4 +1,8 @@
 export { CLI_HELP, parseCliArguments } from './arguments.js';
+export type { AuthArguments } from './auth-arguments.js';
+export { AUTH_HELP, parseAuthArguments } from './auth-arguments.js';
+export type { AdministratorResult, AuthCommandOptions } from './auth-command.js';
+export { createAdministratorFor, runAuthCommand } from './auth-command.js';
 export type { BuildOptions, BuildResult } from './build.js';
 export { bundleConfig, runBuild } from './build.js';
 export { CliError } from './cli.errors.js';

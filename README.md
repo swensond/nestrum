@@ -146,7 +146,7 @@ const auth = defineAuth({
 });
 ```
 
-`auth.database` selects the configured store. Nestrum contributes prebaked, protected User, Session, Account, Verification, and TwoFactor contracts (Better Auth's `twoFactor` plugin is enabled) and owns the Better Auth Prisma 8 adapter. The User model is not extensible. Email/password, session, logout, and session retrieval are available under `/api/auth`. Valid sessions become ABAC subjects; absent, expired, or invalid sessions are anonymous. Domain profile data remains separate from the core auth user. See [Phase 10](docs/phases/phase-10-auth.md).
+`auth.database` selects the configured store. Nestrum contributes prebaked, protected User, Session, Account, Verification, and TwoFactor contracts (Better Auth's `twoFactor` plugin is enabled) and owns the Better Auth Prisma 8 adapter. The User model is not extensible. Users have a role (`user`, `staff`, `admin`); create the first administrator with `nestrum auth create-admin --email you@example.com` (password from `NESTRUM_ADMIN_PASSWORD` or a prompt, run against a previous `nestrum build`), then manage staff in the admin interface at `/admin/access`. `roleBasedAdminPolicies()` from `@nestrum/admin` provides the standard admin policies. Email/password, session, logout, and session retrieval are available under `/api/auth`. Valid sessions become ABAC subjects; absent, expired, or invalid sessions are anonymous. Domain profile data remains separate from the core auth user. See [Phase 10](docs/phases/phase-10-auth.md).
 
 ## Private admin API
 

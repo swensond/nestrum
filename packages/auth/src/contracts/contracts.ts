@@ -15,6 +15,10 @@ const POSTGRESQL = `model User {
     createdAt TimestamptzString
     updatedAt TimestamptzString
     twoFactorEnabled Boolean?
+    role String?
+    banned Boolean?
+    banReason String?
+    banExpires TimestamptzString?
 }
 model Session {
     id String @id
@@ -25,6 +29,7 @@ model Session {
     updatedAt TimestamptzString
     ipAddress String?
     userAgent String?
+    impersonatedBy String?
     user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 model Account {
@@ -73,6 +78,10 @@ const MONGODB = `model User {
     createdAt Date
     updatedAt Date
     twoFactorEnabled Bool?
+    role String?
+    banned Bool?
+    banReason String?
+    banExpires Date?
 }
 model Session {
     id String @id @map("_id")
@@ -83,6 +92,7 @@ model Session {
     updatedAt Date
     ipAddress String?
     userAgent String?
+    impersonatedBy String?
 }
 model Account {
     id String @id @map("_id")
