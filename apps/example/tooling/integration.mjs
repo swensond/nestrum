@@ -440,6 +440,8 @@ try {
     assert.equal((await request('/api/projects', { apiKey: rotatedKey.secret })).status, 401);
     assert.equal((await keyRequest('/__admin/api-keys', { origin: 'https://foreign.invalid' })).status, 403);
     assert.ok((await (await navigate('/admin/api-keys', cookie)).text()).includes('API keys'));
+    // Remove the record created through the key so later counts only see the suite's own data.
+    assert.equal((await request('/api/projects/via-key', { method: 'DELETE', cookie })).status, 204);
     console.log('Real API-key creation, one-time reveal, scoped ABAC resource access, rotation and revocation passed.');
     assert.equal(
         (await request('/api/projects', { method: 'POST', cookie, body: { ...projectData, id: 'invalid', name: 'x' } }))
