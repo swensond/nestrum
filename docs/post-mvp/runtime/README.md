@@ -2,12 +2,12 @@
 
 ## Status and navigation
 
-This is the first post-MVP initiative. PM1.0 records the runtime contract; PM1.1–PM1.6 are not started. Commands, packages, configuration APIs, and build artifacts described below are planned unless a phase explicitly records implementation evidence. This initiative does not close the remaining MVP gate for atomic object-policy writes.
+This is the first post-MVP initiative. PM1.0 records the runtime contract; PM1.1 is complete; PM1.2–PM1.6 are not started. Commands, packages, configuration APIs, and build artifacts described below are planned unless a phase explicitly records implementation evidence. This initiative does not close the remaining MVP gate for atomic object-policy writes.
 
 | Phase | Goal | Primary surface | Status |
 | --- | --- | --- | --- |
 | [PM1.0 — Runtime documentation and contract](phase-00-runtime-contract.md) | Document the self-serving runtime before implementation | docs/core contracts | Complete |
-| [PM1.1 — Runtime adapter abstraction](phase-01-runtime-adapter.md) | Define portable server contracts | `@nestrum/runtime` | Not Started |
+| [PM1.1 — Runtime adapter abstraction](phase-01-runtime-adapter.md) | Define portable server contracts | `@nestrum/runtime` | Complete |
 | [PM1.2 — Node production runtime](phase-02-node-runtime.md) | Implement the first HTTP adapter | `@nestrum/runtime-node` | Not Started |
 | [PM1.3 — Build](phase-03-build.md) | Produce validated production artifacts | CLI/build pipeline | Not Started |
 | [PM1.4 — Serve](phase-04-serve.md) | Start a previously built application | production startup | Not Started |
@@ -97,7 +97,7 @@ export interface RuntimeAdapter {
 }
 ```
 
-This is a proposed contract shape, not an existing exported API. PM1.1 must resolve the exact application type and its ready Fetch interface against current core/Hono contracts.
+This is a proposed contract shape, not an existing exported API. PM1.1 resolved the application type as a Fetch-handler-only `ServableApplication` (see [PM1.1](phase-01-runtime-adapter.md)).
 
 Initial packages are `@nestrum/runtime` and `@nestrum/runtime-node`. Possible future adapters are `@nestrum/runtime-bun`, `@nestrum/runtime-deno`, and `@nestrum/runtime-cloudflare`. Only Node needs official support initially. Prisma and database driver compatibility remain portability constraints.
 

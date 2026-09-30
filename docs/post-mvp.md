@@ -68,12 +68,12 @@ PM2.0 documentation is complete. PM2.1–PM2.5 are Not Started; admin 2FA is not
 
 The [self-serving runtime initiative](post-mvp/runtime/README.md) is the first planned post-MVP initiative. Users define `nestrum.config.ts` and explicit apps; Nestrum owns development, production builds, HTTP startup, admin serving, and shutdown through `nestrum dev`, `nestrum build`, and `nestrum serve`.
 
-PM1.0 documentation is complete. PM1.1–PM1.6 are Not Started; the commands and proposed configuration/runtime APIs are not shipped by this plan. The remaining MVP atomic object-policy write gate stays open independently.
+PM1.0 documentation and PM1.1 (`@nestrum/runtime` adapter contracts) are complete. PM1.2–PM1.6 are Not Started; the commands and proposed configuration APIs are not shipped by this plan. The remaining MVP atomic object-policy write gate stays open independently.
 
 | Phase | Goal | Status |
 | --- | --- | --- |
 | [PM1.0](post-mvp/runtime/phase-00-runtime-contract.md) | Runtime documentation and contract | Complete |
-| [PM1.1](post-mvp/runtime/phase-01-runtime-adapter.md) | Portable `@nestrum/runtime` adapter contracts | Not Started |
+| [PM1.1](post-mvp/runtime/phase-01-runtime-adapter.md) | Portable `@nestrum/runtime` adapter contracts | Complete |
 | [PM1.2](post-mvp/runtime/phase-02-node-runtime.md) | Node HTTP adapter in `@nestrum/runtime-node` | Not Started |
 | [PM1.3](post-mvp/runtime/phase-03-build.md) | Validated production build and manifest | Not Started |
 | [PM1.4](post-mvp/runtime/phase-04-serve.md) | Production startup from a prior build | Not Started |
