@@ -2,7 +2,7 @@
 
 ## Status and navigation
 
-This is the second post-MVP initiative. PM2.0–PM2.5 are Complete: admin 2FA is required by default for the admin UI and private admin API, using Better Auth's `twoFactor` plugin for TOTP and backup codes, with framework-owned setup/challenge/recovery pages. The Docker integration run of the example (which now performs a real 2FA flow) belongs to the project owner and was not executed during implementation; everything else is recorded in the phase documents. This initiative does not change the remaining MVP gate for atomic object-policy writes.
+This is the second post-MVP initiative. PM2.0–PM2.5 are Complete: admin 2FA is required by default for the admin UI and private admin API, using Better Auth's `twoFactor` plugin for TOTP and backup codes, with framework-owned setup/challenge/recovery pages. The project owner ran the Docker + MongoDB integration suite (`pnpm test:integration`), including the real 2FA and staff-elevation flows, and it passes; everything else is recorded in the phase documents. This initiative does not change the remaining MVP gate for atomic object-policy writes.
 
 | Phase | Goal | Primary surface | Status |
 | --- | --- | --- | --- |
