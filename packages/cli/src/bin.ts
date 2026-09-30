@@ -10,6 +10,20 @@ import { parseRuntimeArguments, RUNTIME_COMMANDS, RUNTIME_HELP } from './runtime
 import { runServe } from './serve.js';
 import { installShutdownSignals } from './signals.js';
 
+/** First SIGINT/SIGTERM shuts down gracefully; a repeated signal, or a failed shutdown, exits immediately. */
+function installGracefulSignals(target: { shutdown(): Promise<void> }): void {
+    installShutdownSignals(target, {
+        onError: (error) => {
+            process.stderr.write(`Shutdown failed: ${error instanceof Error ? error.message : String(error)}\n`);
+            process.exit(1);
+        },
+        onRepeat: () => {
+            process.stderr.write('Repeated signal; forcing exit.\n');
+            process.exit(1);
+        },
+    });
+}
+
 const args = process.argv.slice(2);
 try {
     if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
@@ -32,7 +46,7 @@ try {
                 },
             });
             process.stdout.write(`Nestrum listening on http://${server.host}:${server.port}\n`);
-            installShutdownSignals(server);
+            installGracefulSignals(server);
         } else {
             const session = await runDev({
                 ...(parsed.config === undefined ? {} : { config: parsed.config }),
@@ -41,7 +55,7 @@ try {
                     ...(parsed.port === undefined ? {} : { port: parsed.port }),
                 },
             });
-            installShutdownSignals({ shutdown: () => session.close() });
+            installGracefulSignals({ shutdown: () => session.close() });
         }
     } else {
         const parsed = parseCliArguments(args);

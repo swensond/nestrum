@@ -11,6 +11,7 @@ import { nodeRuntime } from '@nestrum/runtime-node';
 import { ADMIN_UI_PACKAGE, bundleConfig, generateArtifacts, loadBuiltConfig, validateResources } from './build.js';
 import type { ServerConfig } from './cli.types.js';
 import { CONFIG_CANDIDATES, discoverConfig } from './config.js';
+import { withHealth } from './health.js';
 import { cliVersion, sha256 } from './manifest.js';
 import type { Environment } from './runtime-options.js';
 import { establishEnvironment, resolveServerOptions } from './runtime-options.js';
@@ -171,7 +172,10 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
             });
             await runtime.start();
             try {
-                handle = await adapter.serve(runtime, server);
+                handle = await adapter.serve(
+                    withHealth(runtime, () => runtime.state === 'ready'),
+                    server,
+                );
             } catch (error) {
                 await runtime.shutdown().catch(() => undefined);
                 throw error;

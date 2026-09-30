@@ -3,6 +3,7 @@ import type { ServerConfig } from './cli.types.js';
 
 export const DEFAULT_HOST = '127.0.0.1';
 export const DEFAULT_PORT = 3000;
+export const DEFAULT_DRAIN_TIMEOUT_MS = 30_000;
 
 export type ServerOptions = { readonly host: string; readonly port: number };
 export type Environment = Readonly<Record<string, string | undefined>>;

@@ -11,7 +11,12 @@ export type CliConfig = {
     readonly timeoutMs?: number;
     readonly server?: ServerConfig;
 };
-export type ServerConfig = { readonly host?: string; readonly port?: number };
+export type ServerConfig = {
+    readonly host?: string;
+    readonly port?: number;
+    /** Maximum time to wait for in-flight requests during shutdown (default 30000). */
+    readonly drainTimeoutMs?: number;
+};
 export type DatabaseCommand = 'generate' | 'migrate' | 'status';
 export type CliArguments = {
     readonly command: DatabaseCommand;

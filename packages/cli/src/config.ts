@@ -9,11 +9,13 @@ function validServer(server: unknown): boolean {
     if (!server || typeof server !== 'object' || Array.isArray(server)) {
         return false;
     }
-    const { host, port } = server as { host?: unknown; port?: unknown };
+    const { host, port, drainTimeoutMs } = server as { host?: unknown; port?: unknown; drainTimeoutMs?: unknown };
 
     return (
         (host === undefined || (typeof host === 'string' && host.trim() !== '')) &&
-        (port === undefined || (Number.isInteger(port) && (port as number) >= 0 && (port as number) <= 65535))
+        (port === undefined || (Number.isInteger(port) && (port as number) >= 0 && (port as number) <= 65535)) &&
+        (drainTimeoutMs === undefined ||
+            (typeof drainTimeoutMs === 'number' && Number.isFinite(drainTimeoutMs) && drainTimeoutMs > 0))
     );
 }
 

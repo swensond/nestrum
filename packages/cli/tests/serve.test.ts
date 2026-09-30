@@ -1,6 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
+import type { RuntimeAdapter } from '@nestrum/runtime';
+import { nodeRuntime } from '@nestrum/runtime-node';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RunningServer } from '../src/index.js';
 import { establishEnvironment, resolveServerOptions, runBuild, runServe } from '../src/index.js';
@@ -108,6 +110,121 @@ describe('nestrum serve', () => {
         await expect(runServe({ cwd: root, env: { NESTRUM_ENV: 'development' } })).rejects.toMatchObject({
             code: 'CLI_ENVIRONMENT_CONFLICT',
         });
+    });
+});
+
+describe('lifecycle hardening', () => {
+    /** Captures the served application and adds a slow route so an in-flight request can span shutdown. */
+    function slowAdapter(gate: Promise<void>, arrived: () => void) {
+        const captured: { served?: { fetch(request: Request): Response | Promise<Response> } } = {};
+        const adapter: RuntimeAdapter = {
+            serve: (application, options) => {
+                captured.served = application;
+
+                return nodeRuntime.serve(
+                    {
+                        fetch: async (request) => {
+                            if (new URL(request.url).pathname === '/slow') {
+                                arrived();
+                                await gate;
+
+                                return new Response('finished');
+                            }
+
+                            return application.fetch(request);
+                        },
+                    },
+                    options,
+                );
+            },
+        };
+
+        return { adapter, captured };
+    }
+
+    it('reports health and readiness, drops readiness first on shutdown, and lets in-flight requests finish', async () => {
+        const root = await project(application());
+        await runBuild({ cwd: root });
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        let arrive!: () => void;
+        const arrived = new Promise<void>((resolve) => {
+            arrive = resolve;
+        });
+        const { adapter, captured } = slowAdapter(gate, arrive);
+        const port = await freePort();
+        const server = await runServe({ cwd: root, flags: { port }, env: env(), adapter });
+        servers.push(server);
+        const probe = (path: string) => captured.served?.fetch(new Request(`http://x${path}`, { method: 'GET' }));
+
+        const health = await fetch(`http://127.0.0.1:${port}/__nestrum/health`);
+        expect(health.status).toBe(200);
+        expect(await health.json()).toEqual({ status: 'ok' });
+        expect(await (await fetch(`http://127.0.0.1:${port}/__nestrum/ready`)).json()).toEqual({ status: 'ready' });
+        expect((await fetch(`http://127.0.0.1:${port}/__nestrum/ready`, { method: 'POST' })).status).toBe(405);
+
+        const pending = fetch(`http://127.0.0.1:${port}/slow`);
+        await arrived;
+        let done = false;
+        const closing = server.shutdown().then(() => {
+            done = true;
+        });
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect((await probe('/__nestrum/ready'))?.status).toBe(503);
+        expect((await probe('/__nestrum/health'))?.status).toBe(200);
+        expect(done).toBe(false);
+        release();
+        expect(await (await pending).text()).toBe('finished');
+        await closing;
+        expect(server.runtime.state).toBe('stopped');
+    });
+
+    it('runs shutdown hooks of already-configured apps when startup fails', async () => {
+        const root = await project(
+            application("ready: () => { throw new Error('boom'); }, shutdown: () => { events.push('shutdown'); },"),
+        );
+        await runBuild({ cwd: root });
+        (globalThis as { __nestrumEvents?: string[] }).__nestrumEvents = [];
+
+        await expect(runServe({ cwd: root, flags: { port: await freePort() }, env: env() })).rejects.toThrow();
+        expect((globalThis as { __nestrumEvents?: string[] }).__nestrumEvents).toEqual(['configure', 'shutdown']);
+    });
+
+    it('fails shutdown at the drain deadline and leaves resources open for the caller to force-exit', async () => {
+        const root = await project(application('', 'server: { drainTimeoutMs: 100 },'));
+        await runBuild({ cwd: root });
+        const gate = new Promise<void>(() => undefined);
+        let arrive!: () => void;
+        const arrived = new Promise<void>((resolve) => {
+            arrive = resolve;
+        });
+        // The slow request must be counted by the Hono runtime, so route it through the runtime's pipeline.
+        const captured: { fetch?: (request: Request) => Response | Promise<Response> } = {};
+        const adapter: RuntimeAdapter = {
+            serve: (served, options) => {
+                captured.fetch = served.fetch;
+
+                return nodeRuntime.serve(served, options);
+            },
+        };
+        const server = await runServe({ cwd: root, flags: { port: await freePort() }, env: env(), adapter });
+        servers.push(server);
+        server.runtime.hono.get('/hang', async () => {
+            arrive();
+            await gate;
+
+            return new Response('never');
+        });
+        const port = server.port;
+        void fetch(`http://127.0.0.1:${port}/hang`).catch(() => undefined);
+        await arrived;
+
+        await expect(server.shutdown()).rejects.toMatchObject({ code: 'HTTP_RUNTIME_DRAIN_TIMEOUT' });
+        expect(server.runtime.state).toBe('failed');
+        servers.pop();
     });
 });
 

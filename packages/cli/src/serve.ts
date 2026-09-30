@@ -6,10 +6,11 @@ import { nodeRuntime } from '@nestrum/runtime-node';
 import { CliError } from './cli.errors.js';
 import type { ServerConfig } from './cli.types.js';
 import { loadCliConfig } from './config.js';
+import { withHealth } from './health.js';
 import type { BuildManifest } from './manifest.js';
 import { cliVersion, readManifest } from './manifest.js';
 import type { Environment, ServerOptions } from './runtime-options.js';
-import { establishEnvironment, resolveServerOptions } from './runtime-options.js';
+import { DEFAULT_DRAIN_TIMEOUT_MS, establishEnvironment, resolveServerOptions } from './runtime-options.js';
 
 export type ServeCommandOptions = {
     readonly cwd?: string;
@@ -71,16 +72,21 @@ export async function runServe(options: ServeCommandOptions = {}): Promise<Runni
     });
     const adminUi = await loadAdminShell(manifest);
     let handle: ServerHandle | undefined;
+    let shuttingDown = false;
     const runtime = createHonoRuntime({
         application: config.application,
         ...(adminUi === undefined ? {} : { adminUi }),
+        drainTimeoutMs: config.server?.drainTimeoutMs ?? DEFAULT_DRAIN_TIMEOUT_MS,
         stopTraffic: async () => {
             await handle?.stopAccepting();
         },
     });
     await runtime.start();
     try {
-        handle = await (options.adapter ?? nodeRuntime).serve(runtime, server);
+        handle = await (options.adapter ?? nodeRuntime).serve(
+            withHealth(runtime, () => !shuttingDown && runtime.state === 'ready'),
+            server,
+        );
     } catch (error) {
         await runtime.shutdown().catch(() => undefined);
         throw error;
@@ -94,12 +100,11 @@ export async function runServe(options: ServeCommandOptions = {}): Promise<Runni
         manifest,
         runtime,
         shutdown: () => {
+            shuttingDown = true;
             stopping ??= (async () => {
-                try {
-                    await runtime.shutdown();
-                } finally {
-                    await listening.close();
-                }
+                // If draining fails (deadline), resources stay open by design and the listener is not awaited.
+                await runtime.shutdown();
+                await listening.close();
             })();
 
             return stopping;
