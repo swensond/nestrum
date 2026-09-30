@@ -40,7 +40,6 @@ export const ADMIN_METADATA_SCHEMA = z
             identity: z.string().min(1),
             slug: z.string().regex(/^[A-Za-z0-9_-]+$/),
             model: z.string().min(1),
-            database: z.string().min(1),
             label: z.string().min(1),
             primaryKey: z.string().min(1),
             listDisplay: z.array(z.string()),

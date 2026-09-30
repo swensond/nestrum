@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CliError } from './cli.errors.js';
 
-export const MANIFEST_VERSION = 1;
+export const MANIFEST_VERSION = 2;
 export const BUILD_DIRECTORY = '.nestrum';
 export const MANIFEST_FILE = 'manifest.json';
 
@@ -28,13 +28,13 @@ export type BuildManifest = {
         /** The SSR bundle, relative to the build directory, when the UI renders on the server. */
         readonly ssr?: { readonly entry: string };
     } | null;
-    readonly databases: readonly {
-        readonly name: string;
+    /** `null` when no installed app contributes a Prisma schema. */
+    readonly database: {
         readonly provider: string;
         /** Paths are relative to the build directory. */
         readonly contract: string;
         readonly metadata: string;
-    }[];
+    } | null;
     readonly server: { readonly host?: string; readonly port?: number };
 };
 
@@ -99,8 +99,8 @@ export async function readManifest(root: string, nestrumVersion: string): Promis
             }
         }
     }
-    for (const database of manifest.databases ?? []) {
-        for (const artifact of [database.contract, database.metadata]) {
+    if (manifest.database) {
+        for (const artifact of [manifest.database.contract, manifest.database.metadata]) {
             try {
                 await readFile(join(directory, artifact));
             } catch {

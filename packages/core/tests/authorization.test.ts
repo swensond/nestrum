@@ -26,8 +26,7 @@ type Project = { id: number; ownerId: string; status: string; note: string | nul
 const ROW: Project = { id: 1, ownerId: 'alice', status: 'active', note: null };
 const READ = z.strictObject({ id: z.number(), ownerId: z.string(), status: z.string(), note: z.string().nullable() });
 const METADATA = {
-    identity: 'default.Project',
-    database: 'default',
+    identity: 'Project',
     name: 'Project',
     provider: 'postgresql',
     namespace: 'public',
@@ -55,7 +54,7 @@ const SCHEMAS = {
 const OWNER_SCOPE = async ({ subject }: { subject: Readonly<Record<string, unknown>> }) =>
     eq('ownerId', subject.id as string);
 const OWNER_POLICY: PolicyDefinition = {
-    resource: 'default.Project',
+    resource: 'Project',
     actions: {
         read: { scope: OWNER_SCOPE },
         update: { scope: OWNER_SCOPE },
@@ -75,10 +74,7 @@ function fixture(policies: readonly PolicyDefinition[] = [OWNER_POLICY]) {
         update: vi.fn(async (_query: QuerySpec, _data: Partial<Omit<Project, 'id'>>) => 1),
         delete: vi.fn(async (_query: QuerySpec) => 1),
     } satisfies QueryBackend<Project, Omit<Project, 'id'>, Partial<Omit<Project, 'id'>>, { bypass: boolean }>;
-    const query = new QuerySet(
-        { identity: 'default.Project', metadata: METADATA, schemas: SCHEMAS, authorization },
-        backend,
-    );
+    const query = new QuerySet({ identity: 'Project', metadata: METADATA, schemas: SCHEMAS, authorization }, backend);
 
     return { query, backend, authorization };
 }
@@ -108,14 +104,14 @@ describe('Default-deny ABAC', () => {
         const check = vi.fn(() => allow());
         const engine = new AuthorizationEngine([
             {
-                resource: 'default.Project',
+                resource: 'Project',
                 authorize: ({ resource }) => (resource === undefined ? deny('RESOURCE_DISABLED') : allow()),
                 actions: { publish: { authorize: check } },
             },
         ]);
         expect(
             await engine.authorize({
-                identity: 'default.Project',
+                identity: 'Project',
                 subject: {},
                 action: 'publish',
                 environment: {},
@@ -125,11 +121,11 @@ describe('Default-deny ABAC', () => {
         expect(check).not.toHaveBeenCalled();
         const inherited = Object.assign(
             Object.create({ authorize: () => deny('INHERITED_GUARD') }) as PolicyDefinition,
-            { resource: 'default.Project', actions: { publish: { authorize: check } } },
+            { resource: 'Project', actions: { publish: { authorize: check } } },
         );
         expect(
             await new AuthorizationEngine([inherited]).authorize({
-                identity: 'default.Project',
+                identity: 'Project',
                 subject: {},
                 action: 'publish',
                 environment: {},
@@ -161,7 +157,7 @@ describe('Default-deny ABAC', () => {
     it('does not grant empty actions, invalid decisions, or object-only actions without an object', async () => {
         const engine = new AuthorizationEngine([
             {
-                resource: 'default.Project',
+                resource: 'Project',
                 actions: {
                     empty: {},
                     invalid: { authorize: (() => true) as never },
@@ -169,7 +165,7 @@ describe('Default-deny ABAC', () => {
                 },
             },
         ]);
-        const context = { identity: 'default.Project', subject: {}, environment: {} };
+        const context = { identity: 'Project', subject: {}, environment: {} };
         expect(await engine.authorize({ ...context, action: 'empty' })).toEqual(deny('ACTION_HAS_NO_GRANT'));
         expect(await engine.authorize({ ...context, action: 'invalid' })).toEqual(deny('INVALID_DECISION'));
         expect(await engine.authorize({ ...context, action: 'approve' })).toEqual(deny('RESOURCE_REQUIRED'));
@@ -183,7 +179,7 @@ describe('Default-deny ABAC', () => {
         const { authorization } = fixture();
         expect(
             await authorization.authorize({
-                identity: 'default.Project',
+                identity: 'Project',
                 subject: { id: 'bob' },
                 action: 'read',
                 environment: {},
@@ -252,7 +248,7 @@ describe('Default-deny ABAC', () => {
             object: () => deny('NOT_OWNER'),
             operations: ['read', 'count', 'update', 'delete'] as const,
         };
-        const { query, backend } = fixture([{ resource: 'default.Project', actions: { review: action } }]);
+        const { query, backend } = fixture([{ resource: 'Project', actions: { review: action } }]);
         const secured = query.filter({ id: 1 }).authorizedFor({ id: 'alice' }, 'review');
         await expect(secured.count()).rejects.toMatchObject({ reason: 'OBJECT_CHECK_REQUIRES_OBJECT' });
         await expect(secured.update({ status: 'archived' })).rejects.toMatchObject({
@@ -272,7 +268,7 @@ describe('Default-deny ABAC', () => {
         });
         expect(backend.create).not.toHaveBeenCalled();
         expect(await query.authorizedFor({ id: 'alice' }, 'create').create(data)).toEqual({ ...data, id: 2 });
-        const scoped = fixture([{ resource: 'default.Project', actions: { create: { scope: OWNER_SCOPE } } }]);
+        const scoped = fixture([{ resource: 'Project', actions: { create: { scope: OWNER_SCOPE } } }]);
         await expect(scoped.query.authorizedFor({ id: 'alice' }, 'create').create(data)).rejects.toMatchObject({
             reason: 'CREATE_REQUIRES_EXPLICIT_CHECK',
         });
@@ -289,7 +285,7 @@ describe('Default-deny ABAC', () => {
         const error = new Error('policy unavailable');
         const { query, backend } = fixture([
             {
-                resource: 'default.Project',
+                resource: 'Project',
                 actions: {
                     read: {
                         authorize: () => {
@@ -346,15 +342,13 @@ describe('Provider-neutral scope AST', () => {
     it('rejects missing subject attributes and invalid scope returns before query execution', async () => {
         const { query, backend } = fixture();
         await expect(query.authorizedFor({}, 'read').all()).rejects.toMatchObject({ code: 'POLICY_SCOPE_INVALID' });
-        const invalid = fixture([
-            { resource: 'default.Project', actions: { read: { scope: (() => undefined) as never } } },
-        ]);
+        const invalid = fixture([{ resource: 'Project', actions: { read: { scope: (() => undefined) as never } } }]);
         await expect(invalid.query.authorizedFor({}, 'read').all()).rejects.toMatchObject({
             code: 'POLICY_SCOPE_INVALID',
         });
         const schemas = { ...SCHEMAS, where: z.strictObject({ ownerId: z.strictObject({ equals: z.string() }) }) };
         const typed = new QuerySet(
-            { identity: 'default.Project', metadata: METADATA, schemas, authorization: fixture().authorization },
+            { identity: 'Project', metadata: METADATA, schemas, authorization: fixture().authorization },
             backend,
         );
         await expect(typed.authorizedFor({ id: 123 }, 'read').all()).rejects.toMatchObject({
@@ -368,10 +362,7 @@ describe('Provider-neutral scope AST', () => {
     it('does not let composed Where schema transforms strip authorization predicates', async () => {
         const { backend, authorization } = fixture();
         const schemas = { ...SCHEMAS, where: z.record(z.string(), z.unknown()).transform(() => ({})) };
-        const query = new QuerySet(
-            { identity: 'default.Project', metadata: METADATA, schemas, authorization },
-            backend,
-        );
+        const query = new QuerySet({ identity: 'Project', metadata: METADATA, schemas, authorization }, backend);
         await query.authorizedFor({ id: 'alice' }, 'read').all();
         expect(backend.all).toHaveBeenCalledWith({ filters: [{ ownerId: { equals: 'alice' } }], orderBy: [] });
     });
@@ -381,28 +372,28 @@ describe('Policy registration', () => {
     it('validates and freezes definitions and rejects duplicate identities across apps', () => {
         const operations = ['read'] as const;
         const definition = definePolicy({
-            resource: 'default.Project',
+            resource: 'Project',
             actions: { read: { authorize: () => allow(), operations } },
         });
         expect(Object.isFrozen(definition.actions.read!.operations)).toBe(true);
         const scope = () => eq('id', 1);
         const inheritedAction = Object.create({ scope }) as PolicyDefinition['actions'][string];
-        expect(
-            definePolicy({ resource: 'default.Project', actions: { read: inheritedAction } }).actions.read!.scope,
-        ).toBe(scope);
+        expect(definePolicy({ resource: 'Project', actions: { read: inheritedAction } }).actions.read!.scope).toBe(
+            scope,
+        );
         expect(() => new AuthorizationEngine([definition, definition])).toThrowError(PolicyError);
         expect(() =>
-            definePolicy({ resource: 'default.Project', actions: { read: { authorize: true as never } } }),
+            definePolicy({ resource: 'Project', actions: { read: { authorize: true as never } } }),
         ).toThrowError(PolicyError);
         expect(() =>
-            definePolicy({ resource: 'default.Project', actions: { read: { operations: ['bad'] as never } } }),
+            definePolicy({ resource: 'Project', actions: { read: { operations: ['bad'] as never } } }),
         ).toThrowError(PolicyError);
         expect(() => defineApp({ name: 'projects', policies: {} as never })).toThrowError(PolicyError);
         expect(() =>
             defineApplication({
                 apps: [{ name: 'projects', policies: [definition] }],
                 policies: [definition],
-                databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+                database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
             }),
         ).toThrowError(PolicyError);
     });
@@ -426,13 +417,13 @@ describe('Policy registration', () => {
                     },
                 }),
             ],
-            databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+            database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
         });
         await application.start();
         expect(seen).toEqual([allow()]);
         expect(
             await application.authorization.authorize({
-                identity: 'default.Project',
+                identity: 'Project',
                 subject: {},
                 action: 'read',
                 environment: {},

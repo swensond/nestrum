@@ -6,7 +6,7 @@ import type { ResourceModel } from '@nestrum/core';
 import { defineApplication, defineResource } from '@nestrum/core';
 import type { ModelMetadata } from '@nestrum/prisma';
 import { compileModelMetadata, PrismaMetadataError, prismaDatabase } from '@nestrum/prisma';
-import { generatePrismaContracts } from '@nestrum/prisma/node';
+import { generatePrismaContract } from '@nestrum/prisma/node';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { generateModelSchemas } from '../src/index.js';
@@ -36,23 +36,6 @@ model Owner {
  id Int @id
 }
 `;
-const MONGO = `enum Status {
- ACTIVE
- ARCHIVED
-}
-model Article {
- id ObjectId @id @map("_id")
- title String
- description String?
- hits Int64
- weight Double
- enabled Bool
- tags String[]
- status Status
- when Date
- updatedAt temporal.updatedAt()
-}
-`;
 const LEGACY = `datasource db {
  provider = "postgresql"
 }
@@ -69,7 +52,6 @@ model Project {
 let directory: string;
 let sqlContract: unknown;
 let sqlModels: readonly ModelMetadata[];
-let mongoModels: readonly ModelMetadata[];
 let legacyModels: readonly ModelMetadata[];
 
 function project(): ModelMetadata {
@@ -79,10 +61,6 @@ function project(): ModelMetadata {
     }
 
     return metadata;
-}
-
-function article(): ModelMetadata {
-    return mongoModels[0]!;
 }
 
 function temporal(name: string, value: string): unknown {
@@ -110,64 +88,27 @@ function projectValue() {
     };
 }
 
-function articleValue() {
-    return {
-        _id: '507f1f77bcf86cd799439011',
-        title: 'Article',
-        hits: 1n,
-        weight: 1.2,
-        enabled: false,
-        tags: ['a'],
-        status: 'ARCHIVED',
-        when: new Date('2026-01-01'),
-        updatedAt: new Date('2026-01-01'),
-    };
-}
-
 beforeAll(async () => {
     if (!(globalThis as unknown as { Temporal?: unknown }).Temporal) {
         vi.stubGlobal('Temporal', Temporal);
     }
     directory = await mkdtemp(join(tmpdir(), 'nestrum-schema-test-'));
     await writeFile(join(directory, 'sql.prisma'), SQL);
-    await writeFile(join(directory, 'mongo.prisma'), MONGO);
     await writeFile(join(directory, 'legacy.prisma'), LEGACY);
-    const databases = {
-        default: prismaDatabase({ provider: 'postgresql', connection: 'unused' }),
-        documents: prismaDatabase({ provider: 'mongodb', connection: 'unused' }),
-    };
-    const application = defineApplication({
-        databases,
-        apps: [{ name: 'models', prisma: { default: ['sql.prisma'], documents: ['mongo.prisma'] } }],
-    });
-    const generation = await generatePrismaContracts(application, { rootDir: directory, outputDir: 'generated' });
-    for (const contract of generation.contracts) {
-        const input: unknown = JSON.parse(await readFile(contract.contractPath, 'utf8'));
-        const metadata = compileModelMetadata({
-            database: contract.database,
-            provider: contract.provider,
-            contract: input,
-        });
-        if (contract.database === 'default') {
-            sqlContract = input;
-            sqlModels = metadata;
-        } else {
-            mongoModels = metadata;
-        }
-    }
-    const legacyApp = defineApplication({
-        databases,
-        apps: [{ name: 'legacy', prisma: { default: ['legacy.prisma'] } }],
-    });
-    const legacy = await generatePrismaContracts(legacyApp, {
+    const database = prismaDatabase({ provider: 'postgresql', connection: 'unused' });
+    const application = defineApplication({ database, apps: [{ name: 'models', prisma: ['sql.prisma'] }] });
+    const generation = await generatePrismaContract(application, { rootDir: directory, outputDir: 'generated' });
+    sqlContract = JSON.parse(await readFile(generation.contract.contractPath, 'utf8'));
+    sqlModels = compileModelMetadata({ provider: generation.contract.provider, contract: sqlContract });
+    const legacyApp = defineApplication({ database, apps: [{ name: 'legacy', prisma: ['legacy.prisma'] }] });
+    const legacy = await generatePrismaContract(legacyApp, {
         rootDir: directory,
         outputDir: 'generated',
-        authoring: { default: 'prisma7' },
+        authoring: 'prisma7',
     });
     legacyModels = compileModelMetadata({
-        database: 'default',
         provider: 'postgresql',
-        contract: JSON.parse(await readFile(legacy.contracts[0]!.contractPath, 'utf8')),
+        contract: JSON.parse(await readFile(legacy.contract.contractPath, 'utf8')),
     });
 }, 30_000);
 
@@ -180,11 +121,8 @@ afterAll(async () => {
 
 describe('Prisma 8 metadata compilation', () => {
     it('compiles stable canonical identities and sorted immutable metadata from real emitted contracts', () => {
-        expect(sqlModels.map((model) => model.identity)).toEqual(['default.Owner', 'default.Project']);
-        expect(mongoModels.map((model) => model.identity)).toEqual(['documents.Article']);
-        expect(compileModelMetadata({ database: 'default', provider: 'postgresql', contract: sqlContract })).toEqual(
-            sqlModels,
-        );
+        expect(sqlModels.map((model) => model.identity)).toEqual(['Owner', 'Project']);
+        expect(compileModelMetadata({ provider: 'postgresql', contract: sqlContract })).toEqual(sqlModels);
         expect(project().fields.map((field) => field.name)).toEqual(
             [...project().fields.map((field) => field.name)].sort(),
         );
@@ -204,7 +142,7 @@ describe('Prisma 8 metadata compilation', () => {
         expect(project().relations).toEqual([
             {
                 name: 'owner',
-                target: 'default.Owner',
+                target: 'Owner',
                 cardinality: 'N:1',
                 nullable: false,
                 localFields: ['ownerId'],
@@ -217,6 +155,13 @@ describe('Prisma 8 metadata compilation', () => {
             generateModelSchemas(project()).create.safeParse({ ...projectValue(), owner: { create: { id: 1 } } })
                 .success,
         ).toBe(false);
+    });
+
+    it('keeps nullable fields required in records', () => {
+        expect(project().fields.find((field) => field.name === 'description')).toMatchObject({
+            nullable: true,
+            optional: false,
+        });
     });
 
     it('reads SQL storage defaults and mutation defaults independently', () => {
@@ -234,24 +179,9 @@ describe('Prisma 8 metadata compilation', () => {
         });
     });
 
-    it('distinguishes nullable SQL fields from optional Mongo fields and preserves native Mongo names', () => {
-        expect(project().fields.find((field) => field.name === 'description')).toMatchObject({
-            nullable: true,
-            optional: false,
-        });
-        expect(article().fields.find((field) => field.name === 'description')).toMatchObject({
-            nullable: true,
-            optional: true,
-        });
-        expect(article().fields.find((field) => field.name === '_id')).toMatchObject({
-            primaryKey: true,
-            codec: 'mongo/objectId@1',
-        });
-    });
-
     it('emits the frozen MVP model through the official explicit PostgreSQL compatibility adapter', () => {
         const metadata = legacyModels[0]!;
-        expect(metadata.identity).toBe('default.Project');
+        expect(metadata.identity).toBe('Project');
         expect(metadata.fields.find((field) => field.name === 'id')).toMatchObject({
             hasCreateDefault: true,
             kind: 'string',
@@ -279,14 +209,12 @@ describe('Prisma 8 metadata compilation', () => {
     it.each([null, {}, { schemaVersion: '2' }, [], 'contract'])(
         'rejects invalid contract envelopes: %j',
         (contract) => {
-            expect(() => compileModelMetadata({ database: 'default', provider: 'postgresql', contract })).toThrow(
-                PrismaMetadataError,
-            );
+            expect(() => compileModelMetadata({ provider: 'postgresql', contract })).toThrow(PrismaMetadataError);
         },
     );
 
     it('rejects provider mismatches and unknown codecs with field identity', () => {
-        expect(() => compileModelMetadata({ database: 'default', provider: 'mongodb', contract: sqlContract })).toThrow(
+        expect(() => compileModelMetadata({ provider: 'mongodb' as never, contract: sqlContract })).toThrow(
             PrismaMetadataError,
         );
         const contract = structuredClone(sqlContract) as {
@@ -295,10 +223,8 @@ describe('Prisma 8 metadata compilation', () => {
             };
         };
         contract.domain.namespaces.public.models.Project.fields.name.type.codecId = 'pg/new-codec@1';
-        expect(() => compileModelMetadata({ database: 'default', provider: 'postgresql', contract })).toThrow(
-            'default.Project.name',
-        );
-        expect(() => compileModelMetadata({ database: 'default', provider: 'postgresql', contract })).toThrow(
+        expect(() => compileModelMetadata({ provider: 'postgresql', contract })).toThrow('Project.name');
+        expect(() => compileModelMetadata({ provider: 'postgresql', contract })).toThrow(
             expect.objectContaining({ code: 'PRISMA_CODEC_UNSUPPORTED' }),
         );
     });
@@ -319,30 +245,24 @@ describe('Prisma 8 metadata compilation', () => {
             };
         };
         contract.domain.namespaces.public.models.Project.fields.name.nullable = 'false';
-        expect(() => compileModelMetadata({ database: 'default', provider: 'postgresql', contract })).toThrow(
-            PrismaMetadataError,
-        );
+        expect(() => compileModelMetadata({ provider: 'postgresql', contract })).toThrow(PrismaMetadataError);
         contract.domain.namespaces.public.models.Project.fields.name.nullable = false;
         contract.domain.namespaces.public.models.Project.relations.owner.on.targetFields = ['missing'];
-        expect(() => compileModelMetadata({ database: 'default', provider: 'postgresql', contract })).toThrow(
-            PrismaMetadataError,
-        );
+        expect(() => compileModelMetadata({ provider: 'postgresql', contract })).toThrow(PrismaMetadataError);
     });
 
-    it('rejects unknown or incompatible authoring configuration before invoking Prisma', async () => {
-        const databases = {
-            default: prismaDatabase({ provider: 'postgresql', connection: 'unused' }),
-            documents: prismaDatabase({ provider: 'mongodb', connection: 'unused' }),
-        };
+    it('rejects unknown authoring configuration before invoking Prisma', async () => {
         const application = defineApplication({
-            databases,
-            apps: [{ name: 'models', prisma: { default: ['sql.prisma'], documents: ['mongo.prisma'] } }],
+            database: prismaDatabase({ provider: 'postgresql', connection: 'unused' }),
+            apps: [{ name: 'models', prisma: ['sql.prisma'] }],
         });
-        for (const authoring of [{ missing: 'prisma7' as const }, { documents: 'prisma7' as const }]) {
-            await expect(
-                generatePrismaContracts(application, { rootDir: directory, outputDir: 'rejected', authoring }),
-            ).rejects.toThrow('Invalid authoring mode');
-        }
+        await expect(
+            generatePrismaContract(application, {
+                rootDir: directory,
+                outputDir: 'rejected',
+                authoring: 'other' as never,
+            }),
+        ).rejects.toThrow('Invalid authoring mode');
     });
 
     it('rejects duplicate model identities across SQL namespaces', () => {
@@ -352,23 +272,20 @@ describe('Prisma 8 metadata compilation', () => {
         };
         contract.domain.namespaces.other = structuredClone(contract.domain.namespaces.public);
         contract.storage.namespaces.other = structuredClone(contract.storage.namespaces.public);
-        expect(() => compileModelMetadata({ database: 'default', provider: 'postgresql', contract })).toThrow(
+        expect(() => compileModelMetadata({ provider: 'postgresql', contract })).toThrow(
             expect.objectContaining({ code: 'PRISMA_MODEL_AMBIGUOUS' }),
         );
     });
 });
 
 describe('Framework-owned Zod families', () => {
-    it('boots real emitted SQL/Mongo resources with generated schemas and resource composition', async () => {
+    it('boots real emitted SQL resources with generated schemas and resource composition', async () => {
         const application = defineApplication({
-            databases: {
-                default: prismaDatabase({ provider: 'postgresql', connection: 'unused' }),
-                documents: prismaDatabase({ provider: 'mongodb', connection: 'unused' }),
-            },
+            database: prismaDatabase({ provider: 'postgresql', connection: 'unused' }),
             apps: [
                 {
                     name: 'projects',
-                    prisma: { default: ['sql.prisma'] },
+                    prisma: ['sql.prisma'],
                     resources: [
                         defineResource({
                             model: 'Project',
@@ -377,39 +294,26 @@ describe('Framework-owned Zod families', () => {
                         }),
                     ],
                 },
-                {
-                    name: 'articles',
-                    prisma: { documents: ['mongo.prisma'] },
-                    resources: [defineResource({ model: 'Article', database: 'documents', api: false })],
-                },
             ],
             async resourceModels(application) {
-                const generated = await generatePrismaContracts(application, {
+                const generated = await generatePrismaContract(application, {
                     rootDir: directory,
                     outputDir: 'bootstrap',
                 });
-                const families: ResourceModel[] = [];
-                for (const contract of generated.contracts) {
-                    const metadata = compileModelMetadata({
-                        database: contract.database,
-                        provider: contract.provider,
-                        contract: JSON.parse(await readFile(contract.contractPath, 'utf8')),
-                    });
-                    families.push(...metadata.map((model) => generateModelSchemas(model)));
-                }
+                const metadata = compileModelMetadata({
+                    provider: generated.contract.provider,
+                    contract: JSON.parse(await readFile(generated.contract.contractPath, 'utf8')),
+                });
 
-                return families;
+                return metadata.map((model) => generateModelSchemas(model));
             },
         });
         await application.start();
-        const project = application.resources.get('default.Project');
-        const article = application.resources.get('documents.Article');
+        const project = application.resources.get('Project');
         expect(project.schemas.create.safeParse({ ...projectValue(), name: 'ab' }).success).toBe(false);
         expect(project.schemas.create.safeParse(projectValue()).success).toBe(true);
         expect(project.api.list).toBe(true);
         expect(project.api.create).toBe(false);
-        expect(article.schemas.read.safeParse(articleValue()).success).toBe(true);
-        expect(Object.values(article.api).every((enabled) => !enabled)).toBe(true);
         await application.shutdown();
     });
 
@@ -472,20 +376,6 @@ describe('Framework-owned Zod families', () => {
         );
     });
 
-    it('validates native Mongo object ids, bigint, dates, enums and arrays with missing/null distinctions', () => {
-        const schemas = generateModelSchemas(article());
-        expect(schemas.read.safeParse(articleValue()).success).toBe(true);
-        expect(schemas.read.safeParse({ ...articleValue(), description: null }).success).toBe(true);
-        expect(schemas.read.safeParse({ ...articleValue(), _id: 'bad' }).success).toBe(false);
-        expect(schemas.read.safeParse({ ...articleValue(), id: '507f1f77bcf86cd799439011' }).success).toBe(false);
-        expect(schemas.read.safeParse({ ...articleValue(), hits: 1 }).success).toBe(false);
-        expect(schemas.read.safeParse({ ...articleValue(), when: '2026-01-01' }).success).toBe(false);
-        expect(schemas.read.safeParse({ ...articleValue(), tags: ['a', null] }).success).toBe(false);
-        const { updatedAt, ...input } = articleValue();
-        expect(schemas.create.safeParse(input).success).toBe(true);
-        expect(schemas.read.safeParse(input).success).toBe(false);
-    });
-
     it('supports explicit Temporal implementations and rejects objects with forged prototypes', () => {
         const schemas = generateModelSchemas(project(), { temporal: Temporal });
         expect(
@@ -499,7 +389,6 @@ describe('Framework-owned Zod families', () => {
     it('fails Temporal validation clearly without an implementation while ordinary dates keep working', () => {
         const schemas = generateModelSchemas(project(), { temporal: {} });
         expect(schemas.read.safeParse(projectValue()).success).toBe(false);
-        expect(generateModelSchemas(article()).read.safeParse(articleValue()).success).toBe(true);
     });
 
     it('rejects Where operator name collisions rather than silently replacing a field', () => {

@@ -37,12 +37,8 @@ async function setup(twoFactor: { maxFailedAttempts?: number } = {}) {
     const memory = storage();
     const application = defineApplication({
         apps: [],
-        databases: {
-            default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-            identity: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-        },
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
         auth: defineAuth({
-            database: 'identity',
             baseURL: BASE_URL,
             secret: SECRET,
             prisma: () => memory.binding,
@@ -84,7 +80,7 @@ describe('Better Auth twoFactor plugin integration', () => {
             baseURL: BASE_URL,
             secret: SECRET,
             trustedOrigins: [],
-            database: createPrismaAuthAdapter(memory.binding, 'postgresql'),
+            database: createPrismaAuthAdapter(memory.binding),
             issuer: 'Example',
             maxFailedAttempts: 10,
             lockoutSeconds: 900,
@@ -107,8 +103,8 @@ describe('Better Auth twoFactor plugin integration', () => {
                     ] as const,
             )
             .sort(([left], [right]) => left.localeCompare(right));
-        for (const provider of ['postgresql', 'mongodb'] as const) {
-            const source = authContract(provider);
+        {
+            const source = authContract();
             const actual = [...source.matchAll(/^model (\w+) \{\n([\s\S]*?)^\}/gm)]
                 .map(
                     ([, name, body]) =>

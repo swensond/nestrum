@@ -21,7 +21,6 @@ const resources = ['Project', 'Article'].map((model) =>
 );
 const auth = {
     kind: 'better-auth',
-    database: 'default',
     protectedModels: [],
     createApp: () => ({ name: 'test.auth' }),
     initialize: async () => ({
@@ -135,13 +134,12 @@ function createApplication() {
 
     return defineApplication({
         apps: [],
-        databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
         auth,
         admin,
         resources,
         resourceModels: resources.map((resource) => ({
             ...generateModelSchemas({
-                database: 'default',
                 name: resource.model,
                 identity: resource.identity,
                 namespace: 'public',

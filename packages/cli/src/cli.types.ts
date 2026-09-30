@@ -7,11 +7,11 @@ export type CliConfig = {
     readonly rootDir?: string;
     readonly outputDir?: string;
     /**
-     * Per-database contract emission directories (relative to `rootDir`). Prisma 8 allows one database facade per
-     * package, so applications mixing providers emit each database inside a package that depends on that provider.
-     * Databases not listed use `outputDir` (`db` commands) or `<build>/contracts` (`build`, `dev`).
+     * Contract emission directory (relative to `rootDir`). Prisma 8 emits the database facade inside a package that
+     * depends on the provider, so applications point this at that package. Without it, `outputDir` is used by `db`
+     * commands and `<build>/contracts` by `build` and `dev`.
      */
-    readonly contractDirs?: Readonly<Record<string, string>>;
+    readonly contractDir?: string;
     readonly migrationsDir?: string;
     readonly authoring?: GeneratePrismaOptions['authoring'];
     readonly extensions?: GeneratePrismaOptions['extensions'];
@@ -30,7 +30,6 @@ export type DatabaseCommand = 'generate' | 'migrate' | 'status';
 export type CliArguments = {
     readonly command: DatabaseCommand;
     readonly config: string;
-    readonly database: string;
     readonly name?: string;
     readonly plan: boolean;
     readonly json: boolean;

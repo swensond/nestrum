@@ -2,7 +2,7 @@ import { copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promi
 import { dirname, join, relative, resolve } from 'node:path';
 import type { Application, ModelMetadata } from '@nestrum/core';
 import { compileModelMetadata } from '@nestrum/prisma';
-import { generatePrismaContracts } from '@nestrum/prisma/node';
+import { generatePrismaContract, PrismaContractError } from '@nestrum/prisma/node';
 import { generateModelSchemas } from '@nestrum/zod';
 import { build as esbuild } from 'esbuild';
 import { CliError } from './cli.errors.js';
@@ -96,11 +96,11 @@ export async function loadBuiltConfig(entry: string, configDir: string): Promise
 }
 
 export type GeneratedArtifacts = {
-    readonly databases: BuildManifest['databases'];
+    readonly database: BuildManifest['database'];
     readonly models: readonly ModelMetadata[];
 };
 
-/** Emit per-database contracts and compiled model metadata beneath `directory`. No database is contacted. */
+/** Emit the database contract and compiled model metadata beneath `directory`. No database is contacted. */
 export async function generateArtifacts(config: CliConfig, directory: string): Promise<GeneratedArtifacts> {
     const application = config.application;
     const rootDir = resolve(config.rootDir ?? '.');
@@ -109,53 +109,48 @@ export async function generateArtifacts(config: CliConfig, directory: string): P
     await rm(contractsDir, { recursive: true, force: true });
     await mkdir(generatedDir, { recursive: true });
     await mkdir(contractsDir, { recursive: true });
-    const databases: BuildManifest['databases'][number][] = [];
-    const models: ModelMetadata[] = [];
-    for (const name of application.databases.names()) {
-        const custom = config.contractDirs?.[name];
-        if (custom !== undefined) {
-            // Drop earlier emission runs so repeated builds do not accumulate inside provider packages.
-            const previous = resolve(rootDir, custom);
-            for (const entry of await readdir(previous).catch(() => [] as string[])) {
-                if (entry.startsWith('run-')) {
-                    await rm(join(previous, entry), { recursive: true, force: true });
-                }
+    if (config.contractDir !== undefined) {
+        // Drop earlier emission runs so repeated builds do not accumulate inside the provider package.
+        const previous = resolve(rootDir, config.contractDir);
+        for (const entry of await readdir(previous).catch(() => [] as string[])) {
+            if (entry.startsWith('run-')) {
+                await rm(join(previous, entry), { recursive: true, force: true });
             }
         }
-        const generated = await generatePrismaContracts(application, {
+    }
+    let generated: Awaited<ReturnType<typeof generatePrismaContract>>;
+    try {
+        generated = await generatePrismaContract(application, {
             rootDir,
-            outputDir: custom ?? contractsDir,
-            database: name,
+            outputDir: config.contractDir ?? contractsDir,
             ...(config.authoring === undefined ? {} : { authoring: config.authoring }),
             ...(config.extensions === undefined ? {} : { extensions: config.extensions }),
             ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }),
         });
-        const contract = generated.contracts.find((candidate) => candidate.database === name);
-        if (!contract) {
-            continue;
+    } catch (cause) {
+        if (cause instanceof PrismaContractError && cause.code === 'PRISMA_FRAGMENTS_EMPTY') {
+            return { database: null, models: [] };
         }
-        // A stable per-database path lets application code locate the emitted contract from a bundle in
-        // `<build>/server/` (build) or `<build>/dev/server/` (dev) via `new URL('../contracts/<db>.json', import.meta.url)`.
-        const stableContract = join(contractsDir, `${name}.json`);
-        await copyFile(contract.contractPath, stableContract);
-        const contractJson = JSON.parse(await readFile(contract.contractPath, 'utf8')) as unknown;
-        const compiled = compileModelMetadata({
-            database: name,
-            provider: contract.provider,
-            contract: contractJson as never,
-        });
-        models.push(...compiled);
-        const metadataPath = join(generatedDir, `${name}.json`);
-        await writeFile(metadataPath, `${JSON.stringify(compiled, null, 2)}\n`, 'utf8');
-        databases.push({
-            name,
+        throw cause;
+    }
+    const contract = generated.contract;
+    // A stable path lets application code locate the emitted contract from a bundle in `<build>/server/` (build)
+    // or `<build>/dev/server/` (dev) via `new URL('../contracts/database.json', import.meta.url)`.
+    const stableContract = join(contractsDir, 'database.json');
+    await copyFile(contract.contractPath, stableContract);
+    const contractJson = JSON.parse(await readFile(contract.contractPath, 'utf8')) as unknown;
+    const models = compileModelMetadata({ provider: contract.provider, contract: contractJson as never });
+    const metadataPath = join(generatedDir, 'database.json');
+    await writeFile(metadataPath, `${JSON.stringify(models, null, 2)}\n`, 'utf8');
+
+    return {
+        database: {
             provider: contract.provider,
             contract: relative(directory, stableContract),
             metadata: relative(directory, metadataPath),
-        });
-    }
-
-    return { databases, models };
+        },
+        models,
+    };
 }
 
 /**
@@ -178,7 +173,7 @@ async function validateAndGenerate(
     entry: string,
 ): Promise<Omit<BuildManifest, 'web'>> {
     const application = config.application;
-    const { databases, models } = await generateArtifacts(config, directory);
+    const { database, models } = await generateArtifacts(config, directory);
     validateResources(application, models);
     const built = await readFile(entry);
 
@@ -192,7 +187,7 @@ async function validateAndGenerate(
         resources: application.resources.all().length,
         auth: application.authConfigured,
         admin: application.adminConfigured ? { package: ADMIN_UI_PACKAGE } : null,
-        databases,
+        database,
         server: { ...(config.server ?? {}) },
     };
 }

@@ -13,9 +13,8 @@ const FIELD = {
     hasUpdateDefault: false,
 } as const;
 const METADATA = {
-    database: 'default',
     name: 'Project',
-    identity: 'default.Project',
+    identity: 'Project',
     provider: 'postgresql',
     namespace: 'public',
     relations: [],
@@ -62,7 +61,6 @@ function stubAuth(authenticate = vi.fn()): { definition: AuthenticationDefinitio
         authenticate,
         definition: {
             kind: 'better-auth',
-            database: 'default',
             protectedModels: [],
             createApp: () => ({ name: 'test.auth' }),
             initialize: async () =>
@@ -81,7 +79,7 @@ function stubAuth(authenticate = vi.fn()): { definition: AuthenticationDefinitio
 }
 
 const POLICY: PolicyDefinition = {
-    resource: 'default.Project',
+    resource: 'Project',
     actions: {
         read: {
             scope: ({ subject }) =>
@@ -111,7 +109,7 @@ function fixture(api: ResourceConfig['api'], withAuth = true) {
     };
     const application = defineApplication({
         apps: [],
-        databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
         resources: [defineResource({ model: 'Project', ...(api === undefined ? {} : { api }) })],
         resourceModels: [{ ...generateModelSchemas(METADATA as never), queryBackend: backend }],
         policies: [POLICY],

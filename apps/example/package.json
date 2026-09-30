@@ -22,7 +22,6 @@
         "@nestrum/auth": "workspace:*",
         "@nestrum/cli": "workspace:*",
         "@nestrum/core": "workspace:*",
-        "@nestrum/example-mongo": "workspace:*",
         "@nestrum/example-postgres": "workspace:*",
         "@nestrum/features": "workspace:*",
         "@nestrum/hono": "workspace:*",

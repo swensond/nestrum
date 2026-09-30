@@ -1,6 +1,5 @@
-import type { PrismaProvider, QueryBackend, QuerySpec } from '@nestrum/core';
+import type { QueryBackend, QuerySpec } from '@nestrum/core';
 import { AppError } from '@nestrum/core';
-import type { PrismaQueryBackendOptions } from '@nestrum/prisma/querysets';
 import { createPrismaQueryBackend } from '@nestrum/prisma/querysets';
 import type { CleanedWhere, CustomAdapter, DBAdapterInstance } from 'better-auth/adapters';
 import { createAdapterFactory } from 'better-auth/adapters';
@@ -8,7 +7,6 @@ import type { AuthModel } from '#auth/contracts/contracts';
 import { AUTH_MODELS } from '#auth/contracts/contracts';
 
 export type AuthPrismaBinding = {
-    readonly database: string;
     readonly collections: Readonly<Record<AuthModel, Parameters<typeof createPrismaQueryBackend>[0]>>;
     /**
      * Optional atomic unit of work: runs `run` with collections bound to one database transaction, committing when it
@@ -17,7 +15,6 @@ export type AuthPrismaBinding = {
      * `client.transaction((tx) => run(tx.orm.public))`.
      */
     readonly transaction?: <R>(run: (collections: AuthPrismaBinding['collections']) => Promise<R>) => Promise<R>;
-    readonly counts?: Readonly<Record<AuthModel, Extract<PrismaQueryBackendOptions, { provider: 'mongodb' }>['count']>>;
 };
 
 const OPERATORS = {
@@ -55,16 +52,12 @@ export type AuthRowCodec = {
     readonly open: (model: string, row: Record<string, unknown>) => Promise<Record<string, unknown>>;
 };
 
-export function createPrismaAuthAdapter(
-    binding: AuthPrismaBinding,
-    provider: PrismaProvider,
-    codec?: AuthRowCodec,
-): DBAdapterInstance {
+export function createPrismaAuthAdapter(binding: AuthPrismaBinding, codec?: AuthRowCodec): DBAdapterInstance {
     let instanceOptions: Parameters<DBAdapterInstance>[0];
-    const factory = buildAdapter(binding, provider, codec, (run) =>
+    const factory = buildAdapter(binding, codec, (run) =>
         // biome-ignore lint/style/noNonNullAssertion: only reachable when the binding provides transactions
         binding.transaction!((collections) =>
-            run(buildAdapter({ ...binding, collections }, provider, codec, false)(instanceOptions)),
+            run(buildAdapter({ ...binding, collections }, codec, false)(instanceOptions)),
         ),
     );
 
@@ -79,7 +72,6 @@ type TransactionConfig = NonNullable<Parameters<typeof createAdapterFactory>[0][
 
 function buildAdapter(
     binding: AuthPrismaBinding,
-    provider: PrismaProvider,
     codec: AuthRowCodec | undefined,
     transaction: TransactionConfig,
 ): DBAdapterInstance {
@@ -89,19 +81,14 @@ function buildAdapter(
         if (!collection) {
             throw new AppError('AUTH_MODEL_MISSING', `Prisma auth collection ${model} is missing.`);
         }
-        backends[model] = createPrismaQueryBackend(
-            collection,
-            provider === 'postgresql'
-                ? { provider }
-                : { provider, count: binding.counts?.[model] as NonNullable<AuthPrismaBinding['counts']>[AuthModel] },
-        );
+        backends[model] = createPrismaQueryBackend(collection);
     }
 
     return createAdapterFactory({
         config: {
             adapterId: 'nestrum-prisma8',
             adapterName: 'Nestrum Prisma 8',
-            supportsDates: provider === 'mongodb',
+            supportsDates: false,
             supportsBooleans: true,
             supportsNumericIds: false,
             supportsUUIDs: false,

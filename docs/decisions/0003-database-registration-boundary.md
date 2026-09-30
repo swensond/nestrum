@@ -1,5 +1,7 @@
 # 0003 — Database registration boundary
 
+> **Superseded in part by [0018](0018-postgresql-single-database.md):** named databases and the MongoDB provider were removed. The rest of this record is historical.
+
 Phase 2 introduces database configuration before Prisma contract/client generation. Core owns the explicit Prisma definition shape and validates named registration; @nestrum/prisma owns prismaDatabase() and depends on core, rather than creating a circular core-to-Prisma dependency. This accepts Prisma-specific core metadata, consistent with Prisma being foundational, while keeping provider runtime packages out of the portable registry.
 
 Definitions carry kind, provider, and connection. The Phase 2 provider contract is PostgreSQL and MongoDB, the MVP integration targets. These values are configuration only: no Prisma ORM runtime is installed or invoked yet. Prisma 8's provider-specific configuration uses db.connection; later contract/runtime phases will translate definitions to the verified provider APIs.

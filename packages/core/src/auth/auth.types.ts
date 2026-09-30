@@ -1,7 +1,7 @@
 import type { Application } from '#core/application/application';
 import type { AppDefinition } from '#core/application/application.types';
 import type { Subject } from '#core/authorization/authorization.types';
-import type { ModelIdentity, PrismaProvider } from '#core/database/database.types';
+import type { ModelIdentity } from '#core/database/database.types';
 import type { ApiKeys } from './api-key.js';
 import type { SsoProviders } from './sso.js';
 
@@ -64,8 +64,7 @@ export type Authentication = {
 };
 export type AuthenticationDefinition = {
     readonly kind: 'better-auth';
-    readonly database: string;
     readonly protectedModels: readonly ModelIdentity[];
-    createApp(provider: PrismaProvider): AppDefinition;
+    createApp(): AppDefinition;
     initialize(application: Application): Promise<Authentication>;
 };

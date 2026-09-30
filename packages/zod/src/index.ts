@@ -47,7 +47,7 @@ function scalarSchema(field: FieldMetadata, options: SchemaGenerationOptions): z
 
     switch (field.kind) {
         case 'string':
-            return field.codec === 'mongo/objectId@1' ? z.string().regex(/^[0-9a-fA-F]{24}$/) : z.string();
+            return z.string();
         case 'integer': {
             const bits = field.codec === 'pg/int2@1' ? 16 : 32;
             return z
@@ -117,7 +117,7 @@ export function generateModelSchemas(metadata: ModelMetadata, options: SchemaGen
                 filter[operator] = scalar.optional();
             }
         }
-        if (!field.array && field.kind === 'string' && !field.enumValues && field.codec !== 'mongo/objectId@1') {
+        if (!field.array && field.kind === 'string' && !field.enumValues) {
             for (const operator of ['contains', 'startsWith', 'endsWith']) {
                 filter[operator] = z.string().optional();
             }

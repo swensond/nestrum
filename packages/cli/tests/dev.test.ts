@@ -21,9 +21,9 @@ import { list } from './src/flags';
 export default defineConfig({
     server: { port: ${port} },
     application: defineApplication({
-        databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://u:p@127.0.0.1:1/x' } },
-        apps: [{ name: 'models', prisma: { default: ['./models.prisma'] }, resources: [defineResource({ model: 'Project', api: { list } })] }],
-        resourceModels: () => JSON.parse(readFileSync(${JSON.stringify(join(root, '.nestrum/dev/generated/models/default.json'))}, 'utf8')).map(generateModelSchemas),
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://u:p@127.0.0.1:1/x' },
+        apps: [{ name: 'models', prisma: ['./models.prisma'], resources: [defineResource({ model: 'Project', api: { list } })] }],
+        resourceModels: () => JSON.parse(readFileSync(${JSON.stringify(join(root, '.nestrum/dev/generated/models/database.json'))}, 'utf8')).map(generateModelSchemas),
     }),
     timeoutMs: 60000
 });
@@ -118,8 +118,8 @@ describe('nestrum dev', () => {
         await session.idle();
 
         const output = lines.join('\n');
-        expect(output).toContain('Database "default" may require migration.');
-        expect(output).toContain('nestrum db migrate --database default');
+        expect(output).toContain('The database may require migration.');
+        expect(output).toContain('nestrum db migrate');
         expect(session.url()).toBeDefined();
     });
 
@@ -312,8 +312,8 @@ export const flags = defineFeatureFlags({ newDashboard: { default: false, expose
 export default defineConfig({
     server: { port: 0 },
     application: defineApplication({
-        databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://u:p@127.0.0.1:1/x' } },
-        apps: [{ name: 'models', prisma: { default: ['./models.prisma'] } }],
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://u:p@127.0.0.1:1/x' },
+        apps: [{ name: 'models', prisma: ['./models.prisma'] }],
         features: defineFeatures({ flags }),
     }),
     timeoutMs: 60000

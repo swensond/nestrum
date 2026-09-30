@@ -9,7 +9,7 @@ import { createHonoRuntime, createRuntimeContainer, mapHttpError } from '../src/
 function application(apps: Parameters<typeof defineApplication>[0]['apps'] = []): Application {
     return defineApplication({
         apps,
-        databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
     });
 }
 
@@ -48,7 +48,7 @@ describe('Fetch-based Hono runtime', () => {
         runtime.hono.get('/context', (context) => {
             const scope = context.var.di;
             expect(scope.get('application')).toBe(app);
-            expect(scope.get('databases')).toBe(app.databases);
+            expect(scope.get('database')).toBe(app.database);
             expect(scope.get('authorization')).toBe(app.authorization);
             expect(scope.get('resources')).toBe(app.resources);
             expect(scope.get('request')).toBe(context.req.raw);
@@ -249,7 +249,7 @@ describe('Fetch-based Hono runtime', () => {
     it('passes trusted resolver subjects and environments into the existing default-deny engine', async () => {
         const app = defineApplication({
             apps: [],
-            databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+            database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
             policies: [
                 {
                     resource: 'admin',

@@ -6,7 +6,7 @@ import type { RequestInputs, RequestScope } from './container.js';
 export type RequestContext = Readonly<
     RequestInputs & {
         application: Application;
-        databases: Application['databases'];
+        database: Application['database'];
         resources: Application['resources'];
         authorization: Application['authorization'];
         features: BoundFeatures;

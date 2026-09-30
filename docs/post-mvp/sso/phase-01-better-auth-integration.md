@@ -11,7 +11,7 @@ Install `@better-auth/sso` and register it in Nestrum's framework-owned Better A
 ## Scope
 
 - Add the plugin dependency and register it in `createAuthInstance` when `auth.sso.enabled` is true.
-- Include the SSO provider schema in the framework-owned prebaked auth contract (PostgreSQL and MongoDB) and protected auth models.
+- Include the SSO provider schema in the framework-owned prebaked auth contract (PostgreSQL) and protected auth models.
 - Make the plugin's callback routes reachable through the allowlisted `/api/auth` forwarding, and add any SSO client integration required.
 - Keep existing email/password, session, 2FA, admin, and API-key behavior unchanged.
 
@@ -25,7 +25,7 @@ Depends on [PM6.0](phase-00-contract.md). The contract test compares the prebake
 
 ## Implementation
 
-`@better-auth/sso` 1.7.6 is a dependency of `@nestrum/auth` and is registered in `createAuthInstance` when `auth.sso.enabled` is true (`defineAuth({ sso: { enabled: true } })`; unknown SSO options throw). The plugin's provider table joins the prebaked contract as `SsoProvider` (PostgreSQL and MongoDB), and `Session` gains nullable `authMethod` and `ssoProviderId`; both are in `AUTH_MODELS`/protected models. The plugin's registration endpoint is disabled (`providersLimit: 0`). `handle` forwards only `POST /sign-in/sso`, `GET /sso/discover` (Nestrum's own), `GET /sso/callback/:providerId`, `GET|POST /sso/saml2/sp/acs/:providerId` and `GET /sso/saml2/sp/metadata`; every other plugin route stays 404. The ACS path alone skips the origin check because the IdP posts cross-site; sign-in and every other path keep it. Session-creation hooks tag sessions created inside the two callbacks.
+`@better-auth/sso` 1.7.6 is a dependency of `@nestrum/auth` and is registered in `createAuthInstance` when `auth.sso.enabled` is true (`defineAuth({ sso: { enabled: true } })`; unknown SSO options throw). The plugin's provider table joins the prebaked contract as `SsoProvider` (PostgreSQL), and `Session` gains nullable `authMethod` and `ssoProviderId`; both are in `AUTH_MODELS`/protected models. The plugin's registration endpoint is disabled (`providersLimit: 0`). `handle` forwards only `POST /sign-in/sso`, `GET /sso/discover` (Nestrum's own), `GET /sso/callback/:providerId`, `GET|POST /sso/saml2/sp/acs/:providerId` and `GET /sso/saml2/sp/metadata`; every other plugin route stays 404. The ACS path alone skips the origin check because the IdP posts cross-site; sign-in and every other path keep it. Session-creation hooks tag sessions created inside the two callbacks.
 
 ## Public API
 

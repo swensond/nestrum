@@ -31,16 +31,16 @@ import { generateModelSchemas } from '@nestrum/zod';
 const events = ((globalThis as any).__nestrumEvents ??= [] as string[]);
 export default defineConfig({
     application: defineApplication({
-        databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://u:p@127.0.0.1:1/x' } },
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://u:p@127.0.0.1:1/x' },
         apps: [{
             name: 'models',
-            prismaSource: { default: ${PRISMA} },
+            prismaSource: ${PRISMA},
             resources: [defineResource({ model: 'Project', api: { list: true } })],
             configure: () => { events.push('configure'); },
             ${extra}
         }],
         // Models come from the build's metadata artifact: serving performs no generation.
-        resourceModels: () => JSON.parse(readFileSync(new URL('../generated/models/default.json', import.meta.url), 'utf8')).map(generateModelSchemas),
+        resourceModels: () => JSON.parse(readFileSync(new URL('../generated/models/database.json', import.meta.url), 'utf8')).map(generateModelSchemas),
     }),
     ${server}
     timeoutMs: 60000

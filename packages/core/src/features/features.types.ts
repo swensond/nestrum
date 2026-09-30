@@ -1,7 +1,7 @@
 import type { Application } from '#core/application/application';
 import type { AppDefinition } from '#core/application/application.types';
 import type { AuthorizationEnvironment, Subject } from '#core/authorization/authorization.types';
-import type { ModelIdentity, PrismaProvider } from '#core/database/database.types';
+import type { ModelIdentity } from '#core/database/database.types';
 import type { FeatureRegistry } from './registry.js';
 
 /** A flag as declared in source. Values are boolean only; the default is the deployable fallback. */
@@ -132,9 +132,9 @@ export type FeatureManagerApi = {
 
 export type FeaturesDefinition = {
     readonly kind: 'nestrum-features';
-    /** Database storing overrides; `undefined` means in-memory (non-persistent) storage. */
-    readonly database: string | undefined;
+    /** Whether overrides persist in the application's database; otherwise they live in memory. */
+    readonly persistent: boolean;
     readonly protectedModels: readonly ModelIdentity[];
-    createApp(provider: PrismaProvider): AppDefinition;
+    createApp(): AppDefinition;
     initialize(application: Application): Promise<Features>;
 };

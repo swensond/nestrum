@@ -41,93 +41,63 @@ async function discover(path: string): Promise<string[]> {
     return files;
 }
 
-export async function assemblePrismaContracts(
+/** Assembles the application's one Prisma contract from app fragments, inline sources and provider extensions. */
+export async function assemblePrismaContract(
     application: ContractApplication,
     options: AssemblePrismaOptions,
-): Promise<readonly PrismaContract[]> {
-    const fragments = new Map<string, PrismaFragment[]>();
+): Promise<PrismaContract | undefined> {
+    const fragments: PrismaFragment[] = [];
     const owners = new Map<string, PrismaFragment>();
     if (options.extensions !== undefined && !Array.isArray(options.extensions)) {
         throw new PrismaContractError('PRISMA_EXTENSION_INVALID', 'Provider extensions must be an explicit array.');
     }
-    if (options.database !== undefined && !application.databases.has(options.database)) {
-        throw new PrismaContractError('PRISMA_DATABASE_UNKNOWN', 'Selected database is not registered.');
-    }
 
     for (const app of application.apps.all()) {
-        for (const [database, content] of Object.entries(app.prismaSource ?? {}).sort(([left], [right]) =>
-            left.localeCompare(right),
-        )) {
-            if (!application.databases.has(database)) {
-                throw new PrismaContractError(
-                    'PRISMA_DATABASE_UNKNOWN',
-                    `App "${app.name}" contributes inline fragments to an unregistered database.`,
-                );
-            }
-            if (options.database !== undefined && database !== options.database) {
-                continue;
-            }
-            const group = fragments.get(database) ?? [];
-            group.push(Object.freeze({ app: app.name, path: `${app.name}:inline:${database}`, content }));
-            fragments.set(database, group);
+        if (app.prismaSource !== undefined) {
+            fragments.push(Object.freeze({ app: app.name, path: `${app.name}:inline`, content: app.prismaSource }));
         }
-        for (const database of Object.keys(app.prisma ?? {}).sort()) {
-            if (!application.databases.has(database)) {
-                throw new PrismaContractError(
-                    'PRISMA_DATABASE_UNKNOWN',
-                    `App "${app.name}" contributes Prisma fragments to unregistered database "${database}".`,
-                );
-            }
-            if (options.database !== undefined && database !== options.database) {
-                continue;
-            }
+        for (const input of app.prisma ?? []) {
+            const path = resolve(options.rootDir, input);
 
-            for (const input of app.prisma?.[database] ?? []) {
-                const path = resolve(options.rootDir, input);
+            try {
+                const files = await discover(path);
 
-                try {
-                    const files = await discover(path);
+                if (files.length === 0) {
+                    throw new PrismaContractError(
+                        'PRISMA_FRAGMENTS_EMPTY',
+                        `App "${app.name}" Prisma path contains no regular .prisma files: ${path}`,
+                    );
+                }
 
-                    if (files.length === 0) {
+                for (const file of files) {
+                    const canonicalPath = await realpath(file);
+                    const owner = owners.get(canonicalPath);
+
+                    if (owner) {
                         throw new PrismaContractError(
-                            'PRISMA_FRAGMENTS_EMPTY',
-                            `App "${app.name}" Prisma path contains no regular .prisma files: ${path}`,
+                            'PRISMA_FRAGMENT_DUPLICATE',
+                            `The database receives ${canonicalPath} twice, from apps "${owner.app}" and "${app.name}".`,
                         );
                     }
 
-                    for (const file of files) {
-                        const canonicalPath = await realpath(file);
-                        const key = `${database}\0${canonicalPath}`;
-                        const owner = owners.get(key);
-
-                        if (owner) {
-                            throw new PrismaContractError(
-                                'PRISMA_FRAGMENT_DUPLICATE',
-                                `Database "${database}" receives ${canonicalPath} twice, from apps "${owner.app}" and "${app.name}".`,
-                            );
-                        }
-
-                        const fragment = Object.freeze({
-                            app: app.name,
-                            path: canonicalPath,
-                            content: await readFile(canonicalPath, 'utf8'),
-                        });
-                        owners.set(key, fragment);
-                        const group = fragments.get(database) ?? [];
-                        group.push(fragment);
-                        fragments.set(database, group);
-                    }
-                } catch (cause) {
-                    if (cause instanceof PrismaContractError) {
-                        throw cause;
-                    }
-
-                    throw new PrismaContractError(
-                        'PRISMA_FRAGMENT_READ_FAILED',
-                        `Cannot read Prisma contribution for app "${app.name}", database "${database}": ${path}`,
-                        { cause },
-                    );
+                    const fragment = Object.freeze({
+                        app: app.name,
+                        path: canonicalPath,
+                        content: await readFile(canonicalPath, 'utf8'),
+                    });
+                    owners.set(canonicalPath, fragment);
+                    fragments.push(fragment);
                 }
+            } catch (cause) {
+                if (cause instanceof PrismaContractError) {
+                    throw cause;
+                }
+
+                throw new PrismaContractError(
+                    'PRISMA_FRAGMENT_READ_FAILED',
+                    `Cannot read Prisma contribution for app "${app.name}": ${path}`,
+                    { cause },
+                );
             }
         }
     }
@@ -140,25 +110,21 @@ export async function assemblePrismaContracts(
             !extension.owner.trim() ||
             typeof extension.name !== 'string' ||
             !/^[A-Za-z][A-Za-z0-9_.-]*$/.test(extension.name) ||
-            !application.databases.has(extension.database) ||
-            application.databases.get(extension.database).provider !== extension.provider ||
+            application.database.provider !== extension.provider ||
             (extension.contribute !== undefined && typeof extension.contribute !== 'function') ||
             (extension.controlModule !== undefined &&
                 (typeof extension.controlModule !== 'string' || !extension.controlModule.trim())) ||
             (extension.contribute === undefined && extension.controlModule === undefined) ||
-            extensions.has(`${extension.database}:${extension.name}`)
+            extensions.has(extension.name)
         ) {
             throw new PrismaContractError(
                 'PRISMA_EXTENSION_INVALID',
-                'Provider extensions require an owner, unique name, matching database/provider, and contributor.',
+                'Provider extensions require an owner, unique name, matching provider, and contributor.',
             );
         }
-        extensions.add(`${extension.database}:${extension.name}`);
+        extensions.add(extension.name);
     }
     for (const extension of options.extensions ?? []) {
-        if (options.database !== undefined && extension.database !== options.database) {
-            continue;
-        }
         if (!extension.contribute) {
             continue;
         }
@@ -175,27 +141,21 @@ export async function assemblePrismaContracts(
                 { cause },
             );
         }
-        const group = fragments.get(extension.database) ?? [];
-        group.push(Object.freeze({ app: extension.owner, path: `extension:${extension.name}`, content }));
-        fragments.set(extension.database, group);
+        fragments.push(Object.freeze({ app: extension.owner, path: `extension:${extension.name}`, content }));
     }
 
-    return Object.freeze(
-        application.databases
-            .names()
-            .filter((database) => fragments.has(database))
-            .map((database) =>
-                Object.freeze({
-                    database,
-                    provider: application.databases.get(database).provider,
-                    fragments: Object.freeze(fragments.get(database) ?? []),
-                    source: `// use prisma-8\n\n${(fragments.get(database) ?? [])
-                        .map(
-                            (fragment) =>
-                                `// Nestrum source: ${JSON.stringify({ app: fragment.app, path: fragment.path })}\n${fragment.content.replace(/^\uFEFF/, '')}\n`,
-                        )
-                        .join('\n')}`,
-                }),
-            ),
-    );
+    if (fragments.length === 0) {
+        return undefined;
+    }
+
+    return Object.freeze({
+        provider: application.database.provider,
+        fragments: Object.freeze(fragments),
+        source: `// use prisma-8\n\n${fragments
+            .map(
+                (fragment) =>
+                    `// Nestrum source: ${JSON.stringify({ app: fragment.app, path: fragment.path })}\n${fragment.content.replace(/^\uFEFF/, '')}\n`,
+            )
+            .join('\n')}`,
+    });
 }

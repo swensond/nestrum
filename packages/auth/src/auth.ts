@@ -29,11 +29,9 @@ import { openProviderConfig, SecretBox, sealProviderConfig } from '#auth/sso/sec
 import { SsoRegistry } from '#auth/sso/service';
 
 export type AuthConfig = {
-    readonly database?: string;
     readonly baseURL: string;
     readonly secret: string;
     readonly prisma: (context: {
-        readonly database: string;
         readonly definition: DatabaseDefinition;
         readonly application: Application;
     }) => AuthPrismaBinding | Promise<AuthPrismaBinding>;
@@ -235,8 +233,7 @@ export function defineAuth(config: AuthConfig): AuthenticationDefinition {
             'Auth requires a secret of at least 32 characters and a Prisma storage factory.',
         );
     }
-    const database = config.database ?? 'default';
-    const protectedModels = Object.freeze(AUTH_MODELS.map((model) => modelIdentity(model, database)));
+    const protectedModels = Object.freeze(AUTH_MODELS.map((model) => modelIdentity(model)));
     const baseURL = origin(config.baseURL);
     if (config.trustedOrigins !== undefined && !Array.isArray(config.trustedOrigins)) {
         throw new AppError('AUTH_CONFIG_INVALID', 'Trusted auth origins must be an array.');
@@ -268,16 +265,11 @@ export function defineAuth(config: AuthConfig): AuthenticationDefinition {
 
     return Object.freeze({
         kind: 'better-auth' as const,
-        database,
         protectedModels,
-        createApp: (provider) =>
-            defineApp({ name: 'nestrum.auth', prismaSource: { [database]: authContract(provider) } }),
+        createApp: () => defineApp({ name: 'nestrum.auth', prismaSource: authContract() }),
         async initialize(application: Application): Promise<Authentication> {
-            const definition = application.databases.get(database);
-            const binding = await prisma({ application, database, definition });
-            if (binding.database !== database) {
-                throw new AppError('AUTH_DATABASE_MISMATCH', 'Auth storage must bind its selected named database.');
-            }
+            const definition = application.database;
+            const binding = await prisma({ application, definition });
             const box = new SecretBox(secret);
             const isSsoModel = (model: string) => model.toLowerCase() === 'ssoprovider';
             const codec: AuthRowCodec | undefined = ssoOptions
@@ -291,7 +283,7 @@ export function defineAuth(config: AuthConfig): AuthenticationDefinition {
                 baseURL,
                 secret,
                 trustedOrigins,
-                database: createPrismaAuthAdapter(binding, definition.provider, codec),
+                database: createPrismaAuthAdapter(binding, codec),
                 issuer,
                 maxFailedAttempts,
                 lockoutSeconds,

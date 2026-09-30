@@ -2,14 +2,14 @@
 
 ## Status
 
-Not complete. Phases 0–15 are complete, and Phase 16's real Docker integration is implemented and passes. Application-owned Project/PostgreSQL and Article/MongoDB resources now prove generated contracts/Zod, QuerySets/managers, scoped ABAC, selected-database Better Auth, public/private CRUD, OpenAPI, generic Svelte forms/browser authentication, native CLI migrations/status, dependency order, and reverse shutdown without framework package edits. See [Phase 16](phases/phase-16-integration.md) and the [runnable example](../apps/example/README.md).
+Not complete. Phases 0–15 are complete, and Phase 16's real Docker integration is implemented and passes. Application-owned Project and Article PostgreSQL resources now prove generated contracts/Zod, QuerySets/managers, scoped ABAC, Better Auth in the application's database, public/private CRUD, OpenAPI, generic Svelte forms/browser authentication, native CLI migrations/status, dependency order, and reverse shutdown without framework package edits. See [Phase 16](phases/phase-16-integration.md) and the [runnable example](../apps/example/README.md).
 
 The earlier required MVP follow-up for atomic object-policy update/delete remains unmet. Such writes continue to deny safely; the live example proves scope-based writes. Full workspace and live-provider validation passes, but it does not remove that remaining requirement.
 
 ## Included
 
 - Explicit Django-style apps, dependency validation, deterministic lifecycle, and reverse shutdown.
-- Required `default` and named Prisma 8 databases; canonical `<database>.<model>` identities; single-database transactions.
+- One PostgreSQL Prisma 8 database per application; canonical model-name identities; database transactions. (The original MVP scope had named databases and MongoDB; [decision 0018](decisions/0018-postgresql-single-database.md) removed them.)
 - App-owned multi-file Prisma fragments, per-database assembly, metadata compilation, and framework-owned Zod generation.
 - Model/Create/Update/Read/Where/OrderBy schemas with resource-level composition and bootstrap model validation.
 - Immutable QuerySets, irreplaceable `objects`, named managers, Django-style evaluation, and explicit `raw()` Prisma access.
@@ -20,7 +20,7 @@ The earlier required MVP follow-up for atomic object-policy update/delete remain
 - Private admin metadata and CRUD API requiring session, `admin.access`, and same-origin access by default.
 - Prebuilt Svelte 5/SvelteKit admin, generic routes/navigation/CRUD, custom fields, and ABAC-backed custom actions.
 - Nestrum database CLI (`db generate`, `db migrate`, `db status`), lifecycle hardening, and provider extension seams.
-- SQL and MongoDB integration proof, a public resource and an admin-only resource, and durable phase documentation.
+- PostgreSQL integration proof, a public resource and an admin-only resource, and durable phase documentation.
 
 ## Resource definition of done
 
@@ -61,7 +61,7 @@ Adding an ordinary resource must require no manual Hono route, OpenAPI definitio
 
 ## Integration proof
 
-Proven with Docker PostgreSQL 17 and MongoDB 8 by `pnpm test:integration`: `default.Project` exposes public/admin CRUD, while `documents.Article` exposes admin CRUD only. Both have distinct managers/policies and generated Zod; auth lives in the separate PostgreSQL `identity` database. App dependencies, native migrations/status, generic forms, browser login/edit/action/logout, and shutdown are validated. The application uses provider-separated facade packages and codec-aware Mongo AST binding; see the example and Phase 16 for exact provider limitations.
+Proven with PostgreSQL by `pnpm test:integration`: `Project` exposes public/admin CRUD, while `Article` exposes admin CRUD only. Both have distinct managers/policies and generated Zod; auth shares the application's database. App dependencies, native migrations/status, generic forms, browser login/edit/action/logout, and shutdown are validated. The application uses a provider facade package; see the example and Phase 16 for exact provider limitations.
 
 ## Completion gate
 

@@ -30,10 +30,7 @@ export function defineCliConfig(config: CliConfig): CliConfig {
         ) ||
         (config.timeoutMs !== undefined && (!Number.isFinite(config.timeoutMs) || config.timeoutMs <= 0)) ||
         (config.server !== undefined && !validServer(config.server)) ||
-        (config.contractDirs !== undefined &&
-            (typeof config.contractDirs !== 'object' ||
-                Array.isArray(config.contractDirs) ||
-                Object.values(config.contractDirs).some((value) => typeof value !== 'string' || !value.trim())))
+        (config.contractDir !== undefined && (typeof config.contractDir !== 'string' || !config.contractDir.trim()))
     ) {
         throw new CliError(
             'CLI_CONFIG_INVALID',

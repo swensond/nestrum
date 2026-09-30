@@ -2,8 +2,7 @@ import type { AdminDefinition } from '#core/admin/admin.types';
 import type { AuthenticationDefinition } from '#core/auth/auth.types';
 import type { AuthorizationEngine } from '#core/authorization/authorization';
 import type { PolicyDefinition } from '#core/authorization/authorization.types';
-import type { DatabaseConfig } from '#core/database/database.types';
-import type { DatabaseRegistry } from '#core/database/database-registry';
+import type { DatabaseDefinition } from '#core/database/database.types';
 import type { FeaturesDefinition } from '#core/features/features.types';
 import type { ResourceDefinition, ResourceModel } from '#core/resource/resource.types';
 import type { ResourceRegistry } from '#core/resource/resource-registry';
@@ -13,7 +12,7 @@ import type { Application } from './application.js';
 export type AppContext = {
     readonly application: Application;
     readonly apps: AppRegistry;
-    readonly databases: DatabaseRegistry;
+    readonly database: DatabaseDefinition;
     readonly resources: ResourceRegistry;
     readonly authorization: AuthorizationEngine;
 };
@@ -26,8 +25,10 @@ export type AppDefinition = {
     readonly dependsOn?: readonly string[];
     readonly resources?: readonly ResourceDefinition[];
     readonly policies?: readonly PolicyDefinition[];
-    readonly prisma?: Readonly<Record<string, readonly string[]>>;
-    readonly prismaSource?: Readonly<Record<string, string>>;
+    /** Prisma schema files or directories this app contributes to the application's database. */
+    readonly prisma?: readonly string[];
+    /** Inline Prisma schema source this app contributes to the application's database. */
+    readonly prismaSource?: string;
     readonly configure?: AppHook;
     readonly ready?: AppHook;
     readonly shutdown?: AppHook;
@@ -35,9 +36,10 @@ export type AppDefinition = {
 
 export type ApplicationConfig = {
     readonly apps: readonly AppDefinition[];
-    readonly databases: DatabaseConfig;
+    /** The application's one database. */
+    readonly database: DatabaseDefinition;
     readonly prepare?: (application: Application) => void | Promise<void>;
-    readonly databaseLifecycle?: Readonly<Record<string, DatabaseLifecycle>>;
+    readonly databaseLifecycle?: DatabaseLifecycle;
     readonly auth?: AuthenticationDefinition;
     readonly admin?: AdminDefinition;
     readonly features?: FeaturesDefinition;

@@ -219,8 +219,8 @@ export class AdminRegistry {
         let identity: string;
         let slug: string;
         try {
-            identity = modelIdentity(resource.model, resource.database ?? 'default');
-            slug = `${resource.database && resource.database !== 'default' ? `${resource.database}--` : ''}${resourceSlug(resource.model)}`;
+            identity = modelIdentity(resource.model);
+            slug = resourceSlug(resource.model);
         } catch (cause) {
             throw new AdminError(
                 'ADMIN_REGISTRATION_INVALID',

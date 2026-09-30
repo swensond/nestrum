@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises';
 import { defineAdmin, roleBasedAdminPolicies } from '@nestrum/admin';
 import { defineAuth } from '@nestrum/auth';
 import { defineApplication, defineFeatureFlags } from '@nestrum/core';
-import mongo, { bindMongoCollection } from '@nestrum/example-mongo';
 import postgres from '@nestrum/example-postgres';
 import { defineFeatures } from '@nestrum/features';
 import { compileModelMetadata } from '@nestrum/prisma';
@@ -12,32 +11,30 @@ import { Article, articlesApp } from './apps/articles/app.mjs';
 import { Project, projectsApp } from './apps/projects/app.mjs';
 
 // Feature flags answer "is this capability switched on?"; ABAC still decides who may use it. Overrides live in
-// Nestrum's FeatureOverride table on the identity database and are managed at /admin/features.
+// Nestrum's FeatureOverride table in the application's database and are managed at /admin/features.
 export const features = defineFeatureFlags({
     newDashboard: { default: false, exposeToClient: true, description: 'Redesigned dashboard for the consumer UI' },
     experimentalSearch: { default: false, description: 'Server-only search experiment' },
 });
 
 export function createExample({
-    connections,
+    connection,
     baseURL = 'http://127.0.0.1:3100',
     events = [],
     secret = process.env.AUTH_SECRET,
 } = {}) {
-    if (!connections || !secret) {
-        throw new Error('Example requires explicit database connections and AUTH_SECRET.');
+    if (!connection || !secret) {
+        throw new Error('Example requires an explicit database connection and AUTH_SECRET.');
     }
-    const clients = new Map();
+    let client;
     let resourceModels = [];
     const auth = defineAuth({
-        database: 'identity',
         baseURL,
         secret,
         prisma: () => ({
-            database: 'identity',
-            collections: clients.get('identity').orm.public,
+            collections: client.orm.public,
             // Atomic units of work (SSO resolveUser needs them); PostgreSQL clients provide transactions.
-            transaction: (run) => clients.get('identity').transaction((tx) => run(tx.orm.public)),
+            transaction: (run) => client.transaction((tx) => run(tx.orm.public)),
         }),
         // Enterprise SSO (OIDC and SAML 2.0): providers are managed at /admin/auth/sso. The identity migration adds
         // the SsoProvider table. Identity providers on private networks would be listed in `trustedIdpOrigins`.
@@ -45,9 +42,8 @@ export function createExample({
     });
     const featureFlags = defineFeatures({
         flags: features,
-        database: 'identity',
         environment: 'integration',
-        prisma: () => ({ database: 'identity', collection: clients.get('identity').orm.public.FeatureOverride }),
+        prisma: () => ({ collection: client.orm.public.FeatureOverride }),
     });
     const admin = defineAdmin();
     admin.register(Project, {
@@ -63,7 +59,7 @@ export function createExample({
         },
     });
     admin.register(Article, {
-        listDisplay: ['_id', 'title', 'status'],
+        listDisplay: ['id', 'title', 'status'],
         fields: { body: { widget: 'textarea' } },
         actions: {
             archive: {
@@ -75,11 +71,7 @@ export function createExample({
         },
     });
     const application = defineApplication({
-        databases: {
-            default: { kind: 'prisma', provider: 'postgresql', connection: connections.default },
-            documents: { kind: 'prisma', provider: 'mongodb', connection: connections.documents },
-            identity: { kind: 'prisma', provider: 'postgresql', connection: connections.identity },
-        },
+        database: { kind: 'prisma', provider: 'postgresql', connection },
         auth,
         admin,
         features: featureFlags,
@@ -88,72 +80,40 @@ export function createExample({
         policies: roleBasedAdminPolicies(),
         // Contracts are emitted by `nestrum build`/`nestrum dev`; startup only reads them. The application module is
         // bundled into `<build>/server/`, so the build directory is its parent.
-        async prepare(app) {
+        async prepare() {
             const buildDir = new URL('../', import.meta.url);
-            const metadata = [];
-            for (const database of app.databases.names()) {
-                const provider = app.databases.get(database).provider;
-                const contractJson = JSON.parse(
-                    await readFile(new URL(`contracts/${database}.json`, buildDir), 'utf8'),
-                );
-                clients.set(
-                    database,
-                    provider === 'postgresql'
-                        ? postgres({ contractJson, url: connections[database] })
-                        : mongo({ contractJson, url: connections[database] }),
-                );
-                metadata.push(...compileModelMetadata({ database, provider, contract: contractJson }));
-            }
-            resourceModels = metadata
+            const contractJson = JSON.parse(await readFile(new URL('contracts/database.json', buildDir), 'utf8'));
+            client = postgres({ contractJson, url: connection });
+            resourceModels = compileModelMetadata({ provider: 'postgresql', contract: contractJson })
                 .filter((model) => [Project.identity, Article.identity].includes(model.identity))
                 .map((model) => {
-                    const client = clients.get(model.database);
-                    const collection =
-                        model.provider === 'postgresql' ? client.orm.public[model.name] : client.orm[model.name];
-                    const binding = model.provider === 'mongodb' ? bindMongoCollection(collection, model) : undefined;
-                    const options =
-                        model.provider === 'postgresql'
-                            ? { provider: 'postgresql' }
-                            : {
-                                  provider: 'mongodb',
-                                  count: async (predicate) => {
-                                      const result = await (await client.runtime()).query(
-                                          client.query
-                                              .from(model.name)
-                                              .match(binding.encodeFilter(predicate))
-                                              .count('total')
-                                              .build(),
-                                      );
-                                      return result[0]?.total ?? 0;
-                                  },
-                              };
+                    const collection = client.orm.public[model.name];
+
                     return {
                         ...generateModelSchemas(model),
-                        queryBackend: {
-                            ...createPrismaQueryBackend(binding?.collection ?? collection, options),
-                            raw: collection,
-                        },
+                        queryBackend: { ...createPrismaQueryBackend(collection), raw: collection },
                     };
                 });
             events.push('prepared');
         },
         resourceModels: () => resourceModels,
-        databaseLifecycle: Object.fromEntries(
-            ['default', 'documents', 'identity'].map((name) => [
-                name,
-                {
-                    connect: async () => {
-                        await clients.get(name).connect();
-                        events.push(`connect:${name}`);
-                    },
-                    disconnect: async () => {
-                        await clients.get(name)?.close();
-                        events.push(`disconnect:${name}`);
-                    },
-                },
-            ]),
-        ),
+        databaseLifecycle: {
+            connect: async () => {
+                await client.connect();
+                events.push('connect');
+            },
+            disconnect: async () => {
+                await client?.close();
+                events.push('disconnect');
+            },
+        },
     });
 
-    return { application, clients, events };
+    return {
+        application,
+        events,
+        get client() {
+            return client;
+        },
+    };
 }

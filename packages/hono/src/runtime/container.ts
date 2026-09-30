@@ -7,7 +7,7 @@ export type RequestInputs = { subject: Subject; environment: AuthorizationEnviro
 
 export type RuntimeGraph = {
     application: Spec<Application>;
-    databases: Spec<Application['databases']>;
+    database: Spec<Application['database']>;
     resources: Spec<Application['resources']>;
     authorization: Spec<Application['authorization']>;
     features: Spec<BoundFeatures, 'scoped'>;
@@ -32,7 +32,7 @@ export function requestFeatures(application: Application, inputs: Omit<RequestIn
 export function createRuntimeContainer(application: Application): RuntimeContainer {
     return new Container()
         .registerValue('application', application)
-        .registerValue('databases', application.databases)
+        .registerValue('database', application.database)
         .registerValue('resources', application.resources)
         .registerValue('authorization', application.authorization)
         .declareScopeInputs<RequestInputs>()

@@ -91,16 +91,11 @@ export function defineResource(config: ResourceConfig): ResourceDefinition {
     if (!config || typeof config !== 'object' || Array.isArray(config)) {
         throw new ResourceError('RESOURCE_CONFIG_INVALID', 'A resource definition must be an object.');
     }
-    const database = config.database === undefined ? 'default' : config.database;
     let identity: ModelIdentity;
     try {
-        identity = modelIdentity(config.model, database);
+        identity = modelIdentity(config.model);
     } catch (cause) {
-        throw new ResourceError(
-            'RESOURCE_CONFIG_INVALID',
-            'Resource database and model must be valid identifier segments.',
-            { cause },
-        );
+        throw new ResourceError('RESOURCE_CONFIG_INVALID', 'Resource model must be a valid identifier.', { cause });
     }
     const api: Record<ResourceApiOperation, boolean> = {
         list: false,
@@ -156,7 +151,6 @@ export function defineResource(config: ResourceConfig): ResourceDefinition {
 
     return Object.freeze({
         model: config.model,
-        database,
         identity,
         api: Object.freeze(api),
         apiAccess,

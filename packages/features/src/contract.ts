@@ -1,5 +1,3 @@
-import type { PrismaProvider } from '@nestrum/core';
-
 /** Nestrum-owned models for persisted feature overrides. Applications never declare these themselves. */
 export const FEATURE_MODELS = ['FeatureOverride'] as const;
 
@@ -19,21 +17,6 @@ const POSTGRESQL = `model FeatureOverride {
 }
 `;
 
-const MONGODB = `model FeatureOverride {
-    id ObjectId @id @map("_id")
-    flag String
-    scope String
-    target String
-    enabled Bool
-    percentage Float?
-    updatedBy String?
-    createdAt Date
-    updatedAt Date
-    @@unique([flag, scope, target])
-    @@index([flag])
-}
-`;
-
-export function featureContract(provider: PrismaProvider): string {
-    return provider === 'mongodb' ? MONGODB : POSTGRESQL;
+export function featureContract(): string {
+    return POSTGRESQL;
 }

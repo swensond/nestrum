@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { AuthorizationEngine } from '#core/authorization/authorization';
-import type { DatabaseRegistry } from '#core/database/database-registry';
+import type { DatabaseDefinition } from '#core/database/database.types';
 import { modelIdentity } from '#core/database/model-identity';
 import { bindResourceQuerySets } from '#core/queryset/queryset';
 import type { QueryBackend } from '#core/queryset/queryset.types';
@@ -15,7 +15,7 @@ export class ResourceRegistry {
 
     constructor(
         definitions: readonly ResourceDefinition[],
-        private readonly databases: DatabaseRegistry,
+        private readonly database: DatabaseDefinition,
         private readonly authorization = new AuthorizationEngine(),
     ) {
         if (!Array.isArray(definitions)) {
@@ -29,12 +29,6 @@ export class ResourceRegistry {
                     throw new ResourceError(
                         'RESOURCE_DUPLICATE',
                         `Resource ${definition.identity} is registered more than once.`,
-                    );
-                }
-                if (!databases.has(definition.database)) {
-                    throw new ResourceError(
-                        'RESOURCE_DATABASE_UNKNOWN',
-                        `Resource ${definition.identity} targets an unregistered database.`,
                     );
                 }
                 identities.add(definition.identity);
@@ -56,9 +50,8 @@ export class ResourceRegistry {
             const metadata = model?.metadata;
             if (
                 !metadata ||
-                !this.databases.has(metadata.database) ||
-                metadata.identity !== modelIdentity(metadata.name, metadata.database) ||
-                metadata.provider !== this.databases.get(metadata.database).provider ||
+                metadata.identity !== modelIdentity(metadata.name) ||
+                metadata.provider !== this.database.provider ||
                 available.has(metadata.identity)
             ) {
                 throw new ResourceError(
@@ -88,7 +81,6 @@ export class ResourceRegistry {
             const schemas = this.compose(definition, model);
             const context = {
                 model: definition.model,
-                database: definition.database,
                 identity: definition.identity,
                 api: definition.api,
                 apiAccess: definition.apiAccess,

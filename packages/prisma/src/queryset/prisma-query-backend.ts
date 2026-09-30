@@ -1,11 +1,8 @@
-import type { PrismaProvider, QueryBackend, QuerySpec } from '@nestrum/core';
+import type { QueryBackend, QuerySpec } from '@nestrum/core';
 import { QuerySetError } from '@nestrum/core';
-import { MongoAndExpr, MongoFieldFilter, MongoNotExpr, MongoOrExpr } from '@prisma/orm-mongo/query-ast/execution';
-import { MongoParamRef } from '@prisma/orm-mongo/value';
 import { and, not, or } from '@prisma/orm-postgres/orm-client';
 
 type SqlPredicate = Parameters<typeof and>[number];
-type MongoPredicate = Parameters<typeof MongoAndExpr.of>[0][number];
 type CollectionShape = {
     all(): PromiseLike<readonly object[]> | AsyncIterable<object> | readonly object[];
     create(data: never): PromiseLike<object>;
@@ -23,13 +20,6 @@ type Update<Raw extends CollectionShape> = Exclude<
     Extract<Parameters<Raw['updateAndCount']>[0], object>,
     (...args: never[]) => unknown
 >;
-export type PrismaQueryBackendOptions =
-    | { readonly provider: 'postgresql' }
-    | {
-          readonly provider: 'mongodb';
-          readonly count: (filter: MongoPredicate) => Promise<number>;
-      };
-
 function invoke(target: unknown, method: string, ...args: unknown[]): unknown {
     if (!target || (typeof target !== 'object' && typeof target !== 'function')) {
         throw new QuerySetError('QUERY_OPERATION_UNSUPPORTED', `Prisma target does not support ${method}.`);
@@ -103,91 +93,21 @@ function sqlFilter(where: object, fields: Record<string, unknown>): SqlPredicate
     return and(...predicates);
 }
 
-function mongoFilter(where: object): MongoPredicate {
-    const predicates: MongoPredicate[] = [];
-    for (const [name, value] of Object.entries(where)) {
-        if (value === undefined) {
-            continue;
-        }
-        if (name === 'AND' || name === 'OR' || name === 'NOT') {
-            const nested = (Array.isArray(value) ? value : [value]).map((entry) => mongoFilter(record(entry)));
-            predicates.push(
-                name === 'OR'
-                    ? MongoOrExpr.of(nested)
-                    : name === 'NOT'
-                      ? MongoAndExpr.of(nested.map((entry) => new MongoNotExpr(entry)))
-                      : MongoAndExpr.of(nested),
-            );
-            continue;
-        }
-        const operations = isFilter(value) ? value : { equals: value };
-        for (const [operator, operand] of Object.entries(operations)) {
-            if (operand === undefined) {
-                continue;
-            }
-            if (operator === 'in' || operator === 'notIn') {
-                const values = (operand as unknown[]).map((entry) => new MongoParamRef(entry));
-                predicates.push(
-                    operator === 'in' ? MongoFieldFilter.in(name, values) : MongoFieldFilter.nin(name, values),
-                );
-            } else if (['equals', 'not', 'lt', 'lte', 'gt', 'gte'].includes(operator)) {
-                predicates.push(
-                    invoke(
-                        MongoFieldFilter,
-                        operator === 'equals' ? 'eq' : operator === 'not' ? 'neq' : operator,
-                        name,
-                        new MongoParamRef(operand),
-                    ) as MongoPredicate,
-                );
-            } else {
-                throw new QuerySetError(
-                    'QUERY_OPERATION_UNSUPPORTED',
-                    `Prisma 8 QuerySets do not yet compile ${operator} filters; use raw() for provider operations.`,
-                );
-            }
-        }
-    }
-
-    return MongoAndExpr.of(predicates);
-}
-
 export function createPrismaQueryBackend<Raw extends CollectionShape>(
     collection: Raw,
-    options: PrismaQueryBackendOptions,
 ): QueryBackend<Rows<Raw>, Create<Raw>, Update<Raw>, Raw> {
-    if (
-        !options ||
-        !['postgresql', 'mongodb'].includes(options.provider) ||
-        (options.provider === 'mongodb' && typeof options.count !== 'function')
-    ) {
-        throw new QuerySetError(
-            'QUERY_ARGUMENT_INVALID',
-            'Prisma QuerySets require a supported provider; MongoDB also requires a database-count callback.',
-        );
-    }
-    const provider: PrismaProvider = options.provider;
     function select(query: QuerySpec, window = true): unknown {
         let selected: unknown = collection;
         for (const filter of query.filters) {
-            selected = invoke(
-                selected,
-                'where',
-                provider === 'postgresql'
-                    ? (fields: Record<string, unknown>) => sqlFilter(filter, fields)
-                    : mongoFilter(filter),
-            );
+            selected = invoke(selected, 'where', (fields: Record<string, unknown>) => sqlFilter(filter, fields));
         }
         if (window && query.orderBy.length) {
             selected = invoke(
                 selected,
                 'orderBy',
-                provider === 'postgresql'
-                    ? query.orderBy.map(
-                          (order) => (fields: Record<string, unknown>) => invoke(fields[order.field], order.direction),
-                      )
-                    : Object.fromEntries(
-                          query.orderBy.map((order) => [order.field, order.direction === 'asc' ? 1 : -1]),
-                      ),
+                query.orderBy.map(
+                    (order) => (fields: Record<string, unknown>) => invoke(fields[order.field], order.direction),
+                ),
             );
         }
         if (window && query.limit !== undefined) {
@@ -219,9 +139,6 @@ export function createPrismaQueryBackend<Raw extends CollectionShape>(
             return result as readonly Rows<Raw>[];
         },
         async count(query: QuerySpec) {
-            if (options.provider === 'mongodb') {
-                return options.count(MongoAndExpr.of(query.filters.map((filter) => mongoFilter(filter))));
-            }
             const result = (await invoke(select(query, false), 'aggregate', (aggregate: { count(): unknown }) => ({
                 total: aggregate.count(),
             }))) as { total: number };

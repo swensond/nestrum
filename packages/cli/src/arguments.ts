@@ -3,7 +3,6 @@ import type { CliArguments, DatabaseCommand } from './cli.types.js';
 
 export const CLI_HELP = `Usage: nestrum db <generate|migrate|status> [options]
   --config <path>      Application config module (default nestrum.config.ts)
-  --database <name>    Named database (default default)
   --name <slug>        Migration name (with migrate --plan)
   --plan              Plan a migration offline without applying it
   --json              Emit machine-readable output
@@ -37,7 +36,7 @@ export function parseCliArguments(args: readonly string[]): CliArguments {
             flags.add(option);
             continue;
         }
-        if (!['--config', '--database', '--name'].includes(option) || values.has(option)) {
+        if (!['--config', '--name'].includes(option) || values.has(option)) {
             throw new CliError('CLI_ARGUMENT_INVALID', `Unknown or repeated option ${option}.`);
         }
         const value = options[++index];
@@ -58,7 +57,6 @@ export function parseCliArguments(args: readonly string[]): CliArguments {
     return {
         command: command as DatabaseCommand,
         config: values.get('--config') ?? 'nestrum.config.ts',
-        database: values.get('--database') ?? 'default',
         ...(name === undefined ? {} : { name }),
         plan: flags.has('--plan'),
         json: flags.has('--json'),

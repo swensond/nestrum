@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FeatureRule, QueryBackend, QuerySpec } from '@nestrum/core';
 import { AppError, defineApplication, defineFeatureFlags, defineResource, modelIdentity } from '@nestrum/core';
-import { generatePrismaContracts } from '@nestrum/prisma/node';
+import { generatePrismaContract } from '@nestrum/prisma/node';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
     createPrismaFeatureStore,
@@ -14,10 +14,7 @@ import {
     parseDevOverrides,
 } from '../src/index.js';
 
-const DATABASES = {
-    default: { kind: 'prisma' as const, provider: 'postgresql' as const, connection: 'unused' },
-    documents: { kind: 'prisma' as const, provider: 'mongodb' as const, connection: 'unused' },
-};
+const DATABASE = { kind: 'prisma' as const, provider: 'postgresql' as const, connection: 'unused' };
 
 type Row = Record<string, unknown>;
 function matches(row: Row, filter: Row): boolean {
@@ -84,39 +81,36 @@ const flags = () =>
     });
 
 describe('feature contract', () => {
-    it('is emitted by real Prisma for both providers', async () => {
+    it('is emitted by real Prisma', async () => {
         const directory = await mkdtemp(join(tmpdir(), 'nestrum-features-'));
         try {
-            for (const provider of ['postgresql', 'mongodb'] as const) {
-                const application = defineApplication({
-                    apps: [{ name: 'nestrum.features', prismaSource: { default: featureContract(provider) } }],
-                    databases: { default: { kind: 'prisma' as const, provider, connection: 'unused' } },
-                });
-                const result = await generatePrismaContracts(application, {
-                    rootDir: directory,
-                    outputDir: `generated-${provider}`,
-                });
-                const contract = JSON.parse(await readFile(result.contracts[0]!.contractPath, 'utf8'));
-                expect(JSON.stringify(contract)).toContain('FeatureOverride');
-                expect(JSON.stringify(contract)).toContain('percentage');
-            }
+            const application = defineApplication({
+                apps: [{ name: 'nestrum.features', prismaSource: featureContract() }],
+                database: DATABASE,
+            });
+            const result = await generatePrismaContract(application, {
+                rootDir: directory,
+                outputDir: 'generated',
+            });
+            const contract = JSON.parse(await readFile(result.contract.contractPath, 'utf8'));
+            expect(JSON.stringify(contract)).toContain('FeatureOverride');
+            expect(JSON.stringify(contract)).toContain('percentage');
         } finally {
             await rm(directory, { recursive: true, force: true });
         }
     }, 60_000);
 
-    it('names its owned models per database', () => {
+    it('names its owned model', () => {
         expect(FEATURE_MODELS).toEqual(['FeatureOverride']);
-        expect(featureContract('postgresql')).toContain('@@unique([flag, scope, target])');
-        expect(featureContract('mongodb')).toContain('@map("_id")');
+        expect(featureContract()).toContain('@@unique([flag, scope, target])');
     });
 });
 
 describe('Prisma feature store', () => {
-    for (const provider of ['postgresql', 'mongodb'] as const) {
-        it(`persists, updates, lists and removes overrides on ${provider}`, async () => {
+    {
+        it('persists, updates, lists and removes overrides', async () => {
             const { impl, rows, hits } = backend();
-            const store = createPrismaFeatureStore(impl, provider);
+            const store = createPrismaFeatureStore(impl);
             const created = await store.upsert({
                 flag: 'newDashboard',
                 scope: 'subject',
@@ -132,7 +126,7 @@ describe('Prisma feature store', () => {
                 enabled: true,
                 updatedBy: 'admin',
             });
-            expect(rows[0]!.updatedAt instanceof Date).toBe(provider === 'mongodb');
+            expect(typeof rows[0]!.updatedAt).toBe('string');
             const updated = await store.upsert({
                 flag: 'newDashboard',
                 scope: 'subject',
@@ -196,7 +190,7 @@ describe('Prisma feature store', () => {
             }
             return found;
         };
-        const store = createPrismaFeatureStore(impl, 'postgresql');
+        const store = createPrismaFeatureStore(impl);
         const rule = await store.upsert({
             flag: 'newDashboard',
             scope: 'global',
@@ -215,7 +209,7 @@ describe('defineFeatures', () => {
         const features = flags();
         const application = defineApplication({
             apps: [],
-            databases: DATABASES,
+            database: DATABASE,
             features: defineFeatures({ flags: features }),
         });
         expect(application.featuresConfigured).toBe(true);
@@ -228,20 +222,19 @@ describe('defineFeatures', () => {
         await application.shutdown();
     });
 
-    it('stores overrides in the selected database and shares the schema fragment', async () => {
+    it('stores overrides in the application database and shares the schema fragment', async () => {
         const { impl, rows } = backend();
         const features = flags();
         const application = defineApplication({
             apps: [],
-            databases: DATABASES,
+            database: DATABASE,
             features: defineFeatures({
                 flags: features,
-                database: 'default',
                 environment: 'production',
-                prisma: ({ database }) => ({ database, collection: impl as never }),
+                prisma: () => ({ collection: impl as never }),
             }),
         });
-        expect(application.apps.get('nestrum.features').prismaSource?.default).toContain('model FeatureOverride');
+        expect(application.apps.get('nestrum.features').prismaSource).toContain('model FeatureOverride');
         await application.start();
         // The Prisma query backend needs a real collection; the store contract is covered above, so here only the wiring is checked.
         expect(application.features?.registry.names()).toEqual(['newDashboard', 'experimentalSearch']);
@@ -253,43 +246,20 @@ describe('defineFeatures', () => {
     it('validates configuration and protects its models from resource registration', async () => {
         const features = flags();
         expect(() => defineFeatures({ flags: {} as never })).toThrow(/defineFeatureFlags/);
-        expect(() => defineFeatures({ flags: features, database: 'default' })).toThrow(/both a database name/);
         expect(() => defineFeatures({ flags: features, environment: 'has space' })).toThrow(/environment/);
         expect(() => defineFeatures({ flags: features, overrides: { nope: true } })).toThrow(/not declared/);
+        const protectedIdentity = modelIdentity('FeatureOverride');
         expect(() =>
             defineApplication({
                 apps: [],
-                databases: DATABASES,
+                database: DATABASE,
                 features: defineFeatures({
                     flags: features,
-                    database: 'missing',
-                    prisma: ({ database }) => ({ database, collection: {} as never }),
-                }),
-            }),
-        ).toThrowError(expect.objectContaining({ code: 'FEATURES_CONFIG_INVALID' }));
-        const protectedIdentity = modelIdentity('FeatureOverride', 'default');
-        expect(() =>
-            defineApplication({
-                apps: [],
-                databases: DATABASES,
-                features: defineFeatures({
-                    flags: features,
-                    database: 'default',
-                    prisma: ({ database }) => ({ database, collection: {} as never }),
+                    prisma: () => ({ collection: {} as never }),
                 }),
                 resources: [defineResource({ identity: protectedIdentity } as never)],
             }),
         ).toThrow();
-        const mismatch = defineApplication({
-            apps: [],
-            databases: DATABASES,
-            features: defineFeatures({
-                flags: features,
-                database: 'default',
-                prisma: () => ({ database: 'documents', collection: {} as never }),
-            }),
-        });
-        await expect(mismatch.start()).rejects.toBeInstanceOf(AppError);
     });
 });
 
@@ -322,7 +292,7 @@ describe('development overrides', () => {
         const production = flags();
         const off = defineApplication({
             apps: [],
-            databases: DATABASES,
+            database: DATABASE,
             features: defineFeatures({ flags: production }),
         });
         await off.start();
@@ -333,7 +303,7 @@ describe('development overrides', () => {
         const development = flags();
         const on = defineApplication({
             apps: [],
-            databases: DATABASES,
+            database: DATABASE,
             features: defineFeatures({ flags: development }),
         });
         await on.start();

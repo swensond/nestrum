@@ -35,13 +35,6 @@ const CODECS: Readonly<Record<string, ScalarKind>> = Object.freeze({
     'pg/timestamp-temporal@1': 'temporal-datetime',
     'pg/date-temporal@1': 'temporal-date',
     'pg/time-temporal@1': 'temporal-time',
-    'mongo/string@1': 'string',
-    'mongo/objectId@1': 'string',
-    'mongo/int32@1': 'integer',
-    'mongo/int64@1': 'bigint',
-    'mongo/double@1': 'number',
-    'mongo/bool@1': 'boolean',
-    'mongo/date@1': 'date',
 });
 
 type ObjectValue = Record<string, unknown>;
@@ -90,17 +83,11 @@ function optionalObject(value: unknown, path: string): ObjectValue {
 }
 
 export function compileModelMetadata(options: CompileMetadataOptions): readonly ModelMetadata[] {
-    modelIdentity('Model', options.database);
     const contract = object(options.contract, 'contract');
-    if (options.provider !== 'postgresql' && options.provider !== 'mongodb') {
+    if (options.provider !== 'postgresql') {
         invalid('provider');
     }
-    const target = options.provider === 'postgresql' ? 'postgres' : 'mongo';
-    if (
-        contract.schemaVersion !== '1' ||
-        contract.target !== target ||
-        contract.targetFamily !== (target === 'postgres' ? 'sql' : 'mongo')
-    ) {
+    if (contract.schemaVersion !== '1' || contract.target !== 'postgres' || contract.targetFamily !== 'sql') {
         invalid('schemaVersion/target');
     }
 
@@ -128,10 +115,9 @@ export function compileModelMetadata(options: CompileMetadataOptions): readonly 
     for (const namespace of Object.keys(namespaces).sort()) {
         const domain = object(namespaces[namespace], namespace);
         const definitions = optionalObject(domain.models, `${namespace}.models`);
-        const storage = object(storageNamespaces[namespace], `storage.${namespace}`);
 
         for (const name of Object.keys(definitions).sort()) {
-            const identity = modelIdentity(name, options.database);
+            const identity = modelIdentity(name);
             if (identities.has(identity)) {
                 throw new PrismaMetadataError(
                     'PRISMA_MODEL_AMBIGUOUS',
@@ -141,24 +127,18 @@ export function compileModelMetadata(options: CompileMetadataOptions): readonly 
             identities.add(identity);
             const definition = object(definitions[name], identity);
             const mapping = object(definition.storage, `${identity}.storage`);
-            const mongo = options.provider === 'mongodb';
-            const storageName = text(mongo ? mapping.collection : mapping.table, 'storage model name');
-            const storageNamespace = mongo
-                ? storage
-                : object(storageNamespaces[text(mapping.namespaceId, 'storage namespace')], 'mapped storage namespace');
-            const mappedEntries = object(storageNamespace.entries, 'mapped storage entries');
-            const physical = object(
-                object(mappedEntries[mongo ? 'collection' : 'table'], 'storage models')[storageName],
-                'storage model',
+            const storageName = text(mapping.table, 'storage model name');
+            const storageNamespace = object(
+                storageNamespaces[text(mapping.namespaceId, 'storage namespace')],
+                'mapped storage namespace',
             );
-            const columns = mongo ? {} : object(physical.columns, 'columns');
-            const fieldMappings = mongo ? {} : object(mapping.fields, 'field mappings');
+            const mappedEntries = object(storageNamespace.entries, 'mapped storage entries');
+            const physical = object(object(mappedEntries.table, 'storage models')[storageName], 'storage model');
+            const columns = object(physical.columns, 'columns');
+            const fieldMappings = object(mapping.fields, 'field mappings');
             const primaryKey = optionalObject(physical.primaryKey, 'primaryKey');
             const primaryColumns =
                 primaryKey.columns === undefined ? [] : strings(primaryKey.columns, 'primaryKey.columns');
-            const validator = mongo ? object(physical.validator, 'validator') : {};
-            const jsonSchema = mongo ? object(validator.jsonSchema, 'validator.jsonSchema') : {};
-            const required = mongo ? strings(jsonSchema.required, 'validator.required') : [];
             const fields: FieldMetadata[] = [];
             const rawFields = object(definition.fields, `${identity}.fields`);
 
@@ -168,19 +148,17 @@ export function compileModelMetadata(options: CompileMetadataOptions): readonly 
                 const type = object(field.type, `${path}.type`);
                 const codec = text(type.codecId, `${path}.codecId`);
                 const kind = Object.hasOwn(CODECS, codec) ? CODECS[codec] : undefined;
-                if (type.kind !== 'scalar' || !kind || !codec.startsWith(mongo ? 'mongo/' : 'pg/')) {
+                if (type.kind !== 'scalar' || !kind || !codec.startsWith('pg/')) {
                     throw new PrismaMetadataError(
                         'PRISMA_CODEC_UNSUPPORTED',
                         `Unsupported codec/type ${codec} at ${path}.`,
                     );
                 }
-                const columnName = mongo
-                    ? fieldName
-                    : text(object(fieldMappings[fieldName], `${path}.mapping`).column, `${path}.column`);
-                const column = mongo ? {} : object(columns[columnName], `${path}.storage`);
+                const columnName = text(object(fieldMappings[fieldName], `${path}.mapping`).column, `${path}.column`);
+                const column = object(columns[columnName], `${path}.storage`);
                 const mutation = defaultEntries.find(
                     (entry) =>
-                        entry.namespace === (mongo ? namespace : mapping.namespaceId) &&
+                        entry.namespace === mapping.namespaceId &&
                         entry.model === storageName &&
                         entry.field === columnName,
                 )?.entry;
@@ -211,9 +189,9 @@ export function compileModelMetadata(options: CompileMetadataOptions): readonly 
                         codec,
                         kind,
                         nullable: flag(field.nullable, `${path}.nullable`),
-                        optional: mongo ? !required.includes(fieldName) : false,
+                        optional: false,
                         array: flag(field.many, `${path}.many`, false),
-                        primaryKey: mongo ? fieldName === '_id' : primaryColumns.includes(columnName),
+                        primaryKey: primaryColumns.includes(columnName),
                         hasCreateDefault: column.default !== undefined || mutation?.onCreate !== undefined,
                         hasUpdateDefault: mutation?.onUpdate !== undefined,
                         ...(enumValues ? { enumValues } : {}),
@@ -252,7 +230,7 @@ export function compileModelMetadata(options: CompileMetadataOptions): readonly 
                 relations.push(
                     Object.freeze({
                         name: relationName,
-                        target: modelIdentity(targetModel, options.database),
+                        target: modelIdentity(targetModel),
                         cardinality: text(relation.cardinality, 'relation.cardinality'),
                         nullable: flag(relation.nullable, 'relation.nullable'),
                         localFields,
@@ -263,7 +241,6 @@ export function compileModelMetadata(options: CompileMetadataOptions): readonly 
 
             models.push(
                 Object.freeze({
-                    database: options.database,
                     provider: options.provider,
                     namespace,
                     name,

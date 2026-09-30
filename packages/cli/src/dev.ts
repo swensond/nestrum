@@ -5,7 +5,7 @@ import type { ModelMetadata } from '@nestrum/core';
 import { AppError } from '@nestrum/core';
 import type { HonoRuntime } from '@nestrum/hono';
 import { createHonoRuntime } from '@nestrum/hono';
-import { assemblePrismaContracts } from '@nestrum/prisma/node';
+import { assemblePrismaContract } from '@nestrum/prisma/node';
 import type { RuntimeAdapter, ServerHandle } from '@nestrum/runtime';
 import { nodeRuntime } from '@nestrum/runtime-node';
 import { describeCollisions, findRouteCollisions } from '@nestrum/web';
@@ -137,7 +137,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
     let generation = 0;
     let running: Running | undefined;
     let models: readonly ModelMetadata[] | undefined;
-    const schemas = new Map<string, string>();
+    let schemaHash: string | undefined;
     let pending = new Set<ChangeKind>();
     let timer: NodeJS.Timeout | undefined;
     let loop: Promise<void> | undefined;
@@ -172,24 +172,18 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
             await bundleConfig(configPath, entry);
             const config = await loadBuiltConfig(entry, root);
             const rootDir = resolve(config.rootDir ?? root);
-            const assembled = await assemblePrismaContracts(config.application, {
+            const assembled = await assemblePrismaContract(config.application, {
                 rootDir,
                 ...(config.extensions === undefined ? {} : { extensions: config.extensions }),
             });
-            const next = new Map(assembled.map((contract) => [contract.database, sha256(contract.source)]));
-            const changed = [...next].filter(([name, hash]) => schemas.get(name) !== hash).map(([name]) => name);
-            if (models === undefined || changed.length > 0) {
+            const next = assembled === undefined ? undefined : sha256(assembled.source);
+            const changed = next !== schemaHash;
+            if (models === undefined || changed) {
                 models = (await generateArtifacts(config, devDir)).models;
-                const migrate = changed.filter((name) => schemas.has(name));
-                for (const name of migrate) {
-                    log(
-                        `Schema changed.\n\nDatabase "${name}" may require migration.\n\nRun:\n  nestrum db migrate --database ${name}\n`,
-                    );
+                if (changed && schemaHash !== undefined) {
+                    log('Schema changed.\n\nThe database may require migration.\n\nRun:\n  nestrum db migrate\n');
                 }
-                schemas.clear();
-                for (const [name, hash] of next) {
-                    schemas.set(name, hash);
-                }
+                schemaHash = next;
             }
             // Validation initializes a resource registry, so it runs on a separate instance from the one served.
             validateResources((await loadBuiltConfig(entry, root)).application, models);
@@ -246,7 +240,6 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
                     'Application',
                     `  Apps       ${config.application.apps.all().length}`,
                     `  Resources  ${config.application.resources.all().length}`,
-                    `  Databases  ${config.application.databases.names().length}`,
                     '',
                     'HTTP',
                     `  API        ${url}/api`,

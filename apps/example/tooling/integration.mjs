@@ -24,25 +24,25 @@ const freePort = async () => {
 const docker = async (args) =>
     (await execute('docker', [...compose, ...args], { timeout: 90_000, maxBuffer: 1024 * 1024 })).stdout;
 let server;
+let started = false;
+const external = process.env.INTEGRATION_POSTGRES_URL;
 
 try {
-    console.log('Starting dedicated Docker PostgreSQL and MongoDB services.');
-    await docker(['up', '--wait', '--wait-timeout', '60']);
+    // An already migrated-empty PostgreSQL database may be supplied (INTEGRATION_POSTGRES_URL); otherwise Docker runs one.
+    if (!external) {
+        console.log('Starting dedicated Docker PostgreSQL service.');
+        await docker(['up', '--wait', '--wait-timeout', '60']);
+        started = true;
+    }
     const port = await freePort();
     const baseURL = `http://127.0.0.1:${port}`;
-    const postgresAddress = (await docker(['port', 'postgres', '5432'])).trim();
-    const mongoAddress = (await docker(['port', 'mongo', '27017'])).trim();
-    const connections = {
-        default: `postgresql://nestrum:integration-only@${postgresAddress}/nestrum_integration`,
-        identity: `postgresql://nestrum:integration-only@${postgresAddress}/nestrum_identity`,
-        documents: `mongodb://${mongoAddress}/nestrum_integration`,
-    };
+    const connection =
+        external ??
+        `postgresql://nestrum:integration-only@${(await docker(['port', 'postgres', '5432'])).trim()}/nestrum_integration`;
     const secret = 'ephemeral-integration-secret-with-at-least-32-characters';
     const env = {
         ...process.env,
-        INTEGRATION_POSTGRES_URL: connections.default,
-        INTEGRATION_IDENTITY_URL: connections.identity,
-        INTEGRATION_MONGO_URL: connections.documents,
+        INTEGRATION_POSTGRES_URL: connection,
         INTEGRATION_OUTPUT_DIR: `${runDir}/db-contracts`,
         INTEGRATION_MIGRATIONS_DIR: `${runDir}/migrations`,
         AUTH_SECRET: secret,
@@ -64,18 +64,16 @@ try {
                 { env, cwd: ROOT_DIR, timeout: 60_000, maxBuffer: 4 * 1024 * 1024 },
             )
         ).stdout;
-    for (const database of ['default', 'documents', 'identity']) {
-        const generated = JSON.parse(await cli(['generate', '--database', database, '--json']));
-        const contract = JSON.parse(await readFile(generated.contract, 'utf8'));
-        assert.equal(contract.target, database === 'documents' ? 'mongo' : 'postgres');
-        const types = await readFile(generated.types, 'utf8');
-        assert.ok(!types.includes('@internal/'), 'Generated types must use public installed provider imports.');
-        await cli(['migrate', '--database', database, '--plan', '--name', 'initial', '--json']);
-        await cli(['migrate', '--database', database, '--json']);
-        const status = await cli(['status', '--database', database, '--json']);
-        assert.ok(status.includes('"ok":true'), `${database} migration status must succeed.`);
-        console.log(`Real ${database} generation, migration application and status passed.`);
-    }
+    const generated = JSON.parse(await cli(['generate', '--json']));
+    const contract = JSON.parse(await readFile(generated.contract, 'utf8'));
+    assert.equal(contract.target, 'postgres');
+    const types = await readFile(generated.types, 'utf8');
+    assert.ok(!types.includes('@internal/'), 'Generated types must use public installed provider imports.');
+    await cli(['migrate', '--plan', '--name', 'initial', '--json']);
+    await cli(['migrate', '--json']);
+    const status = await cli(['status', '--json']);
+    assert.ok(status.includes('"ok":true'), 'Migration status must succeed.');
+    console.log('Real generation, migration application and status passed.');
 
     // The framework owns the lifecycle: build, then serve the built application (no application HTTP bootstrap).
     await execute(
@@ -119,20 +117,20 @@ try {
         example.application.apps.all().map((app) => app.name),
         ['nestrum.auth', 'nestrum.features', 'projects', 'articles'],
     );
-    assert.equal(example.application.databases.get('identity').provider, 'postgresql');
+    assert.equal(example.application.database.provider, 'postgresql');
     assert.deepEqual(
         example.application.resources.all().map((resource) => resource.identity),
-        ['default.Project', 'documents.Article'],
+        ['Project', 'Article'],
     );
     assert.equal(
         example.application.resources
-            .get('default.Project')
+            .get('Project')
             .schemas.create.safeParse({ id: 'bad', name: 'x', ownerId: 'bad', status: 'active' }).success,
         false,
     );
     assert.equal(
         example.application.resources
-            .get('documents.Article')
+            .get('Article')
             .schemas.create.safeParse({ id: 'bad', title: 'x', ownerId: 'bad', status: 'draft' }).success,
         false,
     );
@@ -337,7 +335,7 @@ try {
     const metadata = await json(await request('/__admin/resources', { cookie }), 200);
     assert.deepEqual(
         metadata.map((resource) => resource.identity),
-        ['default.Project', 'documents.Article'],
+        ['Project', 'Article'],
     );
     assert.ok(metadata.every((resource) => resource.actions.some((action) => action.name === 'archive')));
     const projectData = {
@@ -348,19 +346,19 @@ try {
         status: 'active',
     };
     const articleData = {
-        _id: '000000000000000000000001',
+        id: 'article-one',
         title: 'First article',
-        body: 'Mongo persistence',
+        body: 'Persistence',
         ownerId: staff.user.id,
         status: 'published',
     };
     assert.equal((await request('/api/projects')).status, 403);
     await json(await request('/api/projects', { method: 'POST', body: projectData, cookie }), 201);
-    await json(await request('/__admin/documents--articles', { method: 'POST', body: articleData, cookie }), 201);
-    assert.equal((await request('/api/documents/articles', { cookie })).status, 404);
+    await json(await request('/__admin/articles', { method: 'POST', body: articleData, cookie }), 201);
+    assert.equal((await request('/api/articles', { cookie })).status, 404);
     assert.equal(
         (
-            await request('/api/documents/articles/000000000000000000000001', {
+            await request('/api/articles/article-one', {
                 method: 'PATCH',
                 body: { title: 'Hidden' },
                 cookie,
@@ -405,7 +403,7 @@ try {
     assert.ok(viaKey.every((project) => project.ownerId === staff.user.id));
     assert.equal((await use('/api/projects/project-one', { method: 'DELETE' })).status, 403, 'ABAC still denies keys.');
     assert.equal((await use('/api/projects', { method: 'POST', body: { ...projectData, id: 'via-key' } })).status, 201);
-    assert.equal((await request('/api/documents/articles', { apiKey: issued.secret })).status, 404);
+    assert.equal((await request('/api/articles', { apiKey: issued.secret })).status, 404);
     assert.equal(
         (await request('/__admin/resources', { apiKey: issued.secret })).status,
         401,
@@ -485,7 +483,7 @@ try {
     assert.equal(await example.application.features.evaluator.enabled('experimentalSearch'), true);
     // A flag never authorizes: the member still cannot use administration or another owner's records.
     assert.equal((await request('/__admin/resources', { cookie: memberCookie })).status, 403);
-    const persistedRules = await example.clients.get('identity').orm.public.FeatureOverride.all();
+    const persistedRules = await example.client.orm.public.FeatureOverride.all();
     assert.equal(persistedRules.length, 2);
     assert.equal((await flagRequest('/__admin/features', { origin: 'https://foreign.invalid' })).status, 403);
     assert.ok((await (await navigate('/admin/features', cookie)).text()).includes('Feature flags'));
@@ -510,10 +508,10 @@ try {
     );
     assert.equal(
         (
-            await request('/__admin/documents--articles', {
+            await request('/__admin/articles', {
                 method: 'POST',
                 cookie,
-                body: { ...articleData, _id: 'invalid', title: 'x' },
+                body: { ...articleData, id: 'invalid', title: 'x' },
             })
         ).status,
         400,
@@ -536,15 +534,12 @@ try {
         }),
         201,
     );
-    const project = example.application.resources.get('default.Project');
-    const article = example.application.resources.get('documents.Article');
+    const project = example.application.resources.get('Project');
+    const article = example.application.resources.get('Article');
     const subject = { id: staff.user.id, role: 'admin' };
     assert.equal(await project.managers.active.authorizedFor(subject, 'read').count(), 1);
     assert.equal(await article.managers.published.authorizedFor(subject, 'read').count(), 1);
-    assert.equal(
-        await article.objects.authorizedFor(subject, 'read').filter({ _id: '000000000000000000000001' }).count(),
-        1,
-    );
+    assert.equal(await article.objects.authorizedFor(subject, 'read').filter({ id: 'article-one' }).count(), 1);
     assert.equal((await json(await request('/api/projects', { cookie }), 200)).length, 1);
     assert.equal((await request('/api/projects/member-owned', { cookie })).status, 404);
     assert.equal(
@@ -557,62 +552,59 @@ try {
     );
     assert.equal(
         (
-            await request('/__admin/documents--articles/000000000000000000000001', {
+            await request('/__admin/articles/article-one', {
                 method: 'PATCH',
                 cookie,
-                body: { title: 'Updated Mongo' },
+                body: { title: 'Updated article' },
             })
         ).status,
         204,
     );
     assert.equal((await json(await request('/api/projects/project-one', { cookie }), 200)).name, 'Updated SQL');
     assert.equal(
-        (await json(await request('/__admin/documents--articles/000000000000000000000001', { cookie }), 200)).title,
-        'Updated Mongo',
+        (await json(await request('/__admin/articles/article-one', { cookie }), 200)).title,
+        'Updated article',
     );
     for (const path of [
         '/admin/projects',
-        '/admin/documents--articles',
+        '/admin/articles',
         '/admin/projects/project-one',
-        '/admin/documents--articles/000000000000000000000001',
+        '/admin/articles/article-one',
     ]) {
         const response = await request(path, { cookie });
         assert.equal(response.status, 200, path);
-        assert.ok((await response.text()).includes(path.includes('articles') ? 'Updated Mongo' : 'Updated SQL'));
+        assert.ok((await response.text()).includes(path.includes('articles') ? 'Updated article' : 'Updated SQL'));
     }
-    const formCreate = await request('/admin/documents--articles/new?/create', {
+    const formCreate = await request('/admin/articles/new?/create', {
         method: 'POST',
         cookie,
-        form: { ...articleData, _id: '000000000000000000000002', title: 'Native form article' },
+        form: { ...articleData, id: 'article-two', title: 'Native form article' },
     });
     assert.equal(formCreate.status, 303, await formCreate.text());
     assert.equal(
-        (await json(await request('/__admin/documents--articles/000000000000000000000002', { cookie }), 200)).title,
+        (await json(await request('/__admin/articles/article-two', { cookie }), 200)).title,
         'Native form article',
     );
-    const formUpdate = await request('/admin/documents--articles/000000000000000000000002?/update', {
+    const formUpdate = await request('/admin/articles/article-two?/update', {
         method: 'POST',
         cookie,
         form: { title: 'Native form edited', 'mode:title': 'value' },
     });
     assert.equal(formUpdate.status, 303, await formUpdate.text());
-    const action = await request('/admin/documents--articles/000000000000000000000002?/action', {
+    const action = await request('/admin/articles/article-two?/action', {
         method: 'POST',
         cookie,
         form: { action: 'archive', input: '{}' },
     });
     assert.equal(action.status, 303, await action.text());
-    assert.equal(
-        (await json(await request('/__admin/documents--articles/000000000000000000000002', { cookie }), 200)).status,
-        'archived',
-    );
-    const formDelete = await request('/admin/documents--articles/000000000000000000000002?/delete', {
+    assert.equal((await json(await request('/__admin/articles/article-two', { cookie }), 200)).status, 'archived');
+    const formDelete = await request('/admin/articles/article-two?/delete', {
         method: 'POST',
         cookie,
         form: { confirm: 'yes' },
     });
     assert.equal(formDelete.status, 303, await formDelete.text());
-    assert.equal((await request('/__admin/documents--articles/000000000000000000000002', { cookie })).status, 404);
+    assert.equal((await request('/__admin/articles/article-two', { cookie })).status, 404);
     if (process.env.INTEGRATION_BROWSER_QA === '1') {
         console.log(
             `Browser QA: ${host.baseURL}/admin — staff@example.test / Integration-password-2026! — resume with SIGUSR2 to PID ${process.pid}`,
@@ -625,35 +617,28 @@ try {
     );
     assert.equal((await json(await request('/api/projects/project-one', { cookie }), 200)).status, 'archived');
     assert.equal((await request('/api/projects/project-one', { method: 'DELETE', cookie })).status, 204);
-    assert.equal(
-        (await request('/__admin/documents--articles/000000000000000000000001', { method: 'DELETE', cookie })).status,
-        204,
-    );
+    assert.equal((await request('/__admin/articles/article-one', { method: 'DELETE', cookie })).status, 204);
     assert.equal((await request('/api/projects/project-one', { cookie })).status, 404);
     await json(await request('/api/auth/sign-out', { method: 'POST', cookie, body: {} }), 200);
     assert.equal((await request('/__admin/resources', { cookie })).status, 401);
     console.log(
-        'Real auth/session ABAC, SQL/public CRUD, Mongo/admin CRUD, managers/scopes, OpenAPI and generic Svelte forms passed.',
+        'Real auth/session ABAC, public and admin CRUD, managers/scopes, OpenAPI and generic Svelte forms passed.',
     );
     // The hosted consumer UI, driven in a real browser against the served application (Post-MVP Plan 04).
     const consumer = credentials('consumer@example.test');
     await json(await request('/api/auth/sign-up/email', { method: 'POST', body: consumer }), 200);
     await runConsumerBrowserChecks({ baseURL: host.baseURL, email: consumer.email, password: consumer.password });
     await server.shutdown();
-    assert.deepEqual(events.slice(-5), [
-        'shutdown:articles',
-        'shutdown:projects',
-        'disconnect:identity',
-        'disconnect:documents',
-        'disconnect:default',
-    ]);
+    assert.deepEqual(events.slice(-3), ['shutdown:articles', 'shutdown:projects', 'disconnect']);
     assert.equal((await runtime.fetch(new Request(`${host.baseURL}/api/projects`))).status, 503);
     console.log('Reverse app/DI/database shutdown and traffic gating passed.');
 } finally {
     try {
         await server?.shutdown();
     } finally {
-        await docker(['down', '--volumes', '--remove-orphans']);
+        if (started) {
+            await docker(['down', '--volumes', '--remove-orphans']);
+        }
         await rm(join(ROOT_DIR, runDir), { recursive: true, force: true });
     }
 }

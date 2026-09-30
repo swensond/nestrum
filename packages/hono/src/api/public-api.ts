@@ -263,7 +263,7 @@ export function registerPublicApi<Scope extends InferdiScope>(
         if (operations.length === 0) {
             continue;
         }
-        const basePath = `/api/${resource.database === 'default' ? '' : `${resource.database}/`}${resourceSlug(resource.model)}`;
+        const basePath = `/api/${resourceSlug(resource.model)}`;
         if (paths.has(basePath)) {
             throw new AppError('HTTP_API_ROUTE_CONFLICT', `Public resource path ${basePath} is duplicated.`);
         }

@@ -1,7 +1,7 @@
 // Real-database check of API keys: Better Auth's API-key plugin over the Nestrum adapter and PostgreSQL.
 //
-// Not part of `pnpm check`: it needs a reachable identity database migrated with the example identity contract.
-//   INTEGRATION_IDENTITY_URL   PostgreSQL URL of a database migrated with the example identity contract
+// Not part of `pnpm check`: it needs a reachable PostgreSQL database migrated with the example contract.
+//   INTEGRATION_POSTGRES_URL   PostgreSQL URL of a database migrated with the example contract
 //   NESTRUM_CONTRACT_JSON      path to that database's generated contract.json
 // It exercises hashing at rest, expiry, revocation, rotation, and the atomic rate-limit boundary under concurrency.
 import assert from 'node:assert/strict';
@@ -11,25 +11,18 @@ import { API_KEY_HEADER, defineApplication } from '@nestrum/core';
 import postgres from '@nestrum/example-postgres';
 import { createHonoRuntime } from '@nestrum/hono';
 
-const url = process.env.INTEGRATION_IDENTITY_URL;
+const url = process.env.INTEGRATION_POSTGRES_URL;
 const client = postgres({ contractJson: JSON.parse(readFileSync(process.env.NESTRUM_CONTRACT_JSON, 'utf8')), url });
 const BASE = 'http://127.0.0.1:3198';
 const application = defineApplication({
     apps: [],
-    databases: {
-        default: { kind: 'prisma', provider: 'postgresql', connection: url },
-        identity: { kind: 'prisma', provider: 'postgresql', connection: url },
-    },
+    database: { kind: 'prisma', provider: 'postgresql', connection: url },
     auth: defineAuth({
-        database: 'identity',
         baseURL: BASE,
         secret: 'local-verification-secret-with-at-least-32-chars',
-        prisma: () => ({ database: 'identity', collections: client.orm.public }),
+        prisma: () => ({ collections: client.orm.public }),
     }),
-    databaseLifecycle: {
-        default: { connect: async () => {}, disconnect: async () => {} },
-        identity: { connect: async () => client.connect(), disconnect: async () => client.close() },
-    },
+    databaseLifecycle: { connect: async () => client.connect(), disconnect: async () => client.close() },
 });
 const runtime = createHonoRuntime({ application, onError: () => {} });
 await runtime.start();

@@ -3,7 +3,6 @@ import { AppError } from '@nestrum/core';
 export class PrismaContractError extends AppError {
     constructor(
         code:
-            | 'PRISMA_DATABASE_UNKNOWN'
             | 'PRISMA_EXTENSION_INVALID'
             | 'PRISMA_FRAGMENT_READ_FAILED'
             | 'PRISMA_FRAGMENT_PATH_INVALID'

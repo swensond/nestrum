@@ -1,6 +1,6 @@
-export { assemblePrismaContracts } from './contracts/contracts.assembly.js';
+export { assemblePrismaContract } from './contracts/contracts.assembly.js';
 export { PrismaContractError } from './contracts/contracts.errors.js';
-export { generatePrismaContracts } from './contracts/contracts.generation.js';
+export { generatePrismaContract } from './contracts/contracts.generation.js';
 export type {
     AssemblePrismaOptions,
     ContractApplication,

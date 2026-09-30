@@ -108,7 +108,7 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
                 const application = options.application;
                 const requestContext: RequestContext = Object.freeze({
                     application,
-                    databases: application.databases,
+                    database: application.database,
                     resources: application.resources,
                     authorization: application.authorization,
                     features: requestFeatures(application, { subject, environment }),

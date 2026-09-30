@@ -1,7 +1,7 @@
 // Real-database check of feature flags: Nestrum's FeatureOverride model through the Prisma query backend on PostgreSQL.
 //
-// Not part of `pnpm check`: it needs a reachable identity database migrated with the example identity contract.
-//   INTEGRATION_IDENTITY_URL   PostgreSQL URL of a database migrated with the example identity contract
+// Not part of `pnpm check`: it needs a reachable PostgreSQL database migrated with the example contract.
+//   INTEGRATION_POSTGRES_URL   PostgreSQL URL of a database migrated with the example contract
 //   NESTRUM_CONTRACT_JSON      path to that database's generated contract.json
 // It exercises persistence and readback, the unique (flag, scope, target) key under concurrent writers, precedence and
 // rollouts over stored rules, audit events, and the source-default fallback when storage is unavailable.
@@ -11,7 +11,7 @@ import { defineApplication, defineFeatureFlags } from '@nestrum/core';
 import postgres from '@nestrum/example-postgres';
 import { defineFeatures } from '@nestrum/features';
 
-const url = process.env.INTEGRATION_IDENTITY_URL;
+const url = process.env.INTEGRATION_POSTGRES_URL;
 const client = postgres({ contractJson: JSON.parse(readFileSync(process.env.NESTRUM_CONTRACT_JSON, 'utf8')), url });
 const flags = defineFeatureFlags({
     newDashboard: { default: false, exposeToClient: true },
@@ -21,22 +21,15 @@ const events = [];
 const errors = [];
 const application = defineApplication({
     apps: [],
-    databases: {
-        default: { kind: 'prisma', provider: 'postgresql', connection: url },
-        identity: { kind: 'prisma', provider: 'postgresql', connection: url },
-    },
+    database: { kind: 'prisma', provider: 'postgresql', connection: url },
     features: defineFeatures({
         flags,
-        database: 'identity',
         environment: 'verify',
-        prisma: () => ({ database: 'identity', collection: client.orm.public.FeatureOverride }),
+        prisma: () => ({ collection: client.orm.public.FeatureOverride }),
         onChange: [(event) => events.push(event)],
         onError: (error) => errors.push(error),
     }),
-    databaseLifecycle: {
-        default: { connect: async () => {}, disconnect: async () => {} },
-        identity: { connect: async () => client.connect(), disconnect: async () => client.close() },
-    },
+    databaseLifecycle: { connect: async () => client.connect(), disconnect: async () => client.close() },
 });
 await application.start();
 try {

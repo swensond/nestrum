@@ -18,21 +18,17 @@ function setup() {
     const config = defineCliConfig({
         application: defineApplication({
             apps: [],
-            databases: {
-                default: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://secret' },
-                documents: { kind: 'prisma', provider: 'mongodb', connection: 'mongodb://secret' },
-            },
+            database: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://secret' },
         }),
         rootDir: '/project',
     });
     const contract = {
-        database: 'documents',
-        provider: 'mongodb',
+        provider: 'postgresql',
         contractPath: '/artifact/contract.json',
         typesPath: '/artifact/contract.d.ts',
     } as GeneratedPrismaContract;
     const dependencies = {
-        generate: vi.fn(async () => ({ directory: '/artifact', contracts: [contract] })),
+        generate: vi.fn(async () => ({ directory: '/artifact', contract })),
         configure: vi.fn(async () => '/workflow/config.mjs'),
         execute: vi.fn(async () => ({ stdout: 'done', stderr: '' })),
     };
@@ -59,24 +55,26 @@ describe('Nestrum database CLI', () => {
         expect(source.listenerCount('SIGINT')).toBe(0);
         expect(source.listenerCount('SIGTERM')).toBe(0);
     });
-    it('parses commands and named targeting with explicit defaults', () => {
+    it('parses commands with explicit defaults', () => {
         expect(parseCliArguments(['db', 'generate'])).toEqual({
             command: 'generate',
             config: 'nestrum.config.ts',
-            database: 'default',
             plan: false,
             json: false,
         });
-        expect(
-            parseCliArguments(['db', 'migrate', '--database', 'documents', '--plan', '--name', 'initial', '--json']),
-        ).toMatchObject({ command: 'migrate', database: 'documents', plan: true, name: 'initial', json: true });
+        expect(parseCliArguments(['db', 'migrate', '--plan', '--name', 'initial', '--json'])).toMatchObject({
+            command: 'migrate',
+            plan: true,
+            name: 'initial',
+            json: true,
+        });
     });
     it.each(
         [
             ['db', 'push'],
-            ['db', 'generate', '--database'],
+            ['db', 'generate', '--database', 'default'],
             ['db', 'generate', '--force'],
-            ['db', 'generate', '--database', 'a', '--database', 'b'],
+            ['db', 'generate', '--config', 'a', '--config', 'b'],
             ['db', 'status', '--plan'],
             ['db', 'migrate', '--name', 'bad'],
             ['db', 'migrate', '--plan', '--name', '../bad'],
@@ -84,27 +82,16 @@ describe('Nestrum database CLI', () => {
     )('rejects malformed command arguments: %j', ({ args }) => {
         expect(() => parseCliArguments(args)).toThrow(expect.objectContaining({ code: 'CLI_ARGUMENT_INVALID' }));
     });
-    it('generates only the requested database without starting apps or delegating online commands', async () => {
+    it('generates the contract without starting apps or delegating online commands', async () => {
         const { config, dependencies } = setup();
-        const result = await runDatabaseCommand(
-            config,
-            parseCliArguments(['db', 'generate', '--database', 'documents', '--json']),
-            dependencies,
-        );
-        expect(JSON.parse(result.stdout)).toMatchObject({ database: 'documents', contract: '/artifact/contract.json' });
+        const result = await runDatabaseCommand(config, parseCliArguments(['db', 'generate', '--json']), dependencies);
+        expect(JSON.parse(result.stdout)).toMatchObject({ contract: '/artifact/contract.json' });
         expect(dependencies.generate).toHaveBeenCalledWith(
             config.application,
-            expect.objectContaining({ rootDir: '/project', database: 'documents' }),
+            expect.objectContaining({ rootDir: '/project' }),
         );
         expect(config.application.state).toBe('created');
         expect(dependencies.execute).not.toHaveBeenCalled();
-    });
-    it('rejects unknown database selection before any emission', async () => {
-        const { config, dependencies } = setup();
-        await expect(
-            runDatabaseCommand(config, parseCliArguments(['db', 'generate', '--database', 'missing']), dependencies),
-        ).rejects.toMatchObject({ code: 'DATABASE_NOT_FOUND' });
-        expect(dependencies.generate).not.toHaveBeenCalled();
     });
     it.each([
         { command: 'status', flags: [], prefix: ['migration', 'status'], online: true },
@@ -119,36 +106,29 @@ describe('Nestrum database CLI', () => {
         'delegates $command with stable migrations and isolated connection settings',
         async ({ command, flags, prefix, online }) => {
             const { config, dependencies } = setup();
-            await runDatabaseCommand(
-                config,
-                parseCliArguments(['db', command, '--database', 'documents', ...flags]),
-                dependencies,
-            );
+            await runDatabaseCommand(config, parseCliArguments(['db', command, ...flags]), dependencies);
             expect(dependencies.configure).toHaveBeenCalledWith(
-                expect.objectContaining({ database: 'documents' }),
-                '/project/prisma/migrations/documents',
+                expect.objectContaining({ provider: 'postgresql' }),
+                '/project/prisma/migrations',
             );
             expect(dependencies.execute).toHaveBeenCalledWith(
                 expect.arrayContaining([...prefix, '--config', '/workflow/config.mjs', '--no-interactive']),
-                online ? expect.objectContaining({ connection: 'mongodb://secret' }) : { cwd: '/project' },
+                online ? expect.objectContaining({ connection: 'postgresql://secret' }) : { cwd: '/project' },
             );
         },
     );
     it('preserves delegated exit codes and redacts connection URLs in failures and success output', async () => {
         const { config, dependencies } = setup();
-        dependencies.execute.mockResolvedValueOnce({ stdout: 'mongodb://secret', stderr: 'mongodb://secret' });
-        expect(
-            await runDatabaseCommand(
-                config,
-                parseCliArguments(['db', 'status', '--database', 'documents']),
-                dependencies,
-            ),
-        ).toEqual({ stdout: '[redacted]', stderr: '[redacted]' });
+        dependencies.execute.mockResolvedValueOnce({ stdout: 'postgresql://secret', stderr: 'postgresql://secret' });
+        expect(await runDatabaseCommand(config, parseCliArguments(['db', 'status']), dependencies)).toEqual({
+            stdout: '[redacted]',
+            stderr: '[redacted]',
+        });
         dependencies.execute.mockRejectedValueOnce(
-            new PrismaCommandError(4, { cause: { stderr: 'drift mongodb://secret' } }),
+            new PrismaCommandError(4, { cause: { stderr: 'drift postgresql://secret' } }),
         );
         await expect(
-            runDatabaseCommand(config, parseCliArguments(['db', 'status', '--database', 'documents']), dependencies),
+            runDatabaseCommand(config, parseCliArguments(['db', 'status']), dependencies),
         ).rejects.toMatchObject({
             code: 'CLI_DELEGATE_FAILED',
             exitCode: 4,

@@ -22,18 +22,17 @@ const WHERE = z.strictObject({
     createdAt: z.date().optional(),
 });
 const POLICY = {
-    resource: 'default.Project',
+    resource: 'Project',
     actions: {
         test: { authorize: () => allow(), operations: ['read', 'count', 'create', 'update', 'delete'] as const },
     },
 };
 const CONTEXT = {
     authorization: new AuthorizationEngine([POLICY]),
-    identity: 'default.Project' as const,
+    identity: 'Project' as const,
     metadata: {
-        database: 'default',
         name: 'Project',
-        identity: 'default.Project',
+        identity: 'Project',
         provider: 'postgresql',
         namespace: 'public',
         relations: [],
@@ -242,7 +241,7 @@ describe('Immutable typed QuerySets', () => {
         const { backend } = fixture();
         const application = defineApplication({
             policies: [POLICY],
-            databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+            database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
             resourceModels: [{ ...CONTEXT.schemas, metadata: CONTEXT.metadata, queryBackend: backend }],
             apps: [
                 {
@@ -254,14 +253,14 @@ describe('Immutable typed QuerySets', () => {
                         }),
                     ],
                     async configure({ resources }) {
-                        await resources.get('default.Project').managers.active!.authorizedFor({}, 'test').all();
+                        await resources.get('Project').managers.active!.authorizedFor({}, 'test').all();
                     },
                 },
             ],
         });
         await application.start();
         expect(backend.all).toHaveBeenCalledWith({ filters: [{ status: 'active' }], orderBy: [] });
-        expect(application.resources.get('default.Project').objects.raw()).toBe(backend.raw);
+        expect(application.resources.get('Project').objects.raw()).toBe(backend.raw);
         await application.shutdown();
     });
 
@@ -269,7 +268,7 @@ describe('Immutable typed QuerySets', () => {
         const family: ResourceModel = { ...CONTEXT.schemas, metadata: CONTEXT.metadata };
         const application = defineApplication({
             policies: [POLICY],
-            databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+            database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
             apps: [],
             resourceModels: [family],
             resources: [
@@ -280,7 +279,7 @@ describe('Immutable typed QuerySets', () => {
             ],
         });
         await application.start();
-        const resource = application.resources.get('default.Project');
+        const resource = application.resources.get('Project');
         expect(resource.objects).toBeInstanceOf(QuerySet);
         expect(resource.managers.active).toBeInstanceOf(QuerySet);
         expect(Reflect.set(resource, 'objects', resource.managers.active)).toBe(false);

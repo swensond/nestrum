@@ -24,8 +24,8 @@ const config = (web: string) => `import { defineApplication, defineResource } fr
 import { defineConfig } from '@nestrum/cli';
 export default defineConfig({
     application: defineApplication({
-        databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://user:secret@127.0.0.1:1/x' } },
-        apps: [{ name: 'models', prismaSource: { default: ${JSON.stringify(PROJECT)} }, resources: [defineResource({ model: 'Project' })] }],
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://user:secret@127.0.0.1:1/x' },
+        apps: [{ name: 'models', prismaSource: ${JSON.stringify(PROJECT)}, resources: [defineResource({ model: 'Project' })] }],
     }),
     web: ${web},
     timeoutMs: 60000

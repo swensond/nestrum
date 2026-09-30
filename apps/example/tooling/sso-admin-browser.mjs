@@ -1,9 +1,9 @@
 // Real-browser check of the SSO admin lifecycle for both protocols, plus a browser SP-initiated OIDC sign-in.
 //
-// Serves an identity-only application (PostgreSQL with the migrated identity contract) with the built admin shell and
+// Serves an auth-only application (PostgreSQL with the migrated example contract) with the built admin shell and
 // a local OpenID provider, and drives it with Playwright. Not part of `pnpm check`: it needs a reachable, migrated
 // identity database and Playwright.
-//   INTEGRATION_IDENTITY_URL   PostgreSQL URL of a database migrated with the example identity contract
+//   INTEGRATION_POSTGRES_URL   PostgreSQL URL of a database migrated with the example contract
 //   NESTRUM_CONTRACT_JSON      path to that database's generated contract.json
 //   PLAYWRIGHT_MODULE_DIR      node_modules directory that resolves `playwright` (default: this package)
 //   PLAYWRIGHT_CHROMIUM        optional Chromium executable path
@@ -21,7 +21,7 @@ import { createHonoRuntime } from '@nestrum/hono';
 import { nodeRuntime } from '../../../packages/runtime-node/dist/index.js';
 
 const { chromium } = createRequire(`${process.env.PLAYWRIGHT_MODULE_DIR ?? import.meta.dirname}/`)('playwright');
-const url = process.env.INTEGRATION_IDENTITY_URL;
+const url = process.env.INTEGRATION_POSTGRES_URL;
 const client = postgres({ contractJson: JSON.parse(readFileSync(process.env.NESTRUM_CONTRACT_JSON, 'utf8')), url });
 const BASE = 'http://127.0.0.1:3196';
 const PASSWORD = 'Local-password-2026!';
@@ -93,23 +93,16 @@ issuer = `http://127.0.0.1:${idp.address().port}`;
 
 const application = defineApplication({
     apps: [],
-    databases: {
-        default: { kind: 'prisma', provider: 'postgresql', connection: url },
-        identity: { kind: 'prisma', provider: 'postgresql', connection: url },
-    },
+    database: { kind: 'prisma', provider: 'postgresql', connection: url },
     auth: defineAuth({
-        database: 'identity',
         baseURL: BASE,
         secret: 'local-verification-secret-with-at-least-32-chars',
-        prisma: () => ({ database: 'identity', collections: client.orm.public }),
+        prisma: () => ({ collections: client.orm.public }),
         sso: { enabled: true, trustedIdpOrigins: [issuer] },
     }),
     admin: defineAdmin(),
     policies: roleBasedAdminPolicies(),
-    databaseLifecycle: {
-        default: { connect: async () => {}, disconnect: async () => {} },
-        identity: { connect: async () => client.connect(), disconnect: async () => client.close() },
-    },
+    databaseLifecycle: { connect: async () => client.connect(), disconnect: async () => client.close() },
 });
 let handle;
 const runtime = createHonoRuntime({

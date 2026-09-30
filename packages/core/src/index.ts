@@ -118,15 +118,8 @@ export {
     or,
 } from './authorization/filter.js';
 export { DatabaseRegistryError } from './database/database.errors.js';
-export type {
-    DatabaseConfig,
-    DatabaseDefinition,
-    DatabaseEntry,
-    ModelIdentity,
-    PrismaProvider,
-} from './database/database.types.js';
+export type { DatabaseDefinition, ModelIdentity, PrismaProvider } from './database/database.types.js';
 export { validateDatabaseDefinition } from './database/database-definition.js';
-export { DatabaseRegistry } from './database/database-registry.js';
 export { modelIdentity } from './database/model-identity.js';
 export * from './features/index.js';
 export { bindResourceQuerySets, QuerySet, QuerySetError, snapshotQueryValue } from './queryset/queryset.js';

@@ -2,9 +2,8 @@ import type { AdminResourceMetadata } from '@nestrum/admin';
 
 export function resource(model = 'Project', slug = 'projects'): AdminResourceMetadata {
     return {
-        identity: `default.${model}`,
+        identity: model,
         model,
-        database: 'default',
         slug,
         label: model,
         primaryKey: 'id',

@@ -1,6 +1,6 @@
 # Nestrum documentation
 
-This documentation is the durable project memory for future implementation sessions. **Phases 0–15 are complete; Phase 16 integration is implemented and validated with real Docker SQL/Mongo databases.** Its MVP gate remains open for atomic object-policy writes. The phase records distinguish validated integration from that remaining requirement.
+This documentation is the durable project memory for future implementation sessions. **Phases 0–15 are complete; Phase 16 integration is implemented and validated against a real PostgreSQL database.** MongoDB and named databases were later removed ([decision 0018](decisions/0018-postgresql-single-database.md)), so earlier phase records that mention them are historical. Its MVP gate remains open for atomic object-policy writes. The phase records distinguish validated integration from that remaining requirement.
 
 - [Architecture](architecture.md): locked framework contracts and actual implementation boundaries.
 - [MVP](mvp.md): frozen scope and definition of done.
@@ -16,8 +16,9 @@ This documentation is the durable project memory for future implementation sessi
 - [Admin extensions](admin-extensions.md): custom action handlers, field overrides, and compiled widget registration.
 - [Admin design system](design-system/README.md): the Soft Modular brand book, light/dark tokens, accessibility rules, and component guidance for the admin shell (not yet applied to the shipped shell).
 - [Database workflow](database-workflow.md): commands, provider extensions, and lifecycle ownership.
+- [Single PostgreSQL migration](migration-single-postgres.md): adopter checklist for the breaking changes in decision 0018.
 - [Extension seams](extension-seams.md): contribution ownership, conflicts, and CLI/database extension boundaries.
-- [Domain glossary](../CONTEXT.md): database definition, database name, default database, and model identity.
+- [Domain glossary](../CONTEXT.md): database definition, model identity, and resource terminology.
 
 Begin each session by reading `architecture.md`, `mvp.md`, and the relevant phase document. Read `post-mvp.md` and relevant decisions when scope or tradeoffs matter.
 

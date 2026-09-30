@@ -37,7 +37,6 @@ export type RelationMetadata = {
 };
 
 export type ModelMetadata = {
-    readonly database: string;
     readonly provider: PrismaProvider;
     readonly namespace: string;
     readonly name: string;

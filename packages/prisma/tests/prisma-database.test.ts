@@ -18,10 +18,7 @@ describe('prismaDatabase', () => {
         expect(definition.connection).toBe('postgresql://localhost/nestrum_test');
     });
 
-    it('accepts MongoDB configuration and alternate connection schemes without connecting', () => {
-        expect(
-            prismaDatabase({ provider: 'mongodb', connection: 'mongodb+srv://example.test/documents' }).provider,
-        ).toBe('mongodb');
+    it('accepts alternate PostgreSQL connection schemes without connecting', () => {
         expect(
             prismaDatabase({ provider: 'postgresql', connection: 'prisma+postgres://example.test/?api_key=test' })
                 .provider,
@@ -37,7 +34,7 @@ describe('prismaDatabase', () => {
         },
     );
 
-    it.each(['mysql', 'sqlite', 'unknown', undefined])(
+    it.each(['mysql', 'sqlite', 'mongodb', 'unknown', undefined])(
         'rejects provider outside the MVP configuration contract: %j',
         (provider) => {
             expect(() => prismaDatabase({ provider, connection: 'test' } as unknown as PrismaDatabaseConfig)).toThrow(
@@ -54,26 +51,23 @@ describe('prismaDatabase', () => {
         );
     });
 
-    it('composes with the application registry and lifecycle using public package imports', async () => {
+    it('composes with the application and lifecycle using public package imports', async () => {
         const providers: string[] = [];
         const application = defineApplication({
-            databases: {
-                default: prismaDatabase({ provider: 'postgresql', connection: 'postgresql://localhost/nestrum_test' }),
-                documents: prismaDatabase({ provider: 'mongodb', connection: 'mongodb://localhost/nestrum_documents' }),
-            },
+            database: prismaDatabase({ provider: 'postgresql', connection: 'postgresql://localhost/nestrum_test' }),
             apps: [
                 defineApp({
                     name: 'articles',
-                    configure({ databases }) {
-                        providers.push(databases.get('documents').provider);
+                    configure({ database }) {
+                        providers.push(database.provider);
                     },
                 }),
             ],
         });
 
         await application.start();
-        expect(providers).toEqual(['mongodb']);
-        expect(application.databases.get().provider).toBe('postgresql');
+        expect(providers).toEqual(['postgresql']);
+        expect(application.database.provider).toBe('postgresql');
         await application.shutdown();
     });
 });

@@ -5,7 +5,6 @@ export class ResourceError extends AppError {
         code:
             | 'RESOURCE_CONFIG_INVALID'
             | 'RESOURCE_DUPLICATE'
-            | 'RESOURCE_DATABASE_UNKNOWN'
             | 'RESOURCE_MODEL_MISSING'
             | 'RESOURCE_MODELS_INVALID'
             | 'RESOURCE_MODELS_LOAD_FAILED'

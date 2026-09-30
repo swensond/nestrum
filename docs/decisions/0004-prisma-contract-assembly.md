@@ -1,5 +1,7 @@
 # 0004 — Prisma contract assembly and validation
 
+> **Superseded in part by [0018](0018-postgresql-single-database.md):** named databases and the MongoDB provider were removed. The rest of this record is historical.
+
 Apps declare database-to-path-list contributions on their definitions. Core snapshots this metadata without importing Node or Prisma runtime code; @nestrum/prisma/node reads files in app dependency order, groups them by registered database, and invokes the real Prisma emitter. This keeps filesystem/process operations behind a Node entry point and leaves contract parsing and semantics with Prisma instead of duplicating its language.
 
 Direct Prisma CLI and PostgreSQL/MongoDB facade dependencies are pinned to 8.0.0-rc.13. Newer documentation describes native glob input, but the installed facade accepts only a single native contract path. Nestrum therefore assembles a generated contract.prisma per database from separate app-owned fragments, preserving source comments and copied fragments. Apps do not maintain a giant schema. Identical and conflicting model declarations are both rejected by Prisma; declarations are never silently merged.
