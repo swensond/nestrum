@@ -58,7 +58,7 @@ Run targeted feature/admin/consumer integration, `pnpm test`, `pnpm typecheck`, 
 
 ## Known Limitations
 
-The Docker + MongoDB integration run (`pnpm test:integration`, which now includes a feature-flag section) and the Playwright consumer check need Docker and were not run in this session; they are owed to the project owner. Multivariate values, attribute targeting, declarative resource gating and audit history remain future work. Cross-process cache invalidation is bounded by `cacheTtlMs`.
+The Docker + MongoDB integration run (`pnpm test:integration`, including its feature-flag section and the Playwright consumer check) was run by the project owner and passes. Multivariate values, attribute targeting, declarative resource gating and audit history remain future work. Cross-process cache invalidation is bounded by `cacheTtlMs`.
 
 ## Follow-Ups
 
@@ -66,4 +66,4 @@ Record experiments, broader targeting, resource declarations, and full audit his
 
 ## Completion Notes
 
-PM5 meets its definition of done in code, unit/integration tests, real-PostgreSQL verification and documentation; the Docker integration evidence is pending the owner's run.
+PM5 meets its definition of done in code, unit/integration tests, real-PostgreSQL verification and documentation; the project owner's Docker integration run passes.

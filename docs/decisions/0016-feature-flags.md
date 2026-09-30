@@ -30,7 +30,7 @@ Applications need to switch capabilities on and off per environment, organizatio
 - Overrides are keyed by flag name; removing a flag from source leaves inert rows that the admin list no longer shows. The admin cannot create overrides for undeclared flags.
 - The unique key prevents duplicate rows but the read-then-write upsert is not a single atomic statement; concurrent writers converge on one row, and the last writer wins.
 - Multivariate values, attribute-based targeting, declarative resource gating, scheduled changes and audit history are future work.
-- MongoDB storage is verified for contract emission and through the store's unit tests; its live run belongs to the Docker + MongoDB integration suite.
+- MongoDB storage is verified for contract emission and through the store's unit tests; its live run is part of the Docker + MongoDB integration suite, which the project owner ran and passes.
 
 ## References
 

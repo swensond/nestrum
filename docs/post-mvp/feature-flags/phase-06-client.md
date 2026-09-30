@@ -38,7 +38,7 @@ Depends on [PM5.5](phase-05-admin.md) and PM4 consumer hosting. Server evaluatio
 
 ## Tests
 
-Hono tests assert exposed-only booleans, absence of hidden names, rules, reasons and subject identifiers in the body, cache headers, method rejection and per-subject values; web tests cover the endpoint, credentials, snapshot reads, states and fail-closed behavior. The Playwright consumer check asserts `newDashboard: off` and the exact response, but was not run in this session (no browser-capable integration stack).
+Hono tests assert exposed-only booleans, absence of hidden names, rules, reasons and subject identifiers in the body, cache headers, method rejection and per-subject values; web tests cover the endpoint, credentials, snapshot reads, states and fail-closed behavior. The Playwright consumer check asserts `newDashboard: off` and the exact response, and passes in the project owner's Docker integration run.
 
 ## Acceptance Criteria
 

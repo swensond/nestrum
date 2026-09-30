@@ -52,7 +52,7 @@ Run storage/migration tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm 
 
 ## Known Limitations
 
-MongoDB storage is verified through contract emission and unit tests; its live run belongs to the Docker integration suite. Upserts are read-then-write, so concurrent writers converge on one row with last-writer-wins.
+MongoDB storage is verified through contract emission and unit tests; its live run is part of the Docker integration suite, which the project owner ran and passes. Upserts are read-then-write, so concurrent writers converge on one row with last-writer-wins.
 
 ## Follow-Ups
 

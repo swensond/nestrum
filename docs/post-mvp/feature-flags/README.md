@@ -2,7 +2,7 @@
 
 ## Status and navigation
 
-This is the fifth post-MVP initiative. PM5.0–PM5.7 are complete: the registry, storage, targeting, runtime, admin, consumer exposure and hardening described here are implemented (see [decision 0016](../../decisions/0016-feature-flags.md)). The Docker + MongoDB integration run and the Playwright consumer check were not run in the implementing session and are owed to the project owner; everything else, including real PostgreSQL verification, passed. Feature flags answer whether a capability is enabled; ABAC independently answers whether a subject is authorized.
+This is the fifth post-MVP initiative. PM5.0–PM5.7 are complete: the registry, storage, targeting, runtime, admin, consumer exposure and hardening described here are implemented (see [decision 0016](../../decisions/0016-feature-flags.md)). The Docker + MongoDB integration run (including its feature-flag section and the Playwright consumer check) was run by the project owner and passes, as did real PostgreSQL verification. Feature flags answer whether a capability is enabled; ABAC independently answers whether a subject is authorized.
 
 | Phase | Goal | Primary surface | Status |
 | --- | --- | --- | --- |

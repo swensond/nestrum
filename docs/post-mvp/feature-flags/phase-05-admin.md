@@ -55,7 +55,7 @@ Run admin/API tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, 
 
 ## Known Limitations
 
-The consumer surface and dev overrides are PM5.6/PM5.7. The Playwright admin flow is part of the Docker integration run, not run in this session.
+The consumer surface and dev overrides are PM5.6/PM5.7. The real admin flow ran in the project owner's passing Docker integration run.
 
 ## Follow-Ups
 
