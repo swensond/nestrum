@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -25,27 +25,27 @@ Depends on [PM5.0](phase-00-contract.md). Keep definitions immutable and source-
 
 ## Implementation
 
-Planned typed registry and evaluator with boolean defaults, in-memory test/dev overrides, and explicit context. Document invalid-name rules and the generated TypeScript inference behavior.
+`defineFeatureFlags` (`packages/core/src/features/registry.ts`) validates and freezes source declarations into a `FeatureRegistry` and returns typed handles. `FeatureEvaluator` (`evaluator.ts`) evaluates defaults and in-process overrides; `MemoryFeatureStore` backs tests and the no-database configuration. Names are camelCase identifiers of at most 64 characters (`registry` is reserved), defaults must be boolean, and duplicates across `mergeFeatureDefinitions` are rejected. Handles evaluate through the application that registers them and throw `FEATURES_NOT_READY` otherwise. TypeScript infers flag names from the declaration, so unknown flags do not type-check.
 
 ## Public API
 
-Planned `defineFeatureFlags`, registry lookup, `enabled()` evaluation, and typed names.
+`defineFeatureFlags`, `FeatureRegistry`, `FeatureEvaluator`, `FeatureHandle.enabled/evaluate`, `mergeFeatureDefinitions`, `FeatureError`.
 
 ## Files / Packages Changed
 
-Planned core/runtime package, tests, architecture, initiative index, and this record.
+`packages/core/src/features/*`, `packages/core/tests/features.test.ts`, architecture, roadmap, initiative index, and this record.
 
 ## Tests
 
-Cover typed names, invalid definitions, defaults, overrides, immutability, and deterministic repeated evaluation.
+`packages/core/tests/features.test.ts`: typed names, invalid names/definitions, immutability, defaults, repeated deterministic evaluation, in-process overrides, unknown flags, not-ready handles.
 
 ## Acceptance Criteria
 
-- [ ] Flag names are strongly typed.
-- [ ] Declared defaults work.
-- [ ] Evaluator is deterministic.
-- [ ] In-memory overrides work.
-- [ ] Docs updated.
+- [x] Flag names are strongly typed.
+- [x] Declared defaults work.
+- [x] Evaluator is deterministic.
+- [x] In-memory overrides work.
+- [x] Docs updated.
 
 ## Validation
 
@@ -53,7 +53,7 @@ Run targeted registry tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm 
 
 ## Known Limitations
 
-No persistent or contextual targeting yet.
+Persistence, targeting and request integration are covered by PM5.2–PM5.4.
 
 ## Follow-Ups
 
@@ -61,4 +61,4 @@ No persistent or contextual targeting yet.
 
 ## Completion Notes
 
-Pending implementation and validation.
+Implemented and verified with the core Vitest project, `pnpm typecheck`, `pnpm build` and `pnpm lint`.

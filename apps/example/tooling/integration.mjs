@@ -117,7 +117,7 @@ try {
     const runtime = server.runtime;
     assert.deepEqual(
         example.application.apps.all().map((app) => app.name),
-        ['nestrum.auth', 'projects', 'articles'],
+        ['nestrum.auth', 'nestrum.features', 'projects', 'articles'],
     );
     assert.equal(example.application.databases.get('identity').provider, 'postgresql');
     assert.deepEqual(
@@ -444,6 +444,65 @@ try {
     // Remove the record created through the key so later counts only see the suite's own data.
     assert.equal((await request('/api/projects/via-key', { method: 'DELETE', cookie })).status, 204);
     console.log('Real API-key creation, one-time reveal, scoped ABAC resource access, rotation and revocation passed.');
+    // Feature flags: source defaults, persisted overrides managed by an administrator with 2FA, evaluated client values.
+    const flagRequest = (path, options) => request(path, { cookie, ...options });
+    assert.deepEqual(await json(await flagRequest('/__admin/features/capabilities'), 200), {
+        read: true,
+        manage: true,
+    });
+    assert.equal((await request('/__admin/features', { cookie: memberCookie })).status, 403);
+    assert.equal((await request('/__admin/features')).status, 401);
+    const evaluated = async (sessionCookie) =>
+        (await json(await request('/__nestrum/features', { cookie: sessionCookie }), 200)).features;
+    assert.deepEqual(await evaluated(''), { newDashboard: false });
+    await json(
+        await flagRequest('/__admin/features/newDashboard/rules', {
+            method: 'PUT',
+            body: { scope: 'subject', target: member.user.id, enabled: true },
+        }),
+        200,
+    );
+    await json(
+        await flagRequest('/__admin/features/experimentalSearch/rules', {
+            method: 'PUT',
+            body: { scope: 'global', enabled: true },
+        }),
+        200,
+    );
+    assert.deepEqual(await evaluated(memberCookie), { newDashboard: true });
+    assert.deepEqual(await evaluated(''), { newDashboard: false });
+    const clientText = JSON.stringify(await evaluated(memberCookie));
+    assert.ok(!clientText.includes('experimentalSearch'), 'Server-only flags never reach the client.');
+    assert.ok(!clientText.includes(member.user.id), 'Targeting never reaches the client.');
+    const explained = await json(
+        await flagRequest('/__admin/features/newDashboard/explain', {
+            method: 'POST',
+            body: { subjectId: member.user.id },
+        }),
+        200,
+    );
+    assert.deepEqual(explained.evaluation.reason, { source: 'subject', target: member.user.id });
+    assert.equal(await example.application.features.evaluator.enabled('experimentalSearch'), true);
+    // A flag never authorizes: the member still cannot use administration or another owner's records.
+    assert.equal((await request('/__admin/resources', { cookie: memberCookie })).status, 403);
+    const persistedRules = await example.clients.get('identity').orm.public.FeatureOverride.all();
+    assert.equal(persistedRules.length, 2);
+    assert.equal((await flagRequest('/__admin/features', { origin: 'https://foreign.invalid' })).status, 403);
+    assert.ok((await (await navigate('/admin/features', cookie)).text()).includes('Feature flags'));
+    assert.equal(
+        (
+            await flagRequest(`/__admin/features/newDashboard/rules?scope=subject&target=${member.user.id}`, {
+                method: 'DELETE',
+            })
+        ).status,
+        204,
+    );
+    assert.equal(
+        (await flagRequest('/__admin/features/experimentalSearch/rules?scope=global', { method: 'DELETE' })).status,
+        204,
+    );
+    assert.deepEqual(await evaluated(memberCookie), { newDashboard: false });
+    console.log('Real feature-flag defaults, persisted overrides, explanations and client exposure passed.');
     assert.equal(
         (await request('/api/projects', { method: 'POST', cookie, body: { ...projectData, id: 'invalid', name: 'x' } }))
             .status,

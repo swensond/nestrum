@@ -4,6 +4,7 @@ import type { AuthorizationEngine } from '#core/authorization/authorization';
 import type { PolicyDefinition } from '#core/authorization/authorization.types';
 import type { DatabaseConfig } from '#core/database/database.types';
 import type { DatabaseRegistry } from '#core/database/database-registry';
+import type { FeaturesDefinition } from '#core/features/features.types';
 import type { ResourceDefinition, ResourceModel } from '#core/resource/resource.types';
 import type { ResourceRegistry } from '#core/resource/resource-registry';
 import type { AppRegistry } from './app-registry.js';
@@ -39,6 +40,7 @@ export type ApplicationConfig = {
     readonly databaseLifecycle?: Readonly<Record<string, DatabaseLifecycle>>;
     readonly auth?: AuthenticationDefinition;
     readonly admin?: AdminDefinition;
+    readonly features?: FeaturesDefinition;
     readonly resources?: readonly ResourceDefinition[];
     readonly policies?: readonly PolicyDefinition[];
     readonly resourceModels?:

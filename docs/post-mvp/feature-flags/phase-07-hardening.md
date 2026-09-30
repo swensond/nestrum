@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -28,29 +28,29 @@ Depends on PM5.1–PM5.6. Correctness precedes caching; stale state must never b
 
 ## Implementation
 
-Planned final workflow checks for defaults, overrides, targeting, rollouts, request injection, admin security, consumer filtering, and API authorization. Record hash/version, cache, clock, invalidation, and audit semantics demonstrated by implementation.
+`withFeatureFlags(flags, overrides, callback)` binds the flags to a fresh in-memory evaluator and restores the previous binding, even on error; `evaluator.withOverrides()` derives an isolated evaluator. `nestrum dev --feature name=true|false` (repeatable, dev only) sets `NESTRUM_DEV_FEATURES`, which `defineFeatures` honors only when `NESTRUM_ENV` is `development`; overrides are process-local, never persisted, listed in the dev banner, and the environment is restored on close. Evaluations explain themselves safely; the rule cache (`cacheTtlMs`, default off) is invalidated synchronously by manager writes and by `invalidate()`; `onChange` listeners receive an audit event per persisted change and their failures never undo it. Storage failures fall back to source defaults. The example gained flags, an admin/consumer integration section and `verify:features`.
 
 ## Public API
 
-Finalize testing helper, dev override, diagnostics, cache invalidation, audit seam, and consumer exposure contracts. Update docs only to describe shipped behavior.
+`withFeatureFlags`, `FeatureEvaluatorApi.withOverrides/invalidate`, `parseDevOverrides`, `DEV_OVERRIDES_ENV`, `--feature`, `featureDiagnostics`, `FeatureChangeEvent`.
 
 ## Files / Packages Changed
 
-Planned integration tests/fixtures, CLI diagnostics, core/runtime/admin/web hardening, architecture, post-MVP roadmap, and all PM5 records.
+`packages/core/src/features/features.ts`, `packages/features/src/define.ts`, `packages/cli/src/{runtime-arguments,dev,bin}.ts`, example app and tooling, tests, architecture, roadmap, all PM5 records, decision 0016, README.
 
 ## Tests
 
-Vitest covers all precedence and isolation cases. Playwright covers admin management, evaluation explanations, consumer exposure, and relevant UI behavior. Integration verifies flags never bypass ABAC.
+Core tests cover isolation and restoration in `withFeatureFlags`, cache TTL and invalidation, audit events and listener failures, degraded fallback. CLI tests cover argument parsing and a real `nestrum dev --feature` run whose served value is overridden while storage stays empty and the environment is restored. `verify:features` passed on real PostgreSQL. Final validation of this change: `pnpm check` (tests, typecheck, build, admin-ui and CLI build verification), `pnpm lint`, `pnpm --filter @nestrum/example check:web` and `git diff --check`; the only failure seen in the full run was the timing-sensitive `nestrum dev` consumer-Vite HMR test, which passes when run alone.
 
 ## Acceptance Criteria
 
-- [ ] Test overrides are isolated.
-- [ ] Dev overrides do not mutate storage.
-- [ ] Diagnostics explain decisions safely.
-- [ ] Cache/invalidation behavior is deterministic if present.
-- [ ] Audit seam is exercised.
-- [ ] Docs updated.
-- [ ] Initiative definition of done passes and PM5 is marked complete.
+- [x] Test overrides are isolated.
+- [x] Dev overrides do not mutate storage.
+- [x] Diagnostics explain decisions safely.
+- [x] Cache/invalidation behavior is deterministic if present.
+- [x] Audit seam is exercised.
+- [x] Docs updated.
+- [x] Initiative definition of done passes and PM5 is marked complete.
 
 ## Validation
 
@@ -58,7 +58,7 @@ Run targeted feature/admin/consumer integration, `pnpm test`, `pnpm typecheck`, 
 
 ## Known Limitations
 
-Future multivariate values and declarative resource gating remain separately scoped. Document any provider/runtime limitations demonstrated by implementation.
+The Docker + MongoDB integration run (`pnpm test:integration`, including its feature-flag section and the Playwright consumer check) was run by the project owner and passes. Multivariate values, attribute targeting, declarative resource gating and audit history remain future work. Cross-process cache invalidation is bounded by `cacheTtlMs`.
 
 ## Follow-Ups
 
@@ -66,4 +66,4 @@ Record experiments, broader targeting, resource declarations, and full audit his
 
 ## Completion Notes
 
-Pending implementation and validation. PM5 remains incomplete until all phases and definition-of-done items pass.
+PM5 meets its definition of done in code, unit/integration tests, real-PostgreSQL verification and documentation; the project owner's Docker integration run passes.

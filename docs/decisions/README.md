@@ -28,3 +28,5 @@ Use ADR-style records when future sessions need the reasoning for a durable deci
 - [0014 — Roles and staff management](0014-roles-and-staff-management.md): Better Auth admin-plugin roles, CLI-created administrators, admin-managed staff, and role-based policies.
 
 - [0015 — First-class API keys](0015-api-keys.md): Better Auth's API-key plugin behind server-side calls, `X-API-Key` transport, explicit key subjects, scopes plus ABAC, and admin-managed keys.
+
+- [0016 — Typed boolean feature flags](0016-feature-flags.md): source-declared flags, persisted overrides, deterministic targeting and rollouts, request/InferDI evaluation, protected admin management, and evaluated client exposure.

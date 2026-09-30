@@ -1,14 +1,22 @@
 import { readFile } from 'node:fs/promises';
 import { defineAdmin, roleBasedAdminPolicies } from '@nestrum/admin';
 import { defineAuth } from '@nestrum/auth';
-import { defineApplication } from '@nestrum/core';
+import { defineApplication, defineFeatureFlags } from '@nestrum/core';
 import mongo, { bindMongoCollection } from '@nestrum/example-mongo';
 import postgres from '@nestrum/example-postgres';
+import { defineFeatures } from '@nestrum/features';
 import { compileModelMetadata } from '@nestrum/prisma';
 import { createPrismaQueryBackend } from '@nestrum/prisma/querysets';
 import { generateModelSchemas } from '@nestrum/zod';
 import { Article, articlesApp } from './apps/articles/app.mjs';
 import { Project, projectsApp } from './apps/projects/app.mjs';
+
+// Feature flags answer "is this capability switched on?"; ABAC still decides who may use it. Overrides live in
+// Nestrum's FeatureOverride table on the identity database and are managed at /admin/features.
+export const features = defineFeatureFlags({
+    newDashboard: { default: false, exposeToClient: true, description: 'Redesigned dashboard for the consumer UI' },
+    experimentalSearch: { default: false, description: 'Server-only search experiment' },
+});
 
 export function createExample({
     connections,
@@ -26,6 +34,12 @@ export function createExample({
         baseURL,
         secret,
         prisma: () => ({ database: 'identity', collections: clients.get('identity').orm.public }),
+    });
+    const featureFlags = defineFeatures({
+        flags: features,
+        database: 'identity',
+        environment: 'integration',
+        prisma: () => ({ database: 'identity', collection: clients.get('identity').orm.public.FeatureOverride }),
     });
     const admin = defineAdmin();
     admin.register(Project, {
@@ -60,6 +74,7 @@ export function createExample({
         },
         auth,
         admin,
+        features: featureFlags,
         apps: [articlesApp(events), projectsApp(events)],
         // `staff` and `admin` roles enter administration; only `admin` manages users (see the admin interface).
         policies: roleBasedAdminPolicies(),

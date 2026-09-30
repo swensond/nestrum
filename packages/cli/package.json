@@ -32,6 +32,7 @@
         "esbuild": "0.28.2"
     },
     "devDependencies": {
+        "@nestrum/features": "workspace:*",
         "vite": "8.3.1"
     }
 }

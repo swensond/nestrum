@@ -7,7 +7,7 @@ import type { Context, Hono } from 'hono';
 import type { PublicOpenApiDocument } from '#hono/api/public-api';
 import { OPENAPI_PATH, pathsOverlap, registerPublicApi } from '#hono/api/public-api';
 import type { RequestScope } from './container.js';
-import { createRuntimeContainer, openRequestScope } from './container.js';
+import { createRuntimeContainer, openRequestScope, requestFeatures } from './container.js';
 import { mapHttpError } from './runtime.errors.js';
 import type { RequestContext, RuntimeEnv, RuntimeErrorEvent, RuntimeOptions, RuntimeState } from './runtime.types.js';
 
@@ -23,6 +23,9 @@ function attributes<Value extends Subject | AuthorizationEnvironment>(value: Val
 
     return Object.freeze(snapshotQueryValue(value));
 }
+
+/** Evaluated, client-safe feature values for the consumer UI. Reserved under the `/__nestrum` namespace. */
+export const FEATURES_PATH = '/__nestrum/features';
 
 export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
     readonly hono: OpenAPIHono<RuntimeEnv<Scope>>;
@@ -108,6 +111,7 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
                     databases: application.databases,
                     resources: application.resources,
                     authorization: application.authorization,
+                    features: requestFeatures(application, { subject, environment }),
                     subject,
                     environment,
                     request,
@@ -247,6 +251,22 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
             };
             this.hono.all(admin.basePath, handle);
             this.hono.all(`${admin.basePath}/*`, handle);
+        }
+        if (this.options.application.features) {
+            if (
+                this.hono.routes
+                    .slice(this.frameworkRouteCount)
+                    .some((route) => pathsOverlap(route.path, FEATURES_PATH))
+            ) {
+                throw new AppError('FEATURES_ROUTE_CONFLICT', 'Feature routes overlap an existing route.');
+            }
+            // Evaluated on the server for this request's subject; only `exposeToClient` flags, as booleans.
+            this.hono.get(FEATURES_PATH, async (context) =>
+                Response.json(
+                    { features: await context.get('nestrum').features.exposed() },
+                    { headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } },
+                ),
+            );
         }
         const auth = this.options.application.auth;
         const adminUi = this.options.adminUi;

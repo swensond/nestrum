@@ -11,12 +11,14 @@ export { AdminError } from '@nestrum/core';
 export { ADMIN_ACCESS_ACTION, ADMIN_ACCESS_IDENTITY } from './access.js';
 export { defineAdmin } from './admin.js';
 export type { AdminActionMetadata, AdminFieldMetadata, AdminResourceMetadata } from './metadata.js';
-export type { ApiKeyAction } from './policies.js';
+export type { ApiKeyAction, FeatureAction } from './policies.js';
 export {
     ADMIN_USERS_ACTION,
     ADMIN_USERS_IDENTITY,
     API_KEY_ACTIONS,
     API_KEY_IDENTITY,
+    FEATURE_ACTIONS,
+    FEATURE_IDENTITY,
     roleBasedAdminPolicies,
 } from './policies.js';
 export type { AdminOptions } from './registry.js';

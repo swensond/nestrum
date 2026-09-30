@@ -1,5 +1,5 @@
 import type { InferdiRoot, InferdiScope } from '@inferdi/hono';
-import type { Application, AuthorizationEnvironment, Subject } from '@nestrum/core';
+import type { Application, AuthorizationEnvironment, BoundFeatures, Subject } from '@nestrum/core';
 import type { PublicApiOptions } from '#hono/api/api.types';
 import type { RequestInputs, RequestScope } from './container.js';
 
@@ -9,6 +9,7 @@ export type RequestContext = Readonly<
         databases: Application['databases'];
         resources: Application['resources'];
         authorization: Application['authorization'];
+        features: BoundFeatures;
     }
 >;
 

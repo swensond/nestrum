@@ -11,7 +11,7 @@ export { CONFIG_CANDIDATES, defineCliConfig, defineConfig, discoverConfig, loadC
 export type { DatabaseCommandDependencies } from './database-command.js';
 export { runDatabaseCommand } from './database-command.js';
 export type { ChangeKind, DevOptions, DevSession } from './dev.js';
-export { adminSecurityDiagnostics, classifyChange, runDev } from './dev.js';
+export { adminSecurityDiagnostics, classifyChange, featureDiagnostics, runDev } from './dev.js';
 export { HEALTH_PATH, READY_PATH, withHealth } from './health.js';
 export type { BuildManifest } from './manifest.js';
 export { MANIFEST_VERSION, readManifest } from './manifest.js';

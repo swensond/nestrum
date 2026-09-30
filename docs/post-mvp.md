@@ -2,22 +2,42 @@
 
 These features are outside the frozen MVP unless a small supporting abstraction is necessary for an included capability. Record newly deferred work here as implementation proceeds.
 
+## Plan 06 — Enterprise SSO
+
+The [enterprise SSO initiative](post-mvp/sso/README.md) is the sixth planned post-MVP initiative. It adds OIDC and SAML 2.0 single sign-on on Better Auth's official SSO plugin (`@better-auth/sso`), with a prebuilt Svelte admin at `/admin/auth/sso` for managing multiple providers, organization and domain mapping, encrypted secrets, provisioning policy, and validation, all behind admin 2FA and `sso.*` ABAC actions.
+
+PM6.0 documentation is complete. PM6.1–PM6.8 are Not Started; SSO is not currently implemented. IdP claims never become Nestrum authorization, and an SSO login does not satisfy admin 2FA. The remaining MVP atomic object-policy write gate stays open independently.
+
+| Phase | Goal | Status |
+| --- | --- | --- |
+| [PM6.0](post-mvp/sso/phase-00-contract.md) | Document SSO contract | Complete |
+| [PM6.1](post-mvp/sso/phase-01-better-auth-integration.md) | Better Auth SSO plugin integration | Not Started |
+| [PM6.2](post-mvp/sso/phase-02-provider-registry.md) | Provider registry and secure persistence | Not Started |
+| [PM6.3](post-mvp/sso/phase-03-oidc.md) | OIDC | Not Started |
+| [PM6.4](post-mvp/sso/phase-04-saml.md) | SAML 2.0 | Not Started |
+| [PM6.5](post-mvp/sso/phase-05-admin-backend.md) | Private admin management API | Not Started |
+| [PM6.6](post-mvp/sso/phase-06-admin-ui.md) | Prebuilt Svelte SSO admin | Not Started |
+| [PM6.7](post-mvp/sso/phase-07-provisioning.md) | Provisioning and organization/domain mapping | Not Started |
+| [PM6.8](post-mvp/sso/phase-08-hardening.md) | Diagnostics, testing, hardening | Not Started |
+
 ## Plan 05 — Feature flags
 
-The [feature-flag initiative](post-mvp/feature-flags/README.md) is the fifth planned post-MVP initiative. It provides typed boolean capability evaluation across backend services, public APIs, admin, and the hosted consumer UI while keeping feature state separate from authorization.
+The [feature-flag initiative](post-mvp/feature-flags/README.md) is the fifth post-MVP initiative and is implemented. It provides typed boolean capability evaluation across backend services, public APIs, admin, and the hosted consumer UI while keeping feature state separate from authorization.
 
-PM5.0 documentation is complete. PM5.1–PM5.7 are Not Started; feature flags are not currently evaluated by the runtime. Source defaults, Nestrum-owned persistence, subject/organization targeting, deterministic rollouts, InferDI integration, protected admin management, explicit client exposure, test/dev overrides, and an audit seam are planned. The remaining MVP atomic object-policy write gate stays open independently.
+PM5.0–PM5.7 are complete. `defineFeatureFlags` declares typed boolean flags with source defaults; `defineFeatures` (`@nestrum/features`) registers them with an application and persists overrides in Nestrum's `FeatureOverride` Prisma model (or in memory). Evaluation resolves in-process override, subject, organization, deterministic percentage rollout, environment, global, then the default, and never replaces ABAC. Request scopes inject a `features` service; administrators manage overrides at `/admin/features` (`/__admin/features/*`, admin 2FA, `features.read`/`features.manage`) with explanations and an audit seam; `exposeToClient` flags are served as server-evaluated booleans at `/__nestrum/features` and read with `createFeatureClient()`; `withFeatureFlags` and `nestrum dev --feature` provide isolated overrides. See [decision 0016](decisions/0016-feature-flags.md). Existing applications adopting features migrate the new `FeatureOverride` table. Real PostgreSQL verification (`pnpm --filter @nestrum/example verify:features`) passes; the Docker + MongoDB `pnpm test:integration` run, including its feature-flag section and the Playwright consumer check, was run by the project owner and passes. The remaining MVP atomic object-policy write gate stays open independently.
 
 | Phase | Goal | Status |
 | --- | --- | --- |
 | [PM5.0](post-mvp/feature-flags/phase-00-contract.md) | Document feature-flag contract | Complete |
-| [PM5.1](post-mvp/feature-flags/phase-01-registry.md) | Typed registry and evaluator | Not Started |
-| [PM5.2](post-mvp/feature-flags/phase-02-storage.md) | Persistent override storage | Not Started |
-| [PM5.3](post-mvp/feature-flags/phase-03-targeting.md) | Targeting and deterministic rollout | Not Started |
-| [PM5.4](post-mvp/feature-flags/phase-04-runtime.md) | InferDI/request integration | Not Started |
-| [PM5.5](post-mvp/feature-flags/phase-05-admin.md) | Protected admin management | Not Started |
-| [PM5.6](post-mvp/feature-flags/phase-06-client.md) | Consumer UI exposure | Not Started |
-| [PM5.7](post-mvp/feature-flags/phase-07-hardening.md) | Testing, diagnostics, invalidation, audit | Not Started |
+| [PM5.1](post-mvp/feature-flags/phase-01-registry.md) | Typed registry and evaluator | Complete |
+| [PM5.2](post-mvp/feature-flags/phase-02-storage.md) | Persistent override storage | Complete |
+| [PM5.3](post-mvp/feature-flags/phase-03-targeting.md) | Targeting and deterministic rollout | Complete |
+| [PM5.4](post-mvp/feature-flags/phase-04-runtime.md) | InferDI/request integration | Complete |
+| [PM5.5](post-mvp/feature-flags/phase-05-admin.md) | Protected admin management | Complete |
+| [PM5.6](post-mvp/feature-flags/phase-06-client.md) | Consumer UI exposure | Complete |
+| [PM5.7](post-mvp/feature-flags/phase-07-hardening.md) | Testing, diagnostics, invalidation, audit | Complete |
+
+Future work: multivariate values, attribute-based targeting, declarative resource gating, scheduled changes, cross-process cache invalidation, and audit history.
 
 ## Plan 04 — Hosted consumer application UI
 
@@ -93,7 +113,7 @@ Node-specific listener APIs stay in the Node adapter, outside core and CLI. Prod
 
 ## Framework
 
-- Event bus, jobs, queues, outbox, sagas, caching, and feature flags.
+- Event bus, jobs, queues, outbox, sagas, and caching. (Feature flags shipped in [Plan 05](post-mvp/feature-flags/README.md).)
 - Soft delete framework and automatic audit history.
 - Full plugin ecosystem, code generators, and publishing automation.
 - Vite/HMR development serving for the Svelte admin (and rebuilding the admin shell with application component registries) under `nestrum dev`; see [Plan 01](post-mvp/runtime/README.md).
@@ -113,6 +133,7 @@ Node-specific listener APIs stay in the Node adapter, outside core and CLI. Prod
 - GraphQL, advanced relationship expansion, generated external SDKs, and public arbitrary Prisma expressions.
 - Field-level ABAC is excluded from the MVP; any later adoption requires revisiting stable response and admin contracts.
 - Organization-owned and service-identity API keys, external (Redis) API-key rate-limit providers, and key grace-period rotation. (API keys shipped in [Plan 03](post-mvp/api-keys/README.md).)
+- OAuth2-only enterprise providers and trusting upstream MFA assurance (`acr`/`amr`, `AuthnContext`) for admin 2FA. (OIDC and SAML SSO are planned in [Plan 06](post-mvp/sso/README.md).)
 - Social auth providers, non-admin MFA, passkeys/WebAuthn, QR-image enrollment, factor reset and backup-code/disable UI, independently expiring admin assurance, email verification delivery, account linking, and broader Better Auth plugin coverage. (Admin TOTP 2FA shipped in [Plan 02](post-mvp/admin-2fa/README.md).)
 
 ## Implementation follow-ups

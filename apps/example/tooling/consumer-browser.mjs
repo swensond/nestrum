@@ -65,6 +65,12 @@ export async function runConsumerBrowserChecks({ baseURL, email, password }) {
         await page.getByText('API: ok').waitFor();
         console.log('consumer browser public API client ok');
 
+        // 4b. Feature flags: the consumer receives the server-evaluated boolean of an exposed flag, and nothing else.
+        await page.getByText('newDashboard: off').waitFor();
+        const evaluated = await (await context.request.get(`${baseURL}/__nestrum/features`)).json();
+        assert.deepEqual(evaluated, { features: { newDashboard: false } });
+        console.log('consumer browser feature flags ok');
+
         // 5. The admin is a separate, protected surface: anonymous browsers cannot read its private API.
         assert.equal((await context.request.get(`${baseURL}/__admin/resources`)).status(), 401);
         await page.goto(`${baseURL}/admin/`);

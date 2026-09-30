@@ -2,7 +2,13 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { DevSession } from '../src/index.js';
-import { adminSecurityDiagnostics, classifyChange, runDev } from '../src/index.js';
+import {
+    adminSecurityDiagnostics,
+    classifyChange,
+    featureDiagnostics,
+    parseRuntimeArguments,
+    runDev,
+} from '../src/index.js';
 
 const roots: string[] = [];
 const sessions: DevSession[] = [];
@@ -260,4 +266,77 @@ describe('nestrum dev', () => {
         expect(lines.length).toBe(before);
         expect(await (await fetch(`${url}/app/deep/link`)).text()).toContain('two /app/deep/link');
     });
+});
+
+describe('nestrum dev --feature', () => {
+    it('parses repeatable name=boolean overrides for dev only', () => {
+        expect(
+            parseRuntimeArguments(['dev', '--feature', 'newDashboard=true', '--feature', 'beta=false']).features,
+        ).toEqual({
+            newDashboard: true,
+            beta: false,
+        });
+        expect(parseRuntimeArguments(['dev']).features).toBeUndefined();
+        for (const bad of [
+            ['dev', '--feature', 'newDashboard'],
+            ['dev', '--feature', 'NewDashboard=true'],
+            ['dev', '--feature', 'a=yes'],
+            ['dev', '--feature', 'a=true', '--feature', 'a=false'],
+            ['dev', '--feature'],
+            ['serve', '--feature', 'a=true'],
+            ['build', '--feature', 'a=true'],
+        ]) {
+            expect(() => parseRuntimeArguments(bad), bad.join(' ')).toThrowError(
+                expect.objectContaining({ code: 'CLI_ARGUMENT_INVALID' }),
+            );
+        }
+        expect(() => parseRuntimeArguments(['dev', '--port', '1', '--port', '2'])).toThrow(/repeated/);
+    });
+
+    it('lists overrides in the banner and stays silent without them', () => {
+        expect(featureDiagnostics(undefined)).toEqual([]);
+        expect(featureDiagnostics({}).length).toBe(0);
+        expect(featureDiagnostics({ newDashboard: true }).join('\n')).toContain('newDashboard=true');
+    });
+
+    it('applies overrides to this process only, without persisting, and restores the environment', async () => {
+        const root = await mkdtemp(join(import.meta.dirname, '..', '.tmp-dev-'));
+        roots.push(root);
+        await writeFile(join(root, 'models.prisma'), MODEL());
+        await writeFile(
+            join(root, 'nestrum.config.ts'),
+            `import { defineApplication, defineFeatureFlags } from '@nestrum/core';
+import { defineConfig } from '@nestrum/cli';
+import { defineFeatures } from '@nestrum/features';
+export const flags = defineFeatureFlags({ newDashboard: { default: false, exposeToClient: true }, beta: { default: false, exposeToClient: true } });
+export default defineConfig({
+    server: { port: 0 },
+    application: defineApplication({
+        databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://u:p@127.0.0.1:1/x' } },
+        apps: [{ name: 'models', prisma: { default: ['./models.prisma'] } }],
+        features: defineFeatures({ flags }),
+    }),
+    timeoutMs: 60000
+});
+`,
+        );
+        const before = { env: process.env.NESTRUM_ENV, features: process.env.NESTRUM_DEV_FEATURES };
+        const lines: string[] = [];
+        const session = await runDev({
+            cwd: root,
+            env: {},
+            log: (line) => lines.push(line),
+            watch: false,
+            features: { newDashboard: true },
+        });
+        sessions.push(session);
+        const served = (await (await fetch(`${session.url()}/__nestrum/features`)).json()) as {
+            features: Record<string, boolean>;
+        };
+        expect(served.features).toEqual({ newDashboard: true, beta: false });
+        expect(lines.join('\n')).toContain('Feature overrides (this process only; storage is unchanged)');
+        await session.close();
+        expect(process.env.NESTRUM_ENV).toBe(before.env);
+        expect(process.env.NESTRUM_DEV_FEATURES).toBe(before.features);
+    }, 60_000);
 });

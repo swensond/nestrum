@@ -4,3 +4,5 @@ export type { AuthClient, AuthClientOptions, AuthSession, AuthState, SessionUser
 export { createAuthClient } from './auth.js';
 export { readPublicConfig } from './config.js';
 export { ApiError } from './errors.js';
+export type { FeatureClient, FeatureClientOptions, FeatureState } from './features.js';
+export { createFeatureClient, FEATURES_PATH } from './features.js';

@@ -3,6 +3,7 @@ import type { Authentication, AuthenticationDefinition } from '#core/auth/auth.t
 import { AuthorizationEngine } from '#core/authorization/authorization';
 import { PolicyError } from '#core/authorization/authorization.errors';
 import { DatabaseRegistry } from '#core/database/database-registry';
+import type { Features, FeaturesDefinition } from '#core/features/features.types';
 import { ResourceError } from '#core/resource/resource.errors';
 import type { ResourceModel } from '#core/resource/resource.types';
 import { ResourceRegistry } from '#core/resource/resource-registry';
@@ -20,6 +21,8 @@ import type {
 export class Application {
     private authentication: Authentication | undefined;
     private adminApi: AdminApi | undefined;
+    private featuresApi: Features | undefined;
+    private readonly featuresDefinition: FeaturesDefinition | undefined;
     private readonly authDefinition: AuthenticationDefinition | undefined;
     private readonly adminDefinition: AdminDefinition | undefined;
     readonly apps: AppRegistry;
@@ -68,6 +71,20 @@ export class Application {
         this.databaseLifecycle = Object.freeze(databaseLifecycle);
         this.authDefinition = config.auth;
         this.adminDefinition = config.admin;
+        this.featuresDefinition = config.features;
+        if (
+            config.features &&
+            (config.features.kind !== 'nestrum-features' ||
+                typeof config.features.createApp !== 'function' ||
+                typeof config.features.initialize !== 'function' ||
+                !Array.isArray(config.features.protectedModels) ||
+                (config.features.database !== undefined && !this.databases.has(config.features.database)))
+        ) {
+            throw new AppError(
+                'FEATURES_CONFIG_INVALID',
+                'Features require a Nestrum features definition and, when persistent, a configured database.',
+            );
+        }
         if (
             config.admin &&
             (config.admin.kind !== 'nestrum-admin' ||
@@ -94,11 +111,14 @@ export class Application {
                 'Authentication requires a Nestrum Better Auth definition and a configured database.',
             );
         }
-        this.apps = new AppRegistry(
-            config.auth
-                ? [config.auth.createApp(this.databases.get(config.auth.database).provider), ...config.apps]
-                : config.apps,
-        );
+        const featuresDatabase = config.features?.database;
+        this.apps = new AppRegistry([
+            ...(config.auth ? [config.auth.createApp(this.databases.get(config.auth.database).provider)] : []),
+            ...(config.features && featuresDatabase !== undefined
+                ? [config.features.createApp(this.databases.get(featuresDatabase).provider)]
+                : []),
+            ...config.apps,
+        ]);
         if (config.resources !== undefined && !Array.isArray(config.resources)) {
             throw new ResourceError('RESOURCE_CONFIG_INVALID', 'Application resources must be an array.');
         }
@@ -117,7 +137,13 @@ export class Application {
             ...this.apps.all().flatMap((app) => app.policies ?? []),
         ]);
         const definitions = [...(config.resources ?? []), ...this.apps.all().flatMap((app) => app.resources ?? [])];
-        if (definitions.some((definition) => config.auth?.protectedModels.includes(definition.identity))) {
+        if (
+            definitions.some((definition) =>
+                [...(config.auth?.protectedModels ?? []), ...(config.features?.protectedModels ?? [])].includes(
+                    definition.identity,
+                ),
+            )
+        ) {
             throw new AppError(
                 'AUTH_MODEL_PROTECTED',
                 'Authentication models cannot be registered as ordinary resources.',
@@ -153,6 +179,16 @@ export class Application {
     /** Resolved admin security policy, known before startup so diagnostics never need a running server. */
     get adminSecurity(): AdminDefinition['security'] | undefined {
         return this.adminDefinition?.security;
+    }
+
+    /** Whether feature flags were configured, known before startup. */
+    get featuresConfigured(): boolean {
+        return this.featuresDefinition !== undefined;
+    }
+
+    /** Feature evaluation and management; available once the application has started. */
+    get features(): Features | undefined {
+        return this.featuresApi;
     }
 
     get auth(): Authentication | undefined {
@@ -203,6 +239,9 @@ export class Application {
             this.resources.initialize(models);
             if (this.authDefinition) {
                 this.authentication = await this.authDefinition.initialize(this);
+            }
+            if (this.featuresDefinition) {
+                this.featuresApi = await this.featuresDefinition.initialize(this);
             }
             for (const app of this.apps.all()) {
                 this.startedApps.push(app);

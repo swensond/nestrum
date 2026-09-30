@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -25,27 +25,27 @@ Depends on [PM5.2](phase-02-storage.md). Never use `Math.random()` per request. 
 
 ## Implementation
 
-Planned evaluator targeting records, bucket calculation, precedence explanation data, and validation for percentages/bounds. Keep scope/authorization separate from targeting.
+`FeatureEvaluator` resolves override, subject, organization, percentage, environment, global, then the declared default (the planned order plus a `global` layer between environment and default). Percentage rules use `murmur3("v1\0flag\0stableKey") % 10000` (`hash.ts`, `ROLLOUT_HASH_VERSION`); a subject is inside when `bucket < round(percentage × 100)`. The stable key is `stableId ?? subject.id`; without it (anonymous) rollout and subject layers are skipped. Rule input is validated (scope, target shape and length, boolean `enabled`, percentage 0–100 with at most two decimals). Evaluations return a safe reason (`source`, `target`, `percentage`, `bucket`).
 
 ## Public API
 
-Planned `FeatureContext` with optional subject, organizationId, environment, and attributes; targeting/rollout configuration and evaluation explanation shape.
+`FeatureContext`, `FeatureRule`, `FeatureRuleScope`, `FeatureEvaluation`/`FeatureReason`, `rolloutBucket`, `murmur3`, `validateRuleInput`.
 
 ## Files / Packages Changed
 
-Planned evaluator/storage/core integration, tests, architecture, initiative index, and this record.
+`packages/core/src/features/{evaluator,hash,features.types}.ts`, core tests, architecture, roadmap, initiative index, and this record.
 
 ## Tests
 
-Cover every precedence layer, deterministic repeated buckets, percentage boundaries, subject/organization changes, anonymous context, invalid percentages, and explanation reasons.
+Core tests cover every precedence layer in order, skipped layers without context, murmur3 reference vectors, bucket range and distribution, deterministic repeats, percentage 0/100 boundaries, monotonic growth when the percentage rises, anonymous stable identifiers, invalid rules and explanation reasons.
 
 ## Acceptance Criteria
 
-- [ ] Precedence is tested and documented.
-- [ ] Rollout is deterministic.
-- [ ] No request-time randomness is used.
-- [ ] Anonymous evaluation follows the stable-ID rule.
-- [ ] Docs updated.
+- [x] Precedence is tested and documented.
+- [x] Rollout is deterministic.
+- [x] No request-time randomness is used.
+- [x] Anonymous evaluation follows the stable-ID rule.
+- [x] Docs updated.
 
 ## Validation
 
@@ -53,7 +53,7 @@ Run targeting tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, 
 
 ## Known Limitations
 
-Evaluation is not yet injected into request/services and admin cannot manage targeting.
+Targeting reads only subject, organization and environment; attribute-based rules are not supported (`attributes` is carried for application code).
 
 ## Follow-Ups
 
@@ -61,4 +61,4 @@ Evaluation is not yet injected into request/services and admin cannot manage tar
 
 ## Completion Notes
 
-Pending implementation and validation.
+No `Math.random()` or clock is used in evaluation. Hash and input format are version-tagged.

@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -25,26 +25,26 @@ Depends on [PM5.1](phase-01-registry.md). Storage is framework-owned but databas
 
 ## Implementation
 
-Planned schema/service for flag overrides, environment, metadata, timestamps, and future targeting dimensions. Integrate existing Prisma contract/migration workflow and avoid application-owned duplicate models.
+New package `@nestrum/features`. `defineFeatures({ flags, database, prisma, environment, cacheTtlMs, overrides, onChange, onError })` returns a `FeaturesDefinition` for `defineApplication({ features })`. Nestrum contributes a protected `FeatureOverride` Prisma fragment (PostgreSQL and MongoDB variants, unique `(flag, scope, target)`, index on `flag`) to the selected database as the `nestrum.features` app; `createPrismaFeatureStore` reads and writes it through the Prisma query backend. Without `database`/`prisma`, overrides are in memory. A missing or failing store evaluates to the declared default and reports the error.
 
 ## Public API
 
-Planned `features.database` configuration and storage service contracts.
+`defineFeatures`, `FeaturesConfig`, `FeaturePrismaBinding`, `createPrismaFeatureStore`, `featureContract`, `FEATURE_MODELS`, `Application.features`/`featuresConfigured`, `ApplicationConfig.features`.
 
 ## Files / Packages Changed
 
-Planned core/Prisma/config storage, migrations/contracts, tests, architecture, initiative index, and this record.
+New `packages/features`, `packages/core` application/types, `vitest.workspace.ts`, `pnpm-lock.yaml`, example application, architecture, roadmap, initiative index, and this record.
 
 ## Tests
 
-Cover configured database selection, persistence/readback, defaults fallback, invalid config, schema readiness, and future targeting-compatible records.
+`packages/features/tests/features.test.ts`: real Prisma contract emission for both providers, store behavior on both providers (upsert, unique key, list ordering, malformed rows, lost create race), configuration validation, protected-model rejection, database mismatch. `pnpm --filter @nestrum/example verify:features` ran against a real PostgreSQL 16 database migrated through `nestrum db migrate` (table, unique constraint and index created; persistence, concurrent-writer convergence, precedence, rollout and failure fallback passed).
 
 ## Acceptance Criteria
 
-- [ ] Configured database stores overrides.
-- [ ] Source defaults remain fallback.
-- [ ] Storage supports future targeting records.
-- [ ] Docs updated.
+- [x] Configured database stores overrides.
+- [x] Source defaults remain fallback.
+- [x] Storage supports future targeting records.
+- [x] Docs updated.
 
 ## Validation
 
@@ -52,7 +52,7 @@ Run storage/migration tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm 
 
 ## Known Limitations
 
-Targeting precedence and runtime injection remain PM5.3/PM5.4.
+MongoDB storage is verified through contract emission and unit tests; its live run is part of the Docker integration suite, which the project owner ran and passes. Upserts are read-then-write, so concurrent writers converge on one row with last-writer-wins.
 
 ## Follow-Ups
 
@@ -60,4 +60,4 @@ Targeting precedence and runtime injection remain PM5.3/PM5.4.
 
 ## Completion Notes
 
-Pending implementation and validation.
+Existing applications adopting features migrate one additive table. Storage never turns feature state into authorization.

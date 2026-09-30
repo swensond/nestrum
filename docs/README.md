@@ -9,7 +9,8 @@ This documentation is the durable project memory for future implementation sessi
 - [Post-MVP Plan 02 — Admin 2FA enforcement](post-mvp/admin-2fa/README.md): default-required TOTP assurance for admin UI and API boundaries (implemented).
 - [Post-MVP Plan 03 — First-class API keys](post-mvp/api-keys/README.md): implemented machine-to-machine authentication on Better Auth's API-key plugin, with scopes, ABAC, admin management, and rate limits ([decision 0015](decisions/0015-api-keys.md)).
 - [Post-MVP Plan 04 — Hosted consumer application UI](post-mvp/consumer-ui/README.md): Svelte consumer hosting through the Nestrum lifecycle (implemented).
-- [Post-MVP Plan 05 — Feature flags](post-mvp/feature-flags/README.md): planned typed capability evaluation with targeting, ABAC separation, and safe client exposure.
+- [Post-MVP Plan 05 — Feature flags](post-mvp/feature-flags/README.md): typed boolean flags with persisted overrides, deterministic targeting and rollouts, request evaluation, protected admin management, and safe client exposure. Implemented.
+- [Post-MVP Plan 06 — Enterprise SSO](post-mvp/sso/README.md): planned OIDC and SAML 2.0 single sign-on on Better Auth's SSO plugin with a prebuilt Svelte provider admin.
 - [Phases](phases/README.md): bounded implementation tasks and validation records.
 - [Decisions](decisions/README.md): rationale for decisions that need to survive future sessions.
 - [Admin extensions](admin-extensions.md): custom action handlers, field overrides, and compiled widget registration.

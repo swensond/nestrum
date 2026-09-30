@@ -56,7 +56,7 @@ Feature flags are not implemented or evaluated by the current runtime. Exact has
 
 ## Follow-Ups
 
-[PM5.1](phase-01-registry.md) implements the typed registry and evaluator. The remaining MVP atomic object-policy write gate remains independent.
+[PM5.1](phase-01-registry.md) implemented the typed registry and evaluator; PM5.1–PM5.7 are now complete. The remaining MVP atomic object-policy write gate remains independent.
 
 ## Completion Notes
 

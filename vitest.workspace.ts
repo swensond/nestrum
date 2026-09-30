@@ -28,6 +28,13 @@ export default [
     }),
     defineProject({
         test: {
+            name: '@nestrum/features',
+            environment: 'node',
+            include: ['packages/features/tests/**/*.test.ts'],
+        },
+    }),
+    defineProject({
+        test: {
             name: '@nestrum/prisma',
             environment: 'node',
             include: ['packages/prisma/tests/**/*.test.ts'],

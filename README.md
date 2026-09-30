@@ -161,6 +161,34 @@ const Project = defineResource({
 
 Administrators create keys at `/admin/api-keys` (owner user, scopes such as `projects:read`, expiry, optional rate limit); the full key is shown once. Clients send `X-API-Key: nes_live_…`. A key is its own ABAC subject (`subject.type === 'api-key'`, `subject.owner`, `subject.scopes`) and needs the resource's scope (`projects:read` for list/retrieve, `projects:write` for mutations, or `api.scopes`) **and** an allowing policy. Tune `defineAuth({ apiKeys: { prefix, defaultTtlDays, maxTtlDays, rateLimit } })`. See [decision 0015](docs/decisions/0015-api-keys.md).
 
+## Feature flags
+
+Flags answer "is this capability switched on?"; ABAC still answers "may this subject use it?". Declare boolean flags in source and register them with `defineFeatures`:
+
+```ts
+import { defineFeatureFlags } from '@nestrum/core';
+import { defineFeatures } from '@nestrum/features';
+
+export const features = defineFeatureFlags({
+    newDashboard: { default: false, exposeToClient: true },
+    experimentalSearch: { default: false },
+});
+
+defineApplication({
+    features: defineFeatures({
+        flags: features,
+        database: 'identity',
+        environment: 'production',
+        prisma: ({ database }) => ({ database, collection: client.orm.public.FeatureOverride }),
+    }),
+    // ...
+});
+
+await features.newDashboard.enabled({ subject, organizationId });
+```
+
+Overrides persist in Nestrum's `FeatureOverride` model (migrate it like any contract) and resolve in this order: subject, organization, percentage rollout, environment, global, source default. Rollouts hash flag + stable subject key, so they are deterministic; anonymous actors roll out only through an application-provided `environment.featureKey`. Request scopes inject a `features` service bound to the trusted subject and environment (`scope.get('features')`, `context.var.nestrum.features`). Administrators manage overrides at `/admin/features` (admin 2FA plus the `features` ABAC actions `read` and `manage`) and can explain any decision. Flags marked `exposeToClient: true` are evaluated on the server and served as booleans at `/__nestrum/features`; the consumer UI reads them with `createFeatureClient()` from `@nestrum/web/client`. Tests use `withFeatureFlags(features, { newDashboard: true }, callback)`; `nestrum dev --feature newDashboard=true` overrides a flag for that process only. See [decision 0016](docs/decisions/0016-feature-flags.md).
+
 ## Private admin API
 
 ```ts

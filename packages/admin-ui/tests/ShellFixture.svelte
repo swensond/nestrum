@@ -8,12 +8,14 @@ let {
     activePath = '/admin',
     canManageUsers = false,
     canManageApiKeys = false,
+    canViewFeatures = false,
 }: {
     state: AdminShellState;
     loading?: boolean;
     activePath?: string;
     canManageUsers?: boolean;
     canManageApiKeys?: boolean;
+    canViewFeatures?: boolean;
 } = $props();
 </script>
-<AdminShell {state} {loading} {activePath} {canManageUsers} {canManageApiKeys}><p>Protected workspace content</p></AdminShell>
+<AdminShell {state} {loading} {activePath} {canManageUsers} {canManageApiKeys} {canViewFeatures}><p>Protected workspace content</p></AdminShell>

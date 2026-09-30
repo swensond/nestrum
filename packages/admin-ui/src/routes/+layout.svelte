@@ -17,6 +17,7 @@ setContext(ADMIN_COMPONENTS_CONTEXT, adminComponents);
     activePath={data.path}
     canManageUsers={data.canManageUsers}
     canManageApiKeys={data.canManageApiKeys}
+    canViewFeatures={data.canViewFeatures}
     loading={navigating.to !== null}
     onretry={() => invalidateAll()}
     ontwofactor={() => goto(withNext('/admin/auth/2fa', safeReturnTo(`${page.url.pathname}${page.url.search}`)))}
