@@ -122,6 +122,27 @@ model SsoProvider {
     updatedAt TimestamptzString
     @@index([domain])
 }
+model SsoProvider {
+    id String @id @map("_id")
+    issuer String
+    oidcConfig String?
+    samlConfig String?
+    userId String?
+    providerId String @unique
+    organizationId String?
+    domain String
+    domainVerified Bool?
+    displayName String?
+    enabled Bool?
+    createdBy String?
+    updatedBy String?
+    lastValidatedAt Date?
+    lastValidationStatus String?
+    lastSuccessfulLoginAt Date?
+    createdAt Date
+    updatedAt Date
+    @@index([domain])
+}
 `;
 
 export function authContract(): string {
