@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -41,11 +41,11 @@ Cover session/user, sign-in/out, auth state, cookie forwarding, public API succe
 
 ## Acceptance Criteria
 
-- [ ] Current session is accessible.
-- [ ] Sign-in/sign-out work.
-- [ ] Public API client works.
-- [ ] Admin API is not exposed.
-- [ ] Docs updated.
+- [x] Current session is accessible.
+- [x] Sign-in/sign-out work.
+- [x] Public API client works.
+- [x] Admin API is not exposed.
+- [x] Docs updated.
 
 ## Validation
 
@@ -61,4 +61,6 @@ Client/runtime config filtering and final production asset security remain PM4.5
 
 ## Completion Notes
 
-Pending implementation and validation.
+Implemented in `@nestrum/web/client`: `createAuthClient` (`getSession`, `getUser`, `signIn`, `signOut`, `refresh`, and a Svelte-store-compatible `state` with `loading`/`authenticated`/`anonymous`) over Better Auth's same-origin `/api/auth/*`; `createApiClient` (get/post/put/patch/delete under `/api`, `credentials: 'same-origin'`, query/JSON handling, `ApiError` from Nestrum `{ error: { code, message } }` and Better Auth `{ code, message }` bodies, non-JSON bodies never surfaced); `readPublicConfig`. `resolveApiPath` rejects absolute/protocol-relative URLs, traversal, and `__admin`; the auth client exposes no admin, API-key, or 2FA-administration methods (asserted in tests).
+
+Validated with `packages/web/tests/client.test.ts`. Sign-in against a live Better Auth server was not run in this environment.

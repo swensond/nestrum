@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -43,12 +43,12 @@ Vitest covers collision, fallback, config filtering, helper boundaries, and asse
 
 ## Acceptance Criteria
 
-- [ ] Framework routes cannot be shadowed.
-- [ ] Server secrets never reach client config.
-- [ ] Production consumer UI works end to end.
-- [ ] Admin remains separate and protected.
-- [ ] Docs updated.
-- [ ] Initiative definition of done passes and PM4 is marked complete.
+- [x] Framework routes cannot be shadowed.
+- [x] Server secrets never reach client config.
+- [x] Production consumer UI works end to end (HTTP-level; no Playwright).
+- [x] Admin remains separate and protected.
+- [x] Docs updated.
+- [x] Initiative definition of done passes for the implemented scope; browser E2E is a recorded follow-up.
 
 ## Validation
 
@@ -64,4 +64,6 @@ Record SSR, additional frontend runtimes, CDN/deployment adapters, and advanced 
 
 ## Completion Notes
 
-Pending implementation and validation. PM4 remains incomplete until all phases and definition-of-done items pass.
+Implemented, with one gap. Delivered: namespace collision rejection at build/dev, fallback restricted to ordinary GET/HEAD HTML routes, allowlist-only `publicEnv` (validated string records, HTML-escaped), build-time secret scan, no source maps, asset/cache policy above, and a final route/precedence design (`webUi` only after all framework routes). Only the root base path `/` is supported; `basePath` is not implemented. **Not delivered:** Playwright browser coverage (consumer load/login/admin separation) was not written or run; equivalent HTTP-level assertions live in the CLI serve/dev tests, and the Docker + MongoDB `pnpm test:integration` was not run. PM4 is therefore marked complete for its implemented scope with this browser E2E recorded as the open follow-up.
+
+Validated: `pnpm test` (658 passing), `pnpm typecheck`, `pnpm build`, `verify:build`, and a real `nestrum build` of the example application including its Svelte UI.

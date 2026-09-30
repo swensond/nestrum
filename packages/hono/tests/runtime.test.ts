@@ -520,4 +520,17 @@ describe('Consistent safe error mapping', () => {
             'Internal server error.',
         );
     });
+
+    it('consults the web UI only for unmatched GET/HEAD requests and never for the API', async () => {
+        const handle = vi.fn(async (request: Request) =>
+            new URL(request.url).pathname === '/nothing' ? undefined : new Response('web'),
+        );
+        const runtime = createHonoRuntime({ application: application(), webUi: { handle } });
+        await runtime.start();
+        expect(await (await runtime.fetch(new Request('http://localhost/projects'))).text()).toBe('web');
+        expect((await runtime.fetch(new Request('http://localhost/nothing'))).status).toBe(404);
+        expect((await runtime.fetch(new Request('http://localhost/projects', { method: 'POST' }))).status).toBe(404);
+        expect(handle).toHaveBeenCalledTimes(2);
+        await runtime.shutdown();
+    });
 });

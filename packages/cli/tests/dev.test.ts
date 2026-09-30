@@ -188,4 +188,40 @@ describe('nestrum dev', () => {
             code: 'CLI_ENVIRONMENT_CONFLICT',
         });
     });
+
+    it('proxies the consumer Vite server behind the backend without restarting it for frontend edits', async () => {
+        const root = await scaffold();
+        await writeFile(
+            join(root, 'nestrum.config.ts'),
+            config(root, 0).replace(
+                'timeoutMs: 60000',
+                "web: { enabled: true, root: './web', publicEnv: { site: 'dev' } },\n    timeoutMs: 60000",
+            ),
+        );
+        await mkdir(join(root, 'web'), { recursive: true });
+        await writeFile(
+            join(root, 'web/index.html'),
+            '<!doctype html><html><head></head><body><script type="module" src="/main.js"></script></body></html>',
+        );
+        await writeFile(join(root, 'web/main.js'), 'export const v = 1;');
+        const { session, lines } = await start(root);
+        const url = session.url();
+
+        expect(lines.join('\n')).toContain(`Web        ${url}/`);
+        const page = await (await fetch(`${url}/dashboard`)).text();
+        expect(page).toContain('/main.js');
+        expect(page).toContain('"site":"dev"');
+        expect(await (await fetch(`${url}/main.js`)).text()).toContain('v = 1');
+        expect((await fetch(`${url}/api/nope`, { headers: { accept: 'text/html' } })).status).toBe(404);
+        expect((await fetch(`${url}/__admin/nope`)).status).toBe(404);
+        const before = lines.length;
+        await writeFile(join(root, 'web/main.js'), 'export const v = 2;');
+        session.changed(join(root, 'web/main.js'));
+        await session.idle();
+        expect(lines.length).toBe(before);
+        expect(session.url()).toBe(url);
+        expect(await (await fetch(`${url}/main.js`)).text()).toContain('v = 2');
+        await session.close();
+        await expect(fetch(`${url}/`)).rejects.toThrow();
+    });
 });

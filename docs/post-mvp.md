@@ -23,16 +23,16 @@ PM5.0 documentation is complete. PM5.1–PM5.7 are Not Started; feature flags ar
 
 The [hosted consumer UI initiative](post-mvp/consumer-ui/README.md) is the fourth planned post-MVP initiative. It extends the planned PM1 `nestrum dev`, `nestrum build`, and `nestrum serve` lifecycle so applications can ship a consumer-facing Svelte UI alongside the public API, admin UI/API, Better Auth, Prisma, and ABAC.
 
-PM4.0 documentation is complete. PM4.1–PM4.5 are Not Started; consumer UI hosting is not currently implemented. The consuming project owns product pages, components, UX, and branding. Nestrum owns integration, build/serve/dev coordination, reserved namespaces, and client/server configuration filtering. The remaining MVP atomic object-policy write gate stays open independently.
+PM4.0–PM4.5 are complete: `web: { enabled, root, publicEnv }` builds the application's Vite/Svelte project into `.nestrum/web` (`nestrum build`), hosts it with SPA fallback that never shadows framework namespaces (`nestrum serve`), proxies Vite with HMR (`nestrum dev`), and ships `@nestrum/web/client` auth/API helpers. Not done: Playwright browser E2E, `basePath`, SSR. The consuming project owns product pages, components, UX, and branding. Nestrum owns integration, build/serve/dev coordination, reserved namespaces, and client/server configuration filtering. The remaining MVP atomic object-policy write gate stays open independently.
 
 | Phase | Goal | Status |
 | --- | --- | --- |
 | [PM4.0](post-mvp/consumer-ui/phase-00-contract.md) | Document hosted web contract | Complete |
-| [PM4.1](post-mvp/consumer-ui/phase-01-web-package.md) | Consumer Svelte integration package | Not Started |
-| [PM4.2](post-mvp/consumer-ui/phase-02-build.md) | Production build and serving | Not Started |
-| [PM4.3](post-mvp/consumer-ui/phase-03-dev.md) | Development backend/web coordination | Not Started |
-| [PM4.4](post-mvp/consumer-ui/phase-04-auth-api.md) | Consumer Better Auth and public API helpers | Not Started |
-| [PM4.5](post-mvp/consumer-ui/phase-05-hardening.md) | Routing, config, assets, and E2E hardening | Not Started |
+| [PM4.1](post-mvp/consumer-ui/phase-01-web-package.md) | Consumer Svelte integration package | Complete |
+| [PM4.2](post-mvp/consumer-ui/phase-02-build.md) | Production build and serving | Complete |
+| [PM4.3](post-mvp/consumer-ui/phase-03-dev.md) | Development backend/web coordination | Complete |
+| [PM4.4](post-mvp/consumer-ui/phase-04-auth-api.md) | Consumer Better Auth and public API helpers | Complete |
+| [PM4.5](post-mvp/consumer-ui/phase-05-hardening.md) | Routing, config, assets, and E2E hardening | Complete |
 
 ## Plan 03 — First-class API keys
 

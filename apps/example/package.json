@@ -7,6 +7,7 @@
         "integration": "node tooling/integration.mjs",
         "e2e:admin-2fa": "node tooling/admin-2fa-browser.mjs",
         "verify:api-keys": "node tooling/api-keys-postgres.mjs",
+        "check:web": "svelte-check-native --workspace src/web --tsconfig tsconfig.json --fail-on-warnings",
         "dev": "nestrum dev",
         "build:app": "nestrum build",
         "start": "nestrum serve"
@@ -20,8 +21,15 @@
         "@nestrum/admin": "workspace:*",
         "@nestrum/admin-ui": "workspace:*",
         "@nestrum/cli": "workspace:*",
+        "@nestrum/web": "workspace:*",
         "@nestrum/example-postgres": "workspace:*",
         "@nestrum/example-mongo": "workspace:*",
+        "svelte": "5.57.1",
         "zod": "4.6.5"
+    },
+    "devDependencies": {
+        "@sveltejs/vite-plugin-svelte": "7.3.1",
+        "svelte-check-native": "1.8.0",
+        "vite": "8.3.1"
     }
 }

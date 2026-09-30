@@ -1,0 +1,24 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowArbitraryExtensions": true,
+    "incremental": false,
+    "rootDirs": [
+      "/home/user/nestrum/apps/example/src/web",
+      "/home/user/nestrum/apps/example/src/web/.svelte-check/svelte"
+    ]
+  },
+  "files": [
+    "/home/user/nestrum/apps/example/src/web/.svelte-check/svelte/src/App.svelte.svn.ts",
+    "/home/user/nestrum/apps/example/src/web/.svelte-check/svelte-shims.d.ts"
+  ],
+  "include": [
+    "/home/user/nestrum/apps/example/src/web/src/**/*.ts",
+    "/home/user/nestrum/apps/example/src/web/src/**/*.svelte",
+    "/home/user/nestrum/apps/example/src/web/vite.config.ts",
+    "/home/user/nestrum/apps/example/src/web/.svelte-check/svelte/src/**/*.ts",
+    "/home/user/nestrum/apps/example/src/web/.svelte-check/svelte/src/**/*.d.svelte.ts",
+    "/home/user/nestrum/apps/example/src/web/.svelte-check/svelte/vite.config.ts"
+  ]
+}

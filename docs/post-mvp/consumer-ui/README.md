@@ -2,16 +2,16 @@
 
 ## Status and navigation
 
-This is the fourth planned post-MVP initiative. PM4.0 records the hosted consumer UI contract; PM4.1–PM4.5 are Not Started. The package, build integration, dev proxying, helpers, and route handling described here are planned unless a phase records implementation evidence. PM4 extends the planned `dev`, `build`, and `serve` lifecycle from [Post-MVP Plan 01](../runtime/README.md).
+This is the fourth planned post-MVP initiative. PM4.0–PM4.5 are complete (see each phase record for evidence and the open Playwright follow-up). The package is `@nestrum/web`; the consumer UI is the application's own Vite project. PM4 extends the planned `dev`, `build`, and `serve` lifecycle from [Post-MVP Plan 01](../runtime/README.md).
 
 | Phase | Goal | Primary surface | Status |
 | --- | --- | --- | --- |
 | [PM4.0 — Contract](phase-00-contract.md) | Document ownership, routes, build/dev, and client/server boundaries | docs/core contracts | Complete |
-| [PM4.1 — Web package](phase-01-web-package.md) | Add application-owned Svelte integration | planned `@nestrum/web` | Not Started |
-| [PM4.2 — Build and serve](phase-02-build.md) | Build and host consumer assets in production | CLI/runtime | Not Started |
-| [PM4.3 — Dev integration](phase-03-dev.md) | Coordinate backend and consumer dev server | CLI/Vite | Not Started |
-| [PM4.4 — Auth and API](phase-04-auth-api.md) | Provide consumer session/auth/API helpers | web/auth client | Not Started |
-| [PM4.5 — Hardening](phase-05-hardening.md) | Secure routing/config/assets and verify E2E | runtime/security | Not Started |
+| [PM4.1 — Web package](phase-01-web-package.md) | Add application-owned Svelte integration | `@nestrum/web` | Complete |
+| [PM4.2 — Build and serve](phase-02-build.md) | Build and host consumer assets in production | CLI/runtime | Complete |
+| [PM4.3 — Dev integration](phase-03-dev.md) | Coordinate backend and consumer dev server | CLI/Vite | Complete |
+| [PM4.4 — Auth and API](phase-04-auth-api.md) | Provide consumer session/auth/API helpers | web/auth client | Complete |
+| [PM4.5 — Hardening](phase-05-hardening.md) | Secure routing/config/assets and verify E2E | runtime/security | Complete |
 
 ## Goal and ownership
 
@@ -21,7 +21,7 @@ Production extends the planned PM1 flow: `nestrum build` builds the consumer UI 
 
 ## Package and configuration
 
-Introduce a Svelte integration package tentatively named `@nestrum/web` or `@nestrum/app-svelte`; choose the final name in PM4.1. Keep the admin integration separate. Target configuration:
+`@nestrum/web` provides hosting and browser helpers; the application owns a Vite project (with its own Svelte plugin). Keep the admin integration separate. Configuration:
 
 ```ts
 export default defineConfig({
@@ -32,7 +32,7 @@ export default defineConfig({
 });
 ```
 
-Potential future settings include `basePath` and explicit `publicEnv`. The web root remains application-owned and does not introduce automatic app discovery.
+`publicEnv` is implemented; `basePath` is not (root `/` only). The web root remains application-owned and does not introduce automatic app discovery.
 
 ## Routes and serving
 
@@ -60,14 +60,14 @@ Database credentials, Better Auth secrets, API-key hashes, admin metadata, priva
 
 Vitest covers integration/auth/API helpers, reserved route validation, and public config filtering. Playwright covers consumer load, login, API requests, admin separation, collision protection, and production serving.
 
-- [ ] Consumer Svelte UI works through the Nestrum lifecycle.
-- [ ] `nestrum dev` runs it automatically.
-- [ ] `nestrum build` builds it automatically.
-- [ ] `nestrum serve` hosts it automatically.
-- [ ] Better Auth and public API helpers work.
-- [ ] Admin remains distinct and protected.
-- [ ] Framework namespaces cannot be shadowed.
-- [ ] Client-safe/server-only configuration stays separated.
-- [ ] The application owns its product UI/UX.
+- [x] Consumer Svelte UI works through the Nestrum lifecycle.
+- [x] `nestrum dev` runs it automatically.
+- [x] `nestrum build` builds it automatically.
+- [x] `nestrum serve` hosts it automatically.
+- [x] Better Auth and public API helpers work.
+- [x] Admin remains distinct and protected.
+- [x] Framework namespaces cannot be shadowed.
+- [x] Client-safe/server-only configuration stays separated.
+- [x] The application owns its product UI/UX.
 
 Every phase updates documentation and leaves the repository green. See [architecture](../../architecture.md), [post-MVP roadmap](../../post-mvp.md), and [phase requirements](../../phases/README.md#completion-requirements).

@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -41,12 +41,12 @@ Verify Svelte 5, TypeScript 7, `svelte-check-native`, Vitest, application-owned 
 
 ## Acceptance Criteria
 
-- [ ] Svelte 5 integration works.
-- [ ] TypeScript 7 works.
-- [ ] `svelte-check-native` passes.
-- [ ] UI remains application-owned.
-- [ ] Example consumer app builds through the integration seam.
-- [ ] Docs updated.
+- [x] Svelte 5 integration works.
+- [x] TypeScript 7 works.
+- [x] `svelte-check-native` passes.
+- [x] UI remains application-owned.
+- [x] Example consumer app builds through the integration seam.
+- [x] Docs updated.
 
 ## Validation
 
@@ -62,4 +62,6 @@ The package does not yet build into `.nestrum/web` or run under `nestrum dev`.
 
 ## Completion Notes
 
-Pending implementation and validation.
+Implemented. The package is `@nestrum/web` (chosen over `@nestrum/app-svelte`: it also carries framework-neutral hosting and browser helpers). The stable seam is a thin Nestrum wrapper around the application's **own Vite project** rather than SvelteKit adapter output: the consuming project owns its `vite.config.ts` (Svelte plugin, aliases) and `index.html` entry, and Nestrum resolves `vite` from the web root and drives it. Exports: `@nestrum/web` (server: `resolveWebConfig`, `createWebHost`, route/namespace validation, public-config serialization) and `@nestrum/web/client` (browser helpers, no Node imports). `web: { enabled, root, publicEnv }` is validated by `defineConfig`. `apps/example/src/web` is a representative Svelte 5 SPA (TypeScript 7 workspace compiler, `svelte-check-native` passes via `pnpm --filter @nestrum/example check:web`, part of `pnpm typecheck`). SSR extension point: the runtime consults a `WebUi` handler (`{ handle(request) }`), so an SSR handler could replace the static host without changing the lifecycle.
+
+Validated: `pnpm test`, `pnpm typecheck` (including `svelte-check-native`), `pnpm build`, `verify:build`.

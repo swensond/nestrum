@@ -27,7 +27,11 @@
         "@nestrum/prisma": "workspace:*",
         "@nestrum/runtime": "workspace:*",
         "@nestrum/runtime-node": "workspace:*",
+        "@nestrum/web": "workspace:*",
         "@nestrum/zod": "workspace:*",
         "esbuild": "0.28.2"
+    },
+    "devDependencies": {
+        "vite": "8.3.1"
     }
 }

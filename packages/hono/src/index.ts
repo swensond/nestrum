@@ -25,4 +25,5 @@ export type {
     RuntimeErrorEvent,
     RuntimeOptions,
     RuntimeState,
+    WebUi,
 } from './runtime/runtime.types.js';

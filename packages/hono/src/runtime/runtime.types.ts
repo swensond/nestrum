@@ -26,10 +26,18 @@ export type AdminUi = {
     readonly basePath: '/admin';
     handle(request: Request, context: { readonly fetch: (request: Request) => Promise<Response> }): Promise<Response>;
 };
+/**
+ * The hosted consumer UI. It is consulted only for GET/HEAD requests no framework or API route matched, so it can
+ * never shadow `/api/*`, `/admin/*`, `/__admin/*`, or `/__nestrum/*`. Returning `undefined` yields the normal 404.
+ */
+export type WebUi = {
+    handle(request: Request): Response | undefined | Promise<Response | undefined>;
+};
 export type RuntimeOptions<Scope extends InferdiScope = RequestScope> = {
     readonly application: Application;
     readonly publicApi?: PublicApiOptions;
     readonly adminUi?: AdminUi;
+    readonly webUi?: WebUi;
     readonly di?: {
         readonly container: InferdiRoot;
         readonly createScope: (inputs: RequestInputs) => Scope | Promise<Scope>;

@@ -10,6 +10,7 @@ import type { CliConfig } from './cli.types.js';
 import { discoverConfig, loadCliConfig } from './config.js';
 import type { BuildManifest } from './manifest.js';
 import { buildDirectory, cliVersion, MANIFEST_FILE, MANIFEST_VERSION, sha256 } from './manifest.js';
+import { buildConsumerWeb, consumerWeb } from './web.js';
 
 export const ADMIN_UI_PACKAGE = '@nestrum/admin-ui';
 export const RUNTIME_ADAPTER = '@nestrum/runtime-node';
@@ -65,16 +66,19 @@ export async function runBuild(options: BuildOptions = {}): Promise<BuildResult>
     const configDir = dirname(configPath);
     const directory = buildDirectory(configDir);
     await rm(join(directory, MANIFEST_FILE), { force: true });
-    for (const stale of ['server', 'generated', 'contracts']) {
+    for (const stale of ['server', 'generated', 'contracts', 'web']) {
         await rm(join(directory, stale), { recursive: true, force: true });
     }
     const entry = join(directory, SERVER_ENTRY);
     await bundleConfig(configPath, entry);
     const config = await loadBuiltConfig(entry, configDir);
     const manifest = await validateAndGenerate(config, directory, entry);
-    await writeFile(join(directory, MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    const web = consumerWeb(config, configDir);
+    const built = web ? await buildConsumerWeb(web, directory) : null;
+    const complete = { ...manifest, web: built };
+    await writeFile(join(directory, MANIFEST_FILE), `${JSON.stringify(complete, null, 2)}\n`, 'utf8');
 
-    return { directory, manifest };
+    return { directory, manifest: complete };
 }
 
 export async function loadBuiltConfig(entry: string, configDir: string): Promise<CliConfig> {
@@ -168,7 +172,11 @@ export function validateResources(application: Application, models: readonly Mod
     }
 }
 
-async function validateAndGenerate(config: CliConfig, directory: string, entry: string): Promise<BuildManifest> {
+async function validateAndGenerate(
+    config: CliConfig,
+    directory: string,
+    entry: string,
+): Promise<Omit<BuildManifest, 'web'>> {
     const application = config.application;
     const { databases, models } = await generateArtifacts(config, directory);
     validateResources(application, models);

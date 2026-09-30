@@ -8,6 +8,7 @@ import { createHonoRuntime } from '@nestrum/hono';
 import { assemblePrismaContracts } from '@nestrum/prisma/node';
 import type { RuntimeAdapter, ServerHandle } from '@nestrum/runtime';
 import { nodeRuntime } from '@nestrum/runtime-node';
+import { describeCollisions, findRouteCollisions } from '@nestrum/web';
 import { ADMIN_UI_PACKAGE, bundleConfig, generateArtifacts, loadBuiltConfig, validateResources } from './build.js';
 import type { ServerConfig } from './cli.types.js';
 import { CONFIG_CANDIDATES, discoverConfig } from './config.js';
@@ -16,6 +17,8 @@ import { cliVersion, sha256 } from './manifest.js';
 import type { Environment } from './runtime-options.js';
 import { establishEnvironment, resolveServerOptions } from './runtime-options.js';
 import { loadAdminShell } from './serve.js';
+import type { DevWeb } from './web.js';
+import { consumerWeb, startDevWeb } from './web.js';
 
 export type ChangeKind = 'config' | 'prisma' | 'app' | 'frontend';
 
@@ -116,6 +119,8 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
     let timer: NodeJS.Timeout | undefined;
     let loop: Promise<void> | undefined;
     let closed = false;
+    let devWeb: DevWeb | undefined;
+    let webDirectory: string | undefined;
 
     async function stop(): Promise<void> {
         const current = running;
@@ -173,10 +178,26 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
             const adminUi = await loadAdminShell({
                 admin: config.application.adminConfigured ? { package: ADMIN_UI_PACKAGE } : null,
             });
+            const web = consumerWeb(config, root);
+            if (web && !devWeb) {
+                devWeb = await startDevWeb(web);
+            } else if (!web && devWeb) {
+                await devWeb.close();
+                devWeb = undefined;
+            }
+            webDirectory = web?.directory;
+            if (web) {
+                const collisions = await findRouteCollisions(web.directory);
+                if (collisions.length > 0) {
+                    throw new Error(describeCollisions(collisions));
+                }
+                devWeb?.setPublicEnv(web.publicEnv);
+            }
             let handle: ServerHandle | undefined;
             const runtime = createHonoRuntime({
                 application: config.application,
                 ...(adminUi === undefined ? {} : { adminUi }),
+                ...(devWeb === undefined ? {} : { webUi: devWeb.host }),
                 drainTimeoutMs: DRAIN_TIMEOUT_MS,
                 stopTraffic: async () => {
                     await handle?.stopAccepting();
@@ -207,6 +228,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
                     'HTTP',
                     `  API        ${url}/api`,
                     ...(config.application.adminConfigured ? [`  Admin      ${url}/admin`] : []),
+                    ...(web ? [`  Web        ${url}/`] : []),
                     `  OpenAPI    ${url}/api/openapi.json`,
                     ...adminSecurityDiagnostics(config.application.adminSecurity),
                     '',
@@ -251,6 +273,10 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
         if (kind === undefined || closed) {
             return;
         }
+        if (webDirectory !== undefined && !relative(webDirectory, resolve(root, file)).startsWith('..')) {
+            // The consumer Vite server owns files inside the web root (HMR); the backend is never restarted for them.
+            return;
+        }
         if (kind === 'frontend') {
             log('Svelte component changed; the prebuilt admin shell is not rebuilt by `nestrum dev`.');
 
@@ -286,6 +312,8 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
             timer = undefined;
             await loop;
             await stop();
+            await devWeb?.close();
+            devWeb = undefined;
         },
     };
 }
