@@ -150,6 +150,11 @@ export class Application {
         return this.adminDefinition !== undefined;
     }
 
+    /** Resolved admin security policy, known before startup so diagnostics never need a running server. */
+    get adminSecurity(): AdminDefinition['security'] | undefined {
+        return this.adminDefinition?.security;
+    }
+
     get auth(): Authentication | undefined {
         return this.authentication;
     }

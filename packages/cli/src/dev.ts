@@ -69,6 +69,18 @@ export type DevSession = {
 
 type Running = { readonly runtime: HonoRuntime; readonly handle: ServerHandle; readonly url: string };
 
+/** Development banner lines for the admin security policy; empty when no admin is configured. */
+export function adminSecurityDiagnostics(security: { twoFactor: { required: boolean } } | undefined): string[] {
+    if (security === undefined) {
+        return [];
+    }
+    if (security.twoFactor.required) {
+        return ['', 'Admin security', '  2FA required    yes'];
+    }
+
+    return ['', 'Admin security', '  2FA required    no', '', 'WARNING', 'Admin 2FA is disabled for this application.'];
+}
+
 function describe(error: unknown): string {
     if (error instanceof AppError) {
         return `${error.name}: ${error.code}: ${error.message}`;
@@ -196,6 +208,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
                     `  API        ${url}/api`,
                     ...(config.application.adminConfigured ? [`  Admin      ${url}/admin`] : []),
                     `  OpenAPI    ${url}/api/openapi.json`,
+                    ...adminSecurityDiagnostics(config.application.adminSecurity),
                     '',
                     'Watching for changes...',
                 ].join('\n'),

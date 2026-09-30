@@ -5,6 +5,7 @@ import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
+import { totpCode, totpStep } from '@nestrum/auth';
 import { runServe } from '@nestrum/cli';
 import postgres from '@nestrum/example-postgres';
 
@@ -175,6 +176,94 @@ try {
     assert.equal((await request('/__admin/resources')).status, 401);
     assert.equal((await request('/__admin/resources', { cookie: memberCookie })).status, 403);
     assert.equal((await request('/__admin/resources', { cookie, origin: 'https://foreign.invalid' })).status, 403);
+    // Admin 2FA is required by default: a valid login and admin.access are not enough until a second factor is set up.
+    const setupRequired = await json(await request('/__admin/resources', { cookie }), 403);
+    assert.equal(setupRequired.error.code, 'ADMIN_2FA_REQUIRED');
+    assert.equal(setupRequired.error.reason, 'setup-required');
+    const signInAgain = async () => {
+        const response = await request('/api/auth/sign-in/email', {
+            method: 'POST',
+            body: credentials('staff@example.test'),
+        });
+        await json(response, 200);
+        return response.headers
+            .getSetCookie()
+            .map((value) => value.split(';')[0])
+            .join('; ');
+    };
+    const navigate = (path, sessionCookie) =>
+        fetch(`${host.baseURL}${path}`, {
+            redirect: 'manual',
+            headers: { cookie: sessionCookie, accept: 'text/html' },
+        });
+    const setupRedirect = await navigate('/admin/projects', cookie);
+    assert.equal(setupRedirect.status, 303);
+    assert.equal(setupRedirect.headers.get('location'), '/admin/auth/2fa/setup?next=%2Fadmin%2Fprojects');
+    assert.equal((await navigate('/admin/auth/2fa/setup', cookie)).status, 200);
+    const enrollment = await json(
+        await request('/__admin/auth/2fa/enroll/start', { method: 'POST', cookie, body: {} }),
+        201,
+    );
+    assert.equal(
+        (await request('/__admin/auth/2fa/enroll/confirm', { method: 'POST', cookie, body: { code: '000000' } }))
+            .status,
+        400,
+    );
+    assert.equal(
+        (await request('/__admin/resources', { cookie })).status,
+        403,
+        'An unconfirmed secret grants nothing.',
+    );
+    const confirmed = await json(
+        await request('/__admin/auth/2fa/enroll/confirm', {
+            method: 'POST',
+            cookie,
+            body: { code: totpCode(enrollment.secret, totpStep(Date.now())) },
+        }),
+        200,
+    );
+    assert.equal(confirmed.recoveryCodes.length, 10);
+    // Assurance belongs to one login session; another session must complete a challenge.
+    const secondCookie = await signInAgain();
+    const challengeRequired = await json(await request('/__admin/resources', { cookie: secondCookie }), 403);
+    assert.equal(challengeRequired.error.reason, 'challenge-required');
+    const challengeRedirect = await navigate('/admin/projects', secondCookie);
+    assert.equal(challengeRedirect.status, 303);
+    assert.equal(challengeRedirect.headers.get('location'), '/admin/auth/2fa?next=%2Fadmin%2Fprojects');
+    assert.equal((await navigate('/admin/auth/2fa', secondCookie)).status, 200);
+    assert.equal(
+        (
+            await request('/__admin/auth/2fa/challenge', {
+                method: 'POST',
+                cookie: secondCookie,
+                body: { code: '000000' },
+            })
+        ).status,
+        400,
+    );
+    await json(
+        await request('/__admin/auth/2fa/recovery/verify', {
+            method: 'POST',
+            cookie: secondCookie,
+            body: { code: confirmed.recoveryCodes[0] },
+        }),
+        200,
+    );
+    assert.equal((await request('/__admin/resources', { cookie: secondCookie })).status, 200);
+    const thirdCookie = await signInAgain();
+    assert.equal(
+        (
+            await request('/__admin/auth/2fa/recovery/verify', {
+                method: 'POST',
+                cookie: thirdCookie,
+                body: { code: confirmed.recoveryCodes[0] },
+            })
+        ).status,
+        400,
+        'A recovery code works once.',
+    );
+    assert.equal((await request('/__admin/resources', { cookie: thirdCookie })).status, 403);
+    console.log('Real admin 2FA enrollment, challenge, recovery and redirects passed.');
     const metadata = await json(await request('/__admin/resources', { cookie }), 200);
     assert.deepEqual(
         metadata.map((resource) => resource.identity),

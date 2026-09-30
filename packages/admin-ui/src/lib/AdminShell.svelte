@@ -61,7 +61,7 @@ async function authenticate(path: string, body: object) {
 <a class="skip" href="#admin-content">Skip to content</a>
 <header>
     <a class="brand" href="/admin">Nestrum administration</a>
-    {#if shellState.status === 'ready' || shellState.status === 'denied'}
+    {#if shellState.status === 'ready' || shellState.status === 'denied' || shellState.status === 'two-factor'}
         <button type="button" disabled={pending} onclick={() => authenticate('/api/auth/sign-out', {})}>Sign out</button>
     {/if}
 </header>
@@ -79,7 +79,7 @@ async function authenticate(path: string, body: object) {
         {#if sessionError}<p role="alert">{sessionError}</p>{/if}
         {#if loading}
             <p role="status">Loading administration…</p>
-        {:else if shellState.status === 'ready'}
+        {:else if shellState.status === 'ready' || shellState.status === 'two-factor'}
             {#if children}{@render children()}{/if}
         {:else if shellState.status === 'sign-in'}
             <h1>Sign in</h1>

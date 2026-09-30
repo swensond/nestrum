@@ -8,7 +8,8 @@
         "declaration": true,
         "declarationMap": true,
         "sourceMap": true,
-        "lib": ["ES2022", "DOM", "ESNext.Disposable"]
+        "lib": ["ES2022", "DOM", "ESNext.Disposable"],
+        "types": ["node"]
     },
     "include": ["src/**/*.ts"]
 }

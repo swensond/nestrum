@@ -65,15 +65,25 @@ export const ADMIN_METADATA_SCHEMA = z
     });
 
 export type AdminFetch = typeof globalThis.fetch;
+export type TwoFactorReason = 'setup-required' | 'challenge-required';
 export type AdminShellState =
     | { readonly status: 'ready'; readonly resources: readonly AdminResourceMetadata[] }
+    | { readonly status: 'two-factor'; readonly reason: TwoFactorReason; readonly message: string }
     | { readonly status: 'sign-in' | 'denied' | 'error'; readonly message: string };
+
+const TWO_FACTOR_ERROR_SCHEMA = z.object({
+    error: z.object({
+        code: z.literal('ADMIN_2FA_REQUIRED'),
+        reason: z.enum(['setup-required', 'challenge-required']),
+    }),
+});
 
 export class AdminMetadataError extends Error {
     constructor(
         readonly status: number,
         readonly code: string,
         message: string,
+        readonly reason?: TwoFactorReason,
     ) {
         super(message);
         this.name = 'AdminMetadataError';
@@ -89,6 +99,17 @@ export class AdminMetadataClient {
             cache: 'no-store',
             headers: { accept: 'application/json' },
         });
+        if (response.status === 403) {
+            const challenge = TWO_FACTOR_ERROR_SCHEMA.safeParse(await response.json().catch(() => null));
+            if (challenge.success) {
+                throw new AdminMetadataError(
+                    403,
+                    'ADMIN_2FA_REQUIRED',
+                    'Two-factor verification is required.',
+                    challenge.data.error.reason,
+                );
+            }
+        }
         if (!response.ok) {
             throw new AdminMetadataError(
                 response.status,
@@ -117,6 +138,9 @@ export async function loadAdminState(fetch: AdminFetch): Promise<AdminShellState
     } catch (error) {
         if (error instanceof AdminMetadataError && error.status === 401) {
             return { status: 'sign-in', message: 'Sign in to open administration.' };
+        }
+        if (error instanceof AdminMetadataError && error.reason !== undefined) {
+            return { status: 'two-factor', reason: error.reason, message: 'Two-factor verification is required.' };
         }
         if (error instanceof AdminMetadataError && error.status === 403) {
             return { status: 'denied', message: 'You do not have access to administration.' };

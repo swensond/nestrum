@@ -4,7 +4,7 @@ import type { AdminRecord } from './crud.js';
 import { AdminCrudError, AdminResourceClient, recordHref, recordId } from './crud.js';
 import type { FormFeedback } from './fields.js';
 import { parseResourceForm } from './fields.js';
-import type { AdminFetch } from './metadata.js';
+import type { AdminFetch, AdminShellState } from './metadata.js';
 import { loadAdminState } from './metadata.js';
 import type { AdminWorkspace } from './routes.js';
 import { resourceHref } from './routes.js';
@@ -13,13 +13,14 @@ type MutationEvent = { fetch: AdminFetch; request: Request; params: { resource?:
 type Mutation = 'create' | 'update' | 'delete';
 const EMPTY_FEEDBACK: FormFeedback = { message: '', fields: {}, values: {}, modes: {} };
 
+function shellFailureStatus(state: Exclude<AdminShellState, { status: 'ready' }>): number {
+    return state.status === 'sign-in' ? 401 : state.status === 'denied' || state.status === 'two-factor' ? 403 : 503;
+}
+
 export async function mutateResource(event: MutationEvent, operation: Mutation) {
     const state = await loadAdminState(event.fetch);
     if (state.status !== 'ready') {
-        return fail(state.status === 'sign-in' ? 401 : state.status === 'denied' ? 403 : 503, {
-            ...EMPTY_FEEDBACK,
-            message: state.message,
-        });
+        return fail(shellFailureStatus(state), { ...EMPTY_FEEDBACK, message: state.message });
     }
     const resource = state.resources.find((candidate) => candidate.slug === event.params.resource);
     if (!resource?.capabilities[operation] || (operation !== 'create' && event.params.id === undefined)) {
@@ -72,10 +73,7 @@ export async function mutateResource(event: MutationEvent, operation: Mutation) 
 export async function runResourceAction(event: MutationEvent) {
     const state = await loadAdminState(event.fetch);
     if (state.status !== 'ready') {
-        return fail(state.status === 'sign-in' ? 401 : state.status === 'denied' ? 403 : 503, {
-            ...EMPTY_FEEDBACK,
-            message: state.message,
-        });
+        return fail(shellFailureStatus(state), { ...EMPTY_FEEDBACK, message: state.message });
     }
     const resource = state.resources.find((candidate) => candidate.slug === event.params.resource);
     if (!resource || event.params.id === undefined) {
