@@ -33,7 +33,7 @@ Planned generic CRUD and FieldRenderer components consuming admin metadata.
 
 ## Files / Packages Changed
 
-None yet. Planned scope: @nestrum/admin-svelte. Introduce only packages needed by this phase.
+None yet. Planned scope: @nestrum/admin-ui. Introduce only packages needed by this phase.
 
 ## Tests
 
@@ -56,7 +56,7 @@ pnpm test
 pnpm typecheck
 pnpm check
 pnpm build
-pnpm --filter @nestrum/admin-svelte exec svelte-check-native
+pnpm --filter @nestrum/admin-ui exec svelte-check-native
 ```
 
 Not run: phase not started.

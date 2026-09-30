@@ -7,5 +7,6 @@
         "customConditions": ["nestrum-source"],
         "types": ["node"]
     },
-    "include": ["packages/*/src/**/*.ts", "packages/*/tests/**/*.ts", "vitest.config.ts", "vitest.workspace.ts"]
+    "include": ["packages/*/src/**/*.ts", "packages/*/tests/**/*.ts", "vitest.config.ts", "vitest.workspace.ts"],
+    "exclude": ["packages/admin-ui"]
 }

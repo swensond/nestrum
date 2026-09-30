@@ -22,9 +22,14 @@ export type RuntimeErrorEvent = {
     readonly request: Request;
     readonly context?: RequestContext;
 };
+export type AdminUi = {
+    readonly basePath: '/admin';
+    handle(request: Request, context: { readonly fetch: (request: Request) => Promise<Response> }): Promise<Response>;
+};
 export type RuntimeOptions<Scope extends InferdiScope = RequestScope> = {
     readonly application: Application;
     readonly publicApi?: PublicApiOptions;
+    readonly adminUi?: AdminUi;
     readonly di?: {
         readonly container: InferdiRoot;
         readonly createScope: (inputs: RequestInputs) => Scope | Promise<Scope>;

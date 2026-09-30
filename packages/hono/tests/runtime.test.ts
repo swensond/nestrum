@@ -23,6 +23,19 @@ function deferred() {
 }
 
 describe('Fetch-based Hono runtime', () => {
+    it('rejects an admin UI without a configured private admin backend', async () => {
+        const handle = vi.fn(async () => new Response('unreachable'));
+        const runtime = createHonoRuntime({
+            application: application(),
+            adminUi: { basePath: '/admin', handle },
+        });
+        expect((await runtime.fetch(new Request('http://localhost/admin'))).status).toBe(503);
+        await expect(runtime.start()).rejects.toMatchObject({ code: 'ADMIN_UI_CONFIG_INVALID' });
+        expect(runtime.state).toBe('failed');
+        expect(handle).not.toHaveBeenCalled();
+        await runtime.shutdown();
+    });
+
     it('gates traffic until ready and exposes actual InferDI scope values for anonymous requests', async () => {
         const app = application();
         const scopes: RequestScope[] = [];

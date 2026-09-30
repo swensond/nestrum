@@ -33,7 +33,7 @@ Planned: admin.register(Resource, { fields: { metadata: { widget: 'json-editor' 
 
 ## Files / Packages Changed
 
-None yet. Planned scope: @nestrum/admin, @nestrum/admin-svelte. Introduce only packages needed by this phase.
+None yet. Planned scope: @nestrum/admin, @nestrum/admin-ui. Introduce only packages needed by this phase.
 
 ## Tests
 
@@ -54,7 +54,7 @@ pnpm test
 pnpm typecheck
 pnpm check
 pnpm build
-pnpm --filter @nestrum/admin-svelte exec svelte-check-native
+pnpm --filter @nestrum/admin-ui exec svelte-check-native
 ```
 
 Not run: phase not started.

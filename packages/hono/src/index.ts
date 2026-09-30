@@ -19,6 +19,7 @@ export type { ErrorBody, MappedError } from './runtime/runtime.errors.js';
 export { mapHttpError } from './runtime/runtime.errors.js';
 export { createHonoRuntime, HonoRuntime } from './runtime/runtime.js';
 export type {
+    AdminUi,
     RequestContext,
     RuntimeEnv,
     RuntimeErrorEvent,

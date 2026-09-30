@@ -62,7 +62,7 @@ pnpm test
 pnpm typecheck
 pnpm check
 pnpm build
-pnpm --filter @nestrum/admin-svelte exec svelte-check-native
+pnpm --filter @nestrum/admin-ui exec svelte-check-native
 ```
 
 Not run: phase not started. Add Playwright high-level checks when integration fixtures exist.

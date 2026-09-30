@@ -1,6 +1,7 @@
 import { defineProject } from 'vitest/config';
 
 export default [
+    'packages/admin-ui/vitest.config.ts',
     defineProject({
         test: {
             name: '@nestrum/admin',

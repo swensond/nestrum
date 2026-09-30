@@ -21,6 +21,19 @@
     },
     "overrides": [
         {
+            // Biome sees Svelte scripts but does not track their template references.
+            // The native Svelte checker validates component usage instead.
+            "includes": ["**/*.svelte"],
+            "linter": {
+                "rules": {
+                    "correctness": {
+                        "noUnusedImports": "off",
+                        "noUnusedVariables": "off"
+                    }
+                }
+            }
+        },
+        {
             // Tests are formatted like everything else, but lint rules such as
             // noNonNullAssertion fight the idioms that keep fixtures readable.
             "includes": ["**/tests/**"],

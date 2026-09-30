@@ -174,6 +174,28 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
                 this.hono.all(`${admin.basePath}/*`, handle);
             }
             const auth = this.options.application.auth;
+            const adminUi = this.options.adminUi;
+            if (adminUi) {
+                if (!admin || adminUi.basePath !== '/admin' || typeof adminUi.handle !== 'function') {
+                    throw new AppError(
+                        'ADMIN_UI_CONFIG_INVALID',
+                        'Admin UI requires configured admin and a /admin Fetch handler.',
+                    );
+                }
+                if (
+                    this.hono.routes
+                        .slice(this.frameworkRouteCount)
+                        .some((route) => pathsOverlap(route.path, `${adminUi.basePath}/*`))
+                ) {
+                    throw new AppError('ADMIN_UI_ROUTE_CONFLICT', 'Admin UI routes overlap an existing route.');
+                }
+                const handle = (context: Context<RuntimeEnv<Scope>>) =>
+                    adminUi.handle(context.req.raw, {
+                        fetch: (request) => Promise.resolve(this.fetch(request, context.env)),
+                    });
+                this.hono.all(adminUi.basePath, handle);
+                this.hono.all(`${adminUi.basePath}/*`, handle);
+            }
             if (auth) {
                 if (
                     this.hono.routes.some(
@@ -251,8 +273,17 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
         }
     }
 
-    readonly fetch: Hono<RuntimeEnv<Scope>>['fetch'] = (request, bindings, executionContext) =>
-        this.hono.fetch(request, bindings, executionContext);
+    readonly fetch: Hono<RuntimeEnv<Scope>>['fetch'] = (request, bindings, executionContext) => {
+        // Reject before routing so an early request cannot freeze Hono's route matcher.
+        if (this.currentState !== 'ready' || this.options.application.state !== 'ready') {
+            return Response.json(
+                { error: { code: 'HTTP_RUNTIME_NOT_READY', message: 'Service unavailable.' } },
+                { status: 503 },
+            );
+        }
+
+        return this.hono.fetch(request, bindings, executionContext);
+    };
 
     private invalidState(operation: string): AppError {
         return new AppError(
