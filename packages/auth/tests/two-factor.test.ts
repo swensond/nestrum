@@ -1,6 +1,7 @@
 import { defineApplication } from '@nestrum/core';
 import { createHonoRuntime } from '@nestrum/hono';
 import { describe, expect, it } from 'vitest';
+import { resolveApiKeyOptions } from '../src/api-keys/options.js';
 import { createAuthInstance } from '../src/auth.js';
 import {
     authContract,
@@ -86,6 +87,7 @@ describe('Better Auth twoFactor plugin integration', () => {
             issuer: 'Example',
             maxFailedAttempts: 10,
             lockoutSeconds: 900,
+            apiKeys: resolveApiKeyOptions(undefined),
         });
         const tables = (await instance.$context).tables as Record<
             string,

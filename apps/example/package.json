@@ -6,6 +6,7 @@
     "scripts": {
         "integration": "node tooling/integration.mjs",
         "e2e:admin-2fa": "node tooling/admin-2fa-browser.mjs",
+        "verify:api-keys": "node tooling/api-keys-postgres.mjs",
         "dev": "nestrum dev",
         "build:app": "nestrum build",
         "start": "nestrum serve"

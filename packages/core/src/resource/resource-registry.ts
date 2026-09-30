@@ -91,6 +91,7 @@ export class ResourceRegistry {
                 database: definition.database,
                 identity: definition.identity,
                 api: definition.api,
+                apiAccess: definition.apiAccess,
                 metadata: model.metadata,
                 schemas,
                 authorization: this.authorization,

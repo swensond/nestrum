@@ -2,10 +2,10 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import type { InferdiRoot, InferdiScope } from '@inferdi/hono';
 import { inferdiHono } from '@inferdi/hono';
 import type { AuthorizationEnvironment, Subject } from '@nestrum/core';
-import { AppError, snapshotQueryValue } from '@nestrum/core';
+import { API_KEY_HEADER, AppError, apiKeySubject, snapshotQueryValue } from '@nestrum/core';
 import type { Context, Hono } from 'hono';
 import type { PublicOpenApiDocument } from '#hono/api/public-api';
-import { pathsOverlap, registerPublicApi } from '#hono/api/public-api';
+import { OPENAPI_PATH, pathsOverlap, registerPublicApi } from '#hono/api/public-api';
 import type { RequestScope } from './container.js';
 import { createRuntimeContainer, openRequestScope } from './container.js';
 import { mapHttpError } from './runtime.errors.js';
@@ -84,7 +84,7 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
                 const subject = attributes(
                     options.resolveSubject
                         ? await options.resolveSubject(request, bindings)
-                        : ((await options.application.auth?.resolveSubject(request)) ?? { anonymous: true }),
+                        : await this.resolveSubject(request),
                 );
                 const extra = attributes(
                     options.resolveEnvironment ? await options.resolveEnvironment(request, bindings) : {},
@@ -187,6 +187,32 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
         }
     }
 
+    /**
+     * A credential in `X-API-Key` authenticates a request to the public resource API as an explicit API-key subject;
+     * the key wins over any session cookie and never creates a session. Admin, the auth endpoints, and the OpenAPI
+     * document never consult keys, so a key cannot reach them.
+     */
+    private async resolveSubject(request: Request): Promise<Subject> {
+        const auth = this.options.application.auth;
+        if (!auth) {
+            return { anonymous: true };
+        }
+        const path = new URL(request.url).pathname;
+        if (
+            request.headers.has(API_KEY_HEADER) &&
+            path.startsWith('/api/') &&
+            path !== OPENAPI_PATH &&
+            !path.startsWith(`${auth.basePath}/`)
+        ) {
+            const principal = await auth.apiKeys.authenticate(request);
+            if (principal) {
+                return apiKeySubject(principal);
+            }
+        }
+
+        return auth.resolveSubject(request);
+    }
+
     private registerRoutes(): void {
         const admin = this.options.application.admin;
         if (admin) {
@@ -250,6 +276,12 @@ export class HonoRuntime<Scope extends InferdiScope = RequestScope> {
                 throw new AppError('HTTP_AUTH_ROUTE_CONFLICT', 'Authentication routes overlap an existing route.');
             }
             this.hono.on(['GET', 'POST'], `${auth.basePath}/*`, (context) => auth.handle(context.req.raw));
+        }
+        if (!auth && this.options.application.resources.all().some((r) => r.apiAccess.auth.includes('api-key'))) {
+            throw new AppError(
+                'HTTP_API_AUTH_UNCONFIGURED',
+                'Resources that accept API keys require configured authentication.',
+            );
         }
         this.publicDocument = registerPublicApi(
             this.hono,

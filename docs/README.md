@@ -7,7 +7,7 @@ This documentation is the durable project memory for future implementation sessi
 - [Post-MVP](post-mvp.md): explicitly deferred work.
 - [Post-MVP Plan 01 — Self-serving runtime](post-mvp/runtime/README.md): planned `dev`/`build`/`serve` contracts and PM1.0–PM1.6 phase records.
 - [Post-MVP Plan 02 — Admin 2FA enforcement](post-mvp/admin-2fa/README.md): default-required TOTP assurance for admin UI and API boundaries (implemented).
-- [Post-MVP Plan 03 — First-class API keys](post-mvp/api-keys/README.md): planned secure machine-to-machine authentication with scopes and ABAC.
+- [Post-MVP Plan 03 — First-class API keys](post-mvp/api-keys/README.md): implemented machine-to-machine authentication on Better Auth's API-key plugin, with scopes, ABAC, admin management, and rate limits ([decision 0015](decisions/0015-api-keys.md)).
 - [Post-MVP Plan 04 — Hosted consumer application UI](post-mvp/consumer-ui/README.md): planned Svelte consumer hosting through the Nestrum lifecycle.
 - [Post-MVP Plan 05 — Feature flags](post-mvp/feature-flags/README.md): planned typed capability evaluation with targeting, ABAC separation, and safe client exposure.
 - [Phases](phases/README.md): bounded implementation tasks and validation records.

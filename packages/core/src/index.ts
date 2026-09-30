@@ -28,6 +28,29 @@ export type {
     DatabaseLifecycle,
 } from './application/application.types.js';
 export type {
+    ApiKeyErrorCode,
+    ApiKeyPage,
+    ApiKeyPrincipal,
+    ApiKeyRateLimit,
+    ApiKeySummary,
+    ApiKeys,
+    CreateApiKeyInput,
+    CreatedApiKey,
+    ResourceAuthMode,
+    RotatedApiKey,
+} from './auth/api-key.js';
+export {
+    API_KEY_HEADER,
+    API_KEY_SUBJECT_TYPE,
+    ApiKeyError,
+    apiKeySubject,
+    isApiKeyScope,
+    MAX_API_KEY_SCOPES,
+    parseApiKeyScopes,
+    RESOURCE_AUTH_MODES,
+    scopesSatisfy,
+} from './auth/api-key.js';
+export type {
     AuthAdministratorInput,
     Authentication,
     AuthenticationDefinition,
@@ -86,10 +109,11 @@ export type {
 } from './queryset/queryset.types.js';
 export type { FieldMetadata, ModelMetadata, RelationMetadata, ScalarKind } from './resource/model-metadata.types.js';
 export { ResourceError } from './resource/resource.errors.js';
-export { defineResource, resourceSlug } from './resource/resource.js';
+export { defineResource, requiredApiScope, resourceSlug } from './resource/resource.js';
 export type {
     RegisteredResource,
     ResourceApi,
+    ResourceApiAccess,
     ResourceApiOperation,
     ResourceConfig,
     ResourceDefinition,

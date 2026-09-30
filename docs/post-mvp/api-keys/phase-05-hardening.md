@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -27,37 +27,42 @@ Depends on PM3.1–PM3.4. Rate limiting is framework metadata and policy, not a 
 
 ## Implementation
 
-Planned end-to-end verification of the request pipeline: extraction → hash verification → expiry/revocation → rate limit → API-key subject → scope → ABAC → handler. Include production-safe redaction and diagnostics, plus admin 2FA/key-management checks.
+- **Last use.** The plugin records `lastRequest` on each successful verification; it is exposed as `lastUsedAt`. Failed checks (unknown, malformed, expired, revoked, rate-limited, owner missing) write nothing, verified by test. Because the update happens as part of the atomic verification, a failure to record it fails the request instead of being silently skipped.
+- **Rate limits.** Per key, default 1000 requests per 60 seconds (`apiKeys.rateLimit`), overridable at creation (`enabled`, `requests`, `windowSeconds`). The plugin consumes the counter with guarded atomic updates on the key row, so concurrent bursts cannot exceed the limit (verified with a 12-request race against real PostgreSQL: exactly 5 of 5 allowed). An exceeded limit is `API_KEY_RATE_LIMITED` (429) with `Retry-After`. The extension seam for shared/external providers is the plugin's secondary-storage mode, not exposed yet; nothing in the public contract depends on the database counter.
+- **Rotation.** Create → reveal → revoke, compensating on failure; tested, including the compensation path.
+- **Redaction.** Errors are fixed strings; causes carry only plugin codes; a test captures every console line emitted while verifying valid, unknown, revoked, and rate-limited keys and asserts no credential appears. Summaries and logs use `start` (`nes_live_abcd…`) for recognition.
+- **Integration.** `packages/admin/tests/api-keys.test.ts` drives the real stack: admin 2FA-protected create/list/revoke/rotate, then an opted-in resource API using real keys (scopes, owner policy, revocation, rotation, rate limit, keys refused by admin and session endpoints). `apps/example/tooling/api-keys-postgres.mjs` (`pnpm --filter @nestrum/example verify:api-keys`) repeats storage, expiry, revocation, rotation, and the concurrent rate-limit boundary on real PostgreSQL. `apps/example/tooling/integration.mjs` gained an API-key section (Docker + MongoDB) that could not run here.
+- **Assumptions.** The server clock decides expiry and rate-limit windows. Storage has no transactions, so two simultaneous rotations of one key can both succeed; the stray replacement is an ordinary key that can be revoked.
 
 ## Public API
 
-Finalize key format, canonical header, resource auth modes, scope vocabulary/extension, TTL, rate-limit configuration/provider seam, rotation semantics, and error/status behavior. Update the initiative index and architecture only to describe shipped behavior.
+Final: key format `nes_live_` (configurable) plus 64 random letters; header `X-API-Key`; resource modes `session` and `api-key`; scopes `resource:action` and `resource:*`; TTL `apiKeys.defaultTtlDays`/`maxTtlDays` and per-key `expiresInDays`; rate limit `apiKeys.rateLimit` and per-key overrides; rotation as above; statuses 401 (invalid/expired/revoked/not accepted/required), 403 (scope, ABAC), 429 (rate limited). See [decision 0015](../../decisions/0015-api-keys.md).
 
 ## Files / Packages Changed
 
-Planned auth/core/Hono/resource/admin/admin-ui integration tests and hardening, [architecture](../../architecture.md), [post-MVP roadmap](../../post-mvp.md), and all PM3 records.
+`apps/example` (Project resource opt-in, owner-aware policy, integration runner section, `verify:api-keys`), tests across auth/hono/admin/admin-ui/core, [architecture](../../architecture.md), [post-MVP roadmap](../../post-mvp.md), [README](../../../README.md), and all PM3 records.
 
 ## Tests
 
-Vitest: valid/invalid/expired/revoked keys, scope/ABAC denial, owner mapping, rate-limit boundary, rotation, last-use, plaintext non-persistence, and redaction. Integration: actual opt-in resource API authentication and protected admin management.
+Vitest: rate-limit boundary and disabling, rotation and compensation, last-use, plaintext non-persistence, redaction, expiry/revocation, scope/ABAC, admin 2FA management, and the admin UI. Integration: real PostgreSQL (run) and the Docker example (written, not run here).
 
 ## Acceptance Criteria
 
-- [ ] Rate limits are tested.
-- [ ] Rotation is tested.
-- [ ] Logs and errors redact secrets.
-- [ ] Resource API integration passes.
-- [ ] Admin 2FA/key-management integration passes.
-- [ ] Docs updated.
-- [ ] Initiative definition of done passes and PM3 is marked complete.
+- [x] Rate limits are tested.
+- [x] Rotation is tested.
+- [x] Logs and errors redact secrets.
+- [x] Resource API integration passes.
+- [x] Admin 2FA/key-management integration passes.
+- [x] Docs updated.
+- [x] Initiative definition of done passes and PM3 is marked complete.
 
 ## Validation
 
-Run targeted security/resource/admin integration, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, applicable browser checks, and `git diff --check`. Record evidence before marking Complete.
+`pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, biome, `git diff --check`; `nestrum db generate/migrate` and `verify:api-keys` on PostgreSQL 16. The Docker + MongoDB `pnpm test:integration` cannot run in this environment (no Docker daemon); its API-key section is unverified until the project owner runs it.
 
 ## Known Limitations
 
-Future owner types, factors, and external rate-limit providers remain separately scoped. Document any provider/runtime limitations demonstrated by the implementation.
+Organization and service-identity owners, external (Redis) rate-limit providers, and grace-period rotation are not implemented. The plugin logs each failed verification at error level (codes only). Expired keys are removed by the plugin rather than marked.
 
 ## Follow-Ups
 

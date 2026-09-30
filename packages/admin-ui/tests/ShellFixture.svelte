@@ -7,6 +7,13 @@ let {
     loading = false,
     activePath = '/admin',
     canManageUsers = false,
-}: { state: AdminShellState; loading?: boolean; activePath?: string; canManageUsers?: boolean } = $props();
+    canManageApiKeys = false,
+}: {
+    state: AdminShellState;
+    loading?: boolean;
+    activePath?: string;
+    canManageUsers?: boolean;
+    canManageApiKeys?: boolean;
+} = $props();
 </script>
-<AdminShell {state} {loading} {activePath} {canManageUsers}><p>Protected workspace content</p></AdminShell>
+<AdminShell {state} {loading} {activePath} {canManageUsers} {canManageApiKeys}><p>Protected workspace content</p></AdminShell>

@@ -1,4 +1,4 @@
-import { AdminTwoFactorRequiredError, AppError, AuthorizationError } from '@nestrum/core';
+import { AdminTwoFactorRequiredError, ApiKeyError, AppError, AuthorizationError } from '@nestrum/core';
 import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ZodError } from 'zod';
@@ -42,6 +42,7 @@ export function mapHttpError(error: unknown): MappedError {
 
         return {
             status,
+            ...(error instanceof ApiKeyError ? { headers: { ...error.headers } } : {}),
             body: {
                 error: {
                     code: error.code,

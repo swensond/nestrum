@@ -171,11 +171,11 @@ The consuming application writes no MFA middleware or pages. Framework routes ar
 
 ## Post-MVP first-class API keys
 
-The third post-MVP initiative is documented in the [first-class API-key plan](post-mvp/api-keys/README.md). It is planned work: PM3.0 documentation is complete, while PM3.1–PM3.5 have not started and API keys are not currently accepted by resource APIs.
+The third post-MVP initiative is the [first-class API-key plan](post-mvp/api-keys/README.md), implemented on Better Auth's official API-key plugin ([decision 0015](decisions/0015-api-keys.md)). PM3.0–PM3.5 are complete.
 
-API keys are explicit Nestrum principals, not Better Auth browser sessions. The planned pipeline is credential extraction → hash verification → expiration/revocation → rate limit → API-key subject → scope check → resource/action ABAC → handler. Resources opt in with accepted auth modes such as `session` and `api-key`; scope permission and ABAC permission are both required.
+API keys are explicit Nestrum principals, never Better Auth browser sessions. The request pipeline is `X-API-Key` extraction → plugin hash verification → expiry/revocation → per-key rate limit → API-key subject → scope check → resource/action ABAC → handler. Resources opt in with `api.auth` (`session`, `api-key`; the default is `session`); the key's scope (`<resource>:read` or `:write` by default, overridable with `api.scopes`) and ABAC must both allow. Keys are read only for the public resource API, never for admin or auth endpoints.
 
-Keys are cryptographically random, one-time reveal, hashed at rest, owner-bound, expirable, revocable, and redacted from logs/errors. Planned management is `/admin/api-keys` and `/__admin/api-keys/*`, protected by Better Auth, the PM2 admin 2FA assurance boundary, `admin.access`, API-key-management ABAC, and same-origin policy. The canonical header, hash/storage details, and rate-limit provider are finalized in the implementation phases.
+Keys are random, hashed at rest, revealed once, owner-bound, expirable, revocable (`revokedAt` metadata, record kept), rate limited, rotatable, and redacted from errors and logs. Administrators manage them at `/admin/api-keys` (`/__admin/api-keys/*`) behind Better Auth, admin 2FA, `admin.access`, same-origin policy, and the `api-key` ABAC actions `read`, `create`, `revoke`, `rotate`. The plugin's own HTTP endpoints are not exposed. Only user-owned keys exist today.
 
 ## Post-MVP hosted consumer UI
 

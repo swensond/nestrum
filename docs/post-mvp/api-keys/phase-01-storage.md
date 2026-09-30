@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -26,35 +26,39 @@ Depends on [PM3.0](phase-00-contract.md). Use a modern cryptographic hash/verifi
 
 ## Implementation
 
-Planned key service and persistence contract with owner types `user` and `organization`, timestamps, scope/metadata snapshots, and revocation. Integrate migration/contract workflow without deleting revoked records. Keep key format/environment prefix stable once published.
+- **Plugin-owned storage.** `defineAuth` enables `@better-auth/api-key` (config id `default`, `references: 'user'`, `requireName`, `enableMetadata`, hashing on, `enableSessionForAPIKeys` off). The plugin generates the key (`nes_live_` + 64 random letters by default), stores only its SHA-256 hash plus a recognizable `start` (prefix + 4 characters), and returns the plaintext once from `createApiKey`. Nestrum writes no key cryptography.
+- **Contract.** The prebaked auth contract gains `ApiKey` (plugin table `apikey` mapped with `schema.apikey.modelName`) for PostgreSQL and MongoDB; `ApiKey` joins `AUTH_MODELS` and the protected auth models. The drift test compares it with Better Auth's own schema for the configured plugins. The generated PostgreSQL migration adds one table and two indexes (verified with `nestrum db generate/migrate` on PostgreSQL 16).
+- **Service.** `createApiKeys()` (`@nestrum/auth`, `ApiKeys` in `@nestrum/core`) validates input (name 1–64, owner user must exist, `resource:action` scopes, whole-day expiry up to `maxTtlDays`, bounded rate limit, small metadata without reserved names) and calls the plugin's server-side endpoints with the owner's id. Summaries (`ApiKeySummary`) never contain the secret or hash.
+- **Options.** `defineAuth({ apiKeys: { prefix, defaultTtlDays, maxTtlDays, rateLimit: { enabled, requests, windowSeconds } } })`, validated at definition time; defaults are prefix `nes_live_`, no default expiry, 365-day maximum, 1000 requests per 60 seconds.
+- **State.** No expiry, explicit expiry, and default TTL are supported. Revocation sets `enabled: false` and records `revokedAt` in metadata; the row is kept. The plugin deletes an expired key when it is next verified.
 
 ## Public API
 
-Planned internal key creation, verification, revocation, and rotation contracts. Document admin-facing response fields and one-time secret behavior after implementation.
+`defineAuth({ apiKeys })` and the request-independent `application.auth.apiKeys` service: `create`, `list`, `revoke`, `rotate`, `authenticate`. `create` returns `{ key: ApiKeySummary, secret }`; the secret exists only in that return value. Summary fields: `id`, `name`, `start`, `owner`, `scopes`, `status`, `createdAt`, `expiresAt`, `lastUsedAt`, `revokedAt`, `rateLimit`, `metadata`.
 
 ## Files / Packages Changed
 
-Planned auth/core storage/service code, migrations/contracts, tests, [architecture](../../architecture.md), [initiative index](README.md), and this record.
+`packages/core/src/auth/api-key.ts` (types, scope helpers, errors), `packages/auth` (`src/api-keys/`, contracts, `defineAuth`), `packages/core` resource registration, tests, [decision 0015](../../decisions/0015-api-keys.md), [architecture](../../architecture.md), the [initiative index](README.md), and this record.
 
 ## Tests
 
-Cover randomness/format, hash verification, plaintext non-persistence, one-time reveal, expiry metadata, revocation metadata, ownership mapping, and safe logging/errors.
+`packages/auth/tests/api-keys.test.ts` (Vitest, real Better Auth against the in-memory collection fixture): format and randomness, one-time reveal, hash-only persistence, later reads without secrets, default TTL and custom prefix, input and owner validation, revocation metadata and idempotence, pagination and owner filtering, and log redaction. `packages/core/tests/api-keys.test.ts`: scope vocabulary. `apps/example/tooling/api-keys-postgres.mjs`: real PostgreSQL storage.
 
 ## Acceptance Criteria
 
-- [ ] Secret is never persisted.
-- [ ] Secret is shown only once.
-- [ ] Hash verification works.
-- [ ] Expiry and revocation metadata work.
-- [ ] Docs updated.
+- [x] Secret is never persisted.
+- [x] Secret is shown only once.
+- [x] Hash verification works.
+- [x] Expiry and revocation metadata work.
+- [x] Docs updated.
 
 ## Validation
 
-Run targeted storage tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, applicable migration/compiled checks, and `git diff --check`.
+`pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, biome, and `git diff --check` pass. `nestrum db generate`, `db migrate --plan`, and `db migrate` for the identity database, and `pnpm --filter @nestrum/example verify:api-keys`, pass against local PostgreSQL 16.
 
 ## Known Limitations
 
-Stored keys are not accepted by resource APIs until PM3.2. Rate-limit enforcement and admin management follow later.
+Only `user` owners (organization owners need Better Auth's organization plugin). Expired keys are deleted by the plugin rather than marked. The MongoDB auth contract is covered by the drift test only: Prisma's MongoDB interpreter requires `ObjectId` ids, which every auth model (not only `ApiKey`) lacks, so it is unchanged from the earlier auth phases and unverified against a live MongoDB.
 
 ## Follow-Ups
 

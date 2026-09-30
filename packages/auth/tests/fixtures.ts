@@ -50,7 +50,14 @@ function expression(kind: string, field?: string, value?: unknown): Predicate {
 }
 
 export function storage(database = 'identity') {
-    const records: Record<AuthModel, Row[]> = { User: [], Account: [], Session: [], Verification: [], TwoFactor: [] };
+    const records: Record<AuthModel, Row[]> = {
+        User: [],
+        Account: [],
+        Session: [],
+        Verification: [],
+        TwoFactor: [],
+        ApiKey: [],
+    };
     const operations: { model: AuthModel; operation: string }[] = [];
     const collection = (model: AuthModel, filters: Predicate[] = [], limit?: number, orders: Predicate[] = []) => {
         const fields = new Proxy(

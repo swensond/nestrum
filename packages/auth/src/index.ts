@@ -1,5 +1,6 @@
 export type { AuthPrismaBinding } from './adapter/prisma-adapter.js';
 export { createPrismaAuthAdapter } from './adapter/prisma-adapter.js';
+export type { ApiKeyOptions } from './api-keys/options.js';
 export type { AuthConfig } from './auth.js';
 export { defineAuth } from './auth.js';
 export type { AuthModel } from './contracts/contracts.js';

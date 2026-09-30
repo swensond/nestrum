@@ -2,7 +2,15 @@ import type { RouteConfig } from '@hono/zod-openapi';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { InferdiScope } from '@inferdi/hono';
 import type { RegisteredResource, ResourceApiOperation } from '@nestrum/core';
-import { AppError, QuerySetError, resourceSlug } from '@nestrum/core';
+import {
+    API_KEY_SUBJECT_TYPE,
+    ApiKeyError,
+    AppError,
+    QuerySetError,
+    requiredApiScope,
+    resourceSlug,
+    scopesSatisfy,
+} from '@nestrum/core';
 import type { Context } from 'hono';
 import type { RuntimeEnv } from '#hono/runtime/runtime.types';
 import type { PublicApiOptions } from './api.types.js';
@@ -16,7 +24,8 @@ import {
     wireObjectSchema,
 } from './transport.js';
 
-const OPENAPI_PATH = '/api/openapi.json';
+export const OPENAPI_PATH = '/api/openapi.json';
+const API_KEY_SCHEME = 'ApiKeyAuth';
 const OPENAPI_CONFIG = { openapi: '3.1.0' as const, info: { title: 'Nestrum public API', version: '0.0.0' } };
 const ERROR_SCHEMA = z.object({
     error: z.object({
@@ -46,6 +55,35 @@ function queryInput(context: Context, list: boolean): { limit?: number | undefin
     itemQuery(context.req.raw);
 
     return {};
+}
+
+/**
+ * Authentication-mode and scope gates that run before any resource authorization. API keys are opt-in per resource,
+ * and a key's scope must allow the operation in addition to (never instead of) the ABAC policies that follow.
+ */
+function requireAuthentication(
+    resource: RegisteredResource,
+    operation: ResourceApiOperation,
+    subject: Readonly<Record<string, unknown>>,
+): void {
+    const { auth } = resource.apiAccess;
+    if (subject.type === API_KEY_SUBJECT_TYPE) {
+        if (!auth.includes('api-key')) {
+            throw ApiKeyError.unauthenticated('API_KEY_NOT_ACCEPTED', 'This resource does not accept API keys.');
+        }
+        if (!scopesSatisfy(subject.scopes, requiredApiScope(resource, operation))) {
+            throw new ApiKeyError(
+                'API_KEY_SCOPE_DENIED',
+                `The API key lacks the required scope ${requiredApiScope(resource, operation)}.`,
+                403,
+            );
+        }
+
+        return;
+    }
+    if (!auth.includes('session')) {
+        throw ApiKeyError.unauthenticated('API_KEY_REQUIRED', 'This resource requires an API key.');
+    }
 }
 
 function requireSingleMutation(count: number): void {
@@ -118,8 +156,9 @@ function planRoute<Scope extends InferdiScope>(
     const bodySchema = family
         ? wireObjectSchema(resource, family).openapi(family === 'update' ? { minProperties: 1 } : {})
         : undefined;
+    const acceptsKeys = resource.apiAccess.auth.includes('api-key');
     const errors = Object.fromEntries(
-        [400, 403, 404, 415, 500, 503].map((status) => [
+        [400, ...(acceptsKeys ? [401] : []), 403, 404, 415, ...(acceptsKeys ? [429] : []), 500, 503].map((status) => [
             status,
             { description: 'Framework error.', content: { 'application/json': { schema: ERROR_SCHEMA } } },
         ]),
@@ -129,6 +168,12 @@ function planRoute<Scope extends InferdiScope>(
         path: item ? `${basePath}/{id}` : basePath,
         operationId: `${resource.identity}.${operation}`,
         tags: [resource.identity],
+        ...(acceptsKeys
+            ? {
+                  description: `API keys need the \`${requiredApiScope(resource, operation)}\` scope.`,
+                  security: [{ [API_KEY_SCHEME]: [] }, ...(resource.apiAccess.auth.includes('session') ? [{}] : [])],
+              }
+            : {}),
         request: {
             ...(operation === 'list' ? { query: LIST_QUERY_SCHEMA } : {}),
             // biome-ignore lint/style/noNonNullAssertion: primaryKey() rejects a model schema without the key field
@@ -157,6 +202,7 @@ function planRoute<Scope extends InferdiScope>(
         handler: async (context) => {
             const parameters = queryInput(context, operation === 'list');
             const { subject, environment } = context.get('nestrum');
+            requireAuthentication(resource, operation, subject);
             const action = operation === 'list' || operation === 'retrieve' ? 'read' : operation;
             let query = resource.objects.authorizedFor(subject, action, environment);
             if (key) {
@@ -225,6 +271,13 @@ export function registerPublicApi<Scope extends InferdiScope>(
         for (const operation of operations) {
             plans.push(planRoute<Scope>(resource, basePath, operation, options));
         }
+    }
+    if (resources.some((resource) => resource.apiAccess.auth.includes('api-key'))) {
+        router.openAPIRegistry.registerComponent('securitySchemes', API_KEY_SCHEME, {
+            type: 'apiKey',
+            in: 'header',
+            name: 'X-API-Key',
+        });
     }
     for (const plan of plans) {
         router.openAPIRegistry.registerPath(plan.definition);

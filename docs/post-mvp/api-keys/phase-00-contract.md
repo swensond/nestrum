@@ -58,7 +58,7 @@ No API keys are accepted by the current runtime. Canonical header, hash algorith
 
 ## Follow-Ups
 
-[PM3.1](phase-01-storage.md) implements generation and secure storage. The PM2 admin 2FA initiative remains a prerequisite for protected key management.
+[PM3.1](phase-01-storage.md) implemented generation and secure storage (complete). The PM2 admin 2FA initiative remains a prerequisite for protected key management.
 
 ## Completion Notes
 

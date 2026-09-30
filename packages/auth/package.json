@@ -24,6 +24,8 @@
         "build": "tsc -p tsconfig.json"
     },
     "dependencies": {
+        "@better-auth/api-key": "1.7.6",
+        "@better-auth/core": "1.7.6",
         "@nestrum/core": "workspace:*",
         "@nestrum/prisma": "workspace:*",
         "better-auth": "1.7.6",
