@@ -1,0 +1,23 @@
+{
+    "name": "@nestrum/example",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "integration": "node tooling/integration.mjs",
+        "start": "node src/server.mjs"
+    },
+    "dependencies": {
+        "@nestrum/core": "workspace:*",
+        "@nestrum/prisma": "workspace:*",
+        "@nestrum/zod": "workspace:*",
+        "@nestrum/hono": "workspace:*",
+        "@nestrum/auth": "workspace:*",
+        "@nestrum/admin": "workspace:*",
+        "@nestrum/admin-ui": "workspace:*",
+        "@nestrum/cli": "workspace:*",
+        "@nestrum/example-postgres": "workspace:*",
+        "@nestrum/example-mongo": "workspace:*",
+        "zod": "4.6.5"
+    }
+}

@@ -106,3 +106,5 @@ Phase 11 can consume application.auth and SubjectFactory for admin access. Phase
 ## Completion Notes
 
 Phase 10 is complete. Framework-owned Better Auth contracts, adapter, sessions, and subject mapping compose with the selected named database, application lifecycle, Hono request context, and ABAC. Required validation and compiled consumers pass. Client ownership, live database proof, richer providers/plugins, and admin integration remain explicitly scoped to later phases.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

@@ -153,3 +153,5 @@ Phase 7 integrates ABAC without field-level checks; collection scopes stay in da
 ## Completion Notes
 
 Phase 6 is complete. Immutable QuerySets and managers wrap the installed Prisma 8 collection API with explicit backend ownership, runtime validation, typed access, and a documented raw boundary. No ABAC or HTTP system was added.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

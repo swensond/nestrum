@@ -11,6 +11,7 @@
         "build": "pnpm -r build",
         "test": "vitest run",
         "test:watch": "vitest --watch",
+        "test:integration": "pnpm build && pnpm --filter @nestrum/example integration",
         "typecheck": "tsc --noEmit -p tsconfig.json && pnpm --filter @nestrum/admin-ui check",
         "lint": "biome check .",
         "lint:fix": "biome check --write .",

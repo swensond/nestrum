@@ -85,3 +85,5 @@ Next is [Phase 1: Application and App Lifecycle](phase-01-application.md). No ne
 ## Completion Notes
 
 Phase 0 is complete. The full documentation foundation exists, and all required checks passed. Current Vitest projects are used via an explicit import of the requested workspace file; this tooling adaptation is recorded in the ADR. At Phase 0 completion, Phases 1–16 were planned and unimplemented; see the phase index for current progress.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

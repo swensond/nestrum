@@ -79,3 +79,5 @@ Phase 16 proves live database/resource/auth/admin integration with fresh SQL/Mon
 ## Completion Notes
 
 Phase 15 is complete. Database commands need no user-authored Prisma workflow config; deterministic route/ready and shutdown/rollback barriers are implemented and tested. MVP completion remains gated on Phase 16.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

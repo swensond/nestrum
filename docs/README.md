@@ -1,6 +1,6 @@
 # Nestrum documentation
 
-This documentation is the durable project memory for future implementation sessions. **Phases 0–15 are complete; Phase 16 is not started.** Phase 15's implementation and validation are recorded in its phase document. APIs in later phase records remain design targets.
+This documentation is the durable project memory for future implementation sessions. **Phases 0–15 are complete; Phase 16 integration is implemented and validated with real Docker SQL/Mongo databases.** Its MVP gate remains open for atomic object-policy writes. The phase records distinguish validated integration from that remaining requirement.
 
 - [Architecture](architecture.md): locked framework contracts and actual implementation boundaries.
 - [MVP](mvp.md): frozen scope and definition of done.

@@ -106,3 +106,5 @@ Phase 13 adds generic CRUD to these metadata-driven workspaces. Phase 14 adds ov
 ## Completion Notes
 
 Phase 12 is complete. The prebuilt shell, metadata-driven navigation and generic routes, session/loading/error boundaries, Hono integration, and native TypeScript 7 checking are implemented and validated. Generic record CRUD remains Phase 13. The only tooling compatibility exception is SvelteKit’s isolated TypeScript 6 parser dependency, documented above.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

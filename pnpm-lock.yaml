@@ -182,6 +182,54 @@ importers:
         specifier: 5.0.2
         version: 5.0.2(@types/node@26.6.3)(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
 
+  apps/example:
+    dependencies:
+      '@nestrum/admin':
+        specifier: workspace:*
+        version: link:../../packages/admin
+      '@nestrum/admin-ui':
+        specifier: workspace:*
+        version: link:../../packages/admin-ui
+      '@nestrum/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@nestrum/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@nestrum/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@nestrum/example-mongo':
+        specifier: workspace:*
+        version: link:../example-mongo
+      '@nestrum/example-postgres':
+        specifier: workspace:*
+        version: link:../example-postgres
+      '@nestrum/hono':
+        specifier: workspace:*
+        version: link:../../packages/hono
+      '@nestrum/prisma':
+        specifier: workspace:*
+        version: link:../../packages/prisma
+      '@nestrum/zod':
+        specifier: workspace:*
+        version: link:../../packages/zod
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+
+  apps/example-mongo:
+    dependencies:
+      '@prisma/orm-mongo':
+        specifier: 8.0.0-rc.13
+        version: 8.0.0-rc.13(@aws-sdk/credential-providers@3.1142.0)(@prisma/cli-engine@0.6.1(@prisma/management-api-sdk@1.69.0)(magicast@0.5.5))(magicast@0.5.5)(mongodb@7.7.0(@aws-sdk/credential-providers@3.1142.0))(typanion@3.14.0)(typescript@7.0.2)(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
+  apps/example-postgres:
+    dependencies:
+      '@prisma/orm-postgres':
+        specifier: 8.0.0-rc.13
+        version: 8.0.0-rc.13(@prisma/cli-engine@0.6.1(@prisma/management-api-sdk@1.69.0)(magicast@0.5.5))(magicast@0.5.5)(typanion@3.14.0)(typescript@7.0.2)(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
   packages/admin:
     dependencies:
       '@nestrum/core':

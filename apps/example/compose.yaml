@@ -1,0 +1,25 @@
+services:
+    postgres:
+        image: postgres:17-alpine
+        environment:
+            POSTGRES_USER: nestrum
+            POSTGRES_PASSWORD: integration-only
+            POSTGRES_DB: nestrum_integration
+        ports:
+            - '127.0.0.1::5432'
+        volumes:
+            - ./identity.sql:/docker-entrypoint-initdb.d/identity.sql:ro
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U nestrum -d nestrum_integration']
+            interval: 1s
+            timeout: 5s
+            retries: 30
+    mongo:
+        image: mongo:8
+        ports:
+            - '127.0.0.1::27017'
+        healthcheck:
+            test: ['CMD', 'mongosh', '--quiet', '--eval', 'db.adminCommand({ ping: 1 }).ok']
+            interval: 1s
+            timeout: 5s
+            retries: 30

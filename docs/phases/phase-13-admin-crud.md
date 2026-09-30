@@ -107,3 +107,5 @@ Phase 14 provides component/widget overrides and custom actions. Phase 16 exerci
 ## Completion Notes
 
 Phase 13 is complete. Generic list/create/edit/delete, all initial widgets, retained validation feedback, server-authoritative private API forwarding, reusable packaged components, and zero-resource-specific-page behavior are implemented and validated. Phase 14 subsequently implements component overrides and custom actions.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

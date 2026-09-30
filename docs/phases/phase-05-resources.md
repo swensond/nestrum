@@ -148,3 +148,5 @@ Phase 6 now introduces QuerySets and managers using registered resources. Phase 
 ## Completion Notes
 
 Phase 5 is complete. Resources inherit real metadata and schemas, support named databases and composition, fail on missing models before hooks, and keep every public operation opt-in. No QuerySets, HTTP routes, or admin subsystem was introduced.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

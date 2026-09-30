@@ -2,7 +2,9 @@
 
 ## Status
 
-Not complete. Phases 0–15 are complete; Phase 16 is not started. Workspace, app lifecycle, named databases, offline SQL/Mongo contract assembly/emission, immutable metadata, and runtime Zod families are implemented. Resource registration/composition and pre-hook model validation are implemented. Immutable QuerySets, managers, and supplied-client Prisma adapters are implemented. Default-deny ABAC, scoped QuerySets, object decisions, and custom actions are implemented. The Fetch-based Hono/InferDI runtime now generates opt-in public CRUD, JSON scalar transport, and OpenAPI. Item mutations return 204 and retain object-policy denial. Framework-owned Better Auth now provides protected contracts, a Prisma 8 adapter, email/password sessions, and ABAC subject mapping. The private admin backend, metadata-driven Svelte admin shell, generic CRUD widgets, explicit custom widget registry, and authorized per-record action handlers are implemented. Named database CLI commands, provider extension seams, and prepare/route/DI/disconnect lifecycle barriers are implemented. Automatic client binding and live integration remain Phase 16 work. The frozen scope below remains the full MVP target.
+Not complete. Phases 0–15 are complete, and Phase 16's real Docker integration is implemented and passes. Application-owned Project/PostgreSQL and Article/MongoDB resources now prove generated contracts/Zod, QuerySets/managers, scoped ABAC, selected-database Better Auth, public/private CRUD, OpenAPI, generic Svelte forms/browser authentication, native CLI migrations/status, dependency order, and reverse shutdown without framework package edits. See [Phase 16](phases/phase-16-integration.md) and the [runnable example](../apps/example/README.md).
+
+The earlier required MVP follow-up for atomic object-policy update/delete remains unmet. Such writes continue to deny safely; the live example proves scope-based writes. Full workspace and live-provider validation passes, but it does not remove that remaining requirement.
 
 ## Included
 
@@ -59,7 +61,7 @@ Adding an ordinary resource must require no manual Hono route, OpenAPI definitio
 
 ## Integration proof
 
-Target `default.Project` in PostgreSQL and `documents.Article` in MongoDB, subject to verified Prisma 8/runtime capabilities in the integration environment. Both have distinct managers/policies, generated Zod, and admin access; only one exposes public CRUD. Verify app dependencies and configurable auth placement. If provider support blocks a target, record the blocker and leave the unmet acceptance criterion open.
+Proven with Docker PostgreSQL 17 and MongoDB 8 by `pnpm test:integration`: `default.Project` exposes public/admin CRUD, while `documents.Article` exposes admin CRUD only. Both have distinct managers/policies and generated Zod; auth lives in the separate PostgreSQL `identity` database. App dependencies, native migrations/status, generic forms, browser login/edit/action/logout, and shutdown are validated. The application uses provider-separated facade packages and codec-aware Mongo AST binding; see the example and Phase 16 for exact provider limitations.
 
 ## Completion gate
 

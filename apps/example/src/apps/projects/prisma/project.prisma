@@ -1,0 +1,7 @@
+model Project {
+    id String @id
+    name String
+    description String?
+    ownerId String
+    status String
+}

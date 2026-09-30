@@ -144,3 +144,5 @@ Phase 9 integrates public CRUD/OpenAPI; QuerySet Read failures remain internal Q
 ## Completion Notes
 
 Phase 8 is complete. A portable Fetch-based Hono boundary now composes the existing application and ABAC services with real InferDI request scopes, awaited cleanup, and consistent errors. The repository passes required validation. Generated APIs/auth/admin and host listener integration remain in their planned phases.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

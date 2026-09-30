@@ -142,3 +142,5 @@ Proceed to [Phase 3: Prisma 8 Multi-File Contract Assembly](phase-03-prisma-cont
 ## Completion Notes
 
 Phase 2 is complete. Named definitions, required default, identity validation, public factory, lifecycle context integration, tests, builds, and documentation are implemented and validated. This phase introduces configuration registration only; Phase 3 is next.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

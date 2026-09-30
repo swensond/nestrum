@@ -1,0 +1,12 @@
+{
+    "name": "@nestrum/example-postgres",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "exports": {
+        ".": "./index.mjs"
+    },
+    "dependencies": {
+        "@prisma/orm-postgres": "8.0.0-rc.13"
+    }
+}

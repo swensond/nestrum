@@ -141,3 +141,5 @@ Phase 8 supplies request scopes and trusted subject/environment plumbing. Public
 ## Completion Notes
 
 Phase 7 is complete. Default-deny ABAC, policy registration, scoped QuerySets, object decisions, and arbitrary actions are implemented and validated. No HTTP/auth/admin systems were introduced. Object-policy count/bulk restrictions and atomic mutation follow-ups remain explicit.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

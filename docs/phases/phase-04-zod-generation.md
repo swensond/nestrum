@@ -129,3 +129,5 @@ Phase 5 now registers resources against this metadata and composes these schemas
 ## Completion Notes
 
 Phase 4 is complete. Nestrum consumes real Prisma 8 IR and owns all six runtime schema families. The frozen MVP authoring example now emits and validates through an explicit official PostgreSQL adapter; full resource/runtime integration remains incomplete. No resources, QuerySets, or HTTP systems were introduced.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

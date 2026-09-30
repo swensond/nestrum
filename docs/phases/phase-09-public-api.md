@@ -143,3 +143,5 @@ Phase 10 adds Better Auth/session subjects. Before enabling object-based admin w
 ## Completion Notes
 
 Phase 9 is complete. Opt-in public resource CRUD and OpenAPI now compose generated schemas, QuerySets, ABAC, and the request-scoped runtime without resource-specific routes. Required validation and compiled consumers pass. Scope-based item writes return 204; object-policy write restrictions and remaining MVP lifecycle/live-database work are explicitly recorded. Auth/admin remain later phases.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

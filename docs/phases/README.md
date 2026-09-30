@@ -1,6 +1,6 @@
 # Implementation phases
 
-Phases 0–15 are complete; Phase 16 is not started. Each task should introduce one primary abstraction or integrate two existing abstractions, and leave the repository green.
+Phases 0–15 are complete. Phase 16 now has passing Docker SQL/Mongo integration and browser evidence; its final MVP completion gate remains open for atomic object-policy mutations. Each task should introduce one primary abstraction or integrate two existing abstractions, and leave the repository green.
 
 | Phase | Goal | Packages | Status |
 | --- | --- | --- | --- |
@@ -20,7 +20,7 @@ Phases 0–15 are complete; Phase 16 is not started. Each task should introduce 
 | [13 — Generic Svelte Admin CRUD](phase-13-admin-crud.md) | Deliver usable generic list/create/edit/delete without per-resource Svelte code. | @nestrum/admin-ui | Complete |
 | [14 — Admin Extensibility and Arbitrary Actions](phase-14-admin-extensions.md) | Add admin overrides, custom components, and ABAC-backed arbitrary actions. | @nestrum/core, @nestrum/admin, @nestrum/admin-ui | Complete |
 | [15 — Nestrum DB CLI and Lifecycle Hardening](phase-15-cli-lifecycle.md) | Own the public database workflow and harden deterministic bootstrap/shutdown. | @nestrum/cli, @nestrum/core, @nestrum/prisma, @nestrum/hono | Complete |
-| [16 — MVP Integration and Architecture Test](phase-16-integration.md) | Prove fresh resources work end-to-end without changing framework internals. | all; @nestrum/testing and example apps as needed | Not Started |
+| [16 — MVP Integration and Architecture Test](phase-16-integration.md) | Prove fresh resources work end-to-end without changing framework internals. | application-owned example/provider packages | In Progress |
 
 ## Session inputs
 

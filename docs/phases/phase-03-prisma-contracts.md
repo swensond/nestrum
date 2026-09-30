@@ -157,3 +157,5 @@ Phase 4 now consumes contract IR, maps provider codecs/model metadata, and suppo
 ## Completion Notes
 
 Phase 3 is complete. The fragment/contract abstraction, real offline SQL/Mongo emission, focused tests, checks/builds, and documentation are implemented and validated. The pinned-emitter glob limitation is handled by generated per-database assembly. Phase 4 subsequently adds an explicit official compatibility authoring option; resources, QuerySets, and live databases remain out of scope.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

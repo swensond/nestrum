@@ -1,0 +1,7 @@
+model Article {
+    id ObjectId @id @map("_id")
+    title String
+    body String?
+    ownerId String
+    status String
+}

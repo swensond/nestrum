@@ -106,3 +106,5 @@ Phase 15 implements the public database CLI and lifecycle hardening using the do
 ## Completion Notes
 
 Phase 14 is complete. Custom widgets and authorized per-record handlers extend the generic admin without editing its internal pages. Contribution seams are designed with clear implemented/planned boundaries; no broader plugin ecosystem was introduced.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

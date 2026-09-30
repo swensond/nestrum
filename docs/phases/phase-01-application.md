@@ -134,3 +134,5 @@ Proceed to [Phase 2: Named Database Registry](phase-02-databases.md). Phase 15 w
 ## Completion Notes
 
 Phase 1 is complete. Only the app/lifecycle abstraction was introduced in this phase; no dependencies or later-phase packages were added at that point. The example and compatibility note now reflect Phase 2's required database configuration; see the phase index for current progress.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

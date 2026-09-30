@@ -126,3 +126,5 @@ Phase 12 can consume resource metadata for navigation, Phase 13 can use CRUD, an
 ## Completion Notes
 
 Phase 11 is complete. Private session/ABAC/origin boundaries, independent registration and discovery, generic CRUD without public exposure, and the known-action metadata seam are implemented and validated. Phases 12–14 subsequently add the shell, generic CRUD UI, custom widgets, and action handlers.
+
+Current integration evidence (2026-09-30): [Phase 16](phase-16-integration.md) now verifies real Docker PostgreSQL/Mongo contracts, migrations, resources, auth, admin forms/browser flows, and shutdown. Earlier phase-specific fixture results remain historical evidence. Atomic object-policy writes still deny and remain an unmet required MVP follow-up.

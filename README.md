@@ -2,6 +2,8 @@
 
 A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–15 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, default-deny ABAC, a Hono/InferDI runtime, opt-in public CRUD with OpenAPI, framework-owned Better Auth, a private session/ABAC-protected admin backend, and a prebuilt metadata-driven admin shell with generic CRUD, custom widgets, and authorized per-record actions.
 
+The [Docker-backed integration example](apps/example/README.md) now proves fresh PostgreSQL/Mongo resources, selected-database auth, generated public/admin CRUD, generic Svelte forms/browser flows, CLI migrations, and shutdown. MVP completion remains gated on the documented atomic object-policy mutation follow-up.
+
 ## Development
 
 Use Node.js 22.18+, 24, or 26+ within the ranges in package.json, and pnpm 12.6.0. TypeScript 7.0.2, Vitest 5.0.2, and Prisma CLI/provider facades 8.0.0-rc.13 are pinned in the workspace.
@@ -12,6 +14,7 @@ pnpm build
 pnpm test
 pnpm typecheck
 pnpm check
+pnpm test:integration # requires Docker
 ```
 
 `pnpm test:watch` starts interactive watch mode. `pnpm check` runs tests, type checking (including native Svelte checks), builds, and compiled admin shell integration. Core, Prisma, Zod, Hono, Auth, Admin, and Admin UI packages emit ESM JavaScript and declarations to their dist directories. Workspace tests/type checking resolve source through the nestrum-source condition; ordinary Node imports use compiled output.
