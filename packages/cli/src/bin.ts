@@ -38,7 +38,7 @@ try {
                 ...(parsed.config === undefined ? {} : { config: parsed.config }),
             });
             process.stdout.write(
-                `Built ${manifest.apps.length} app(s), ${manifest.resources} resource(s), ${manifest.databases.length} database(s) into ${directory}\n`,
+                `Built ${manifest.apps.length} app(s), ${manifest.resources} resource(s), ${manifest.database ? 'a' : 'no'} database contract into ${directory}\n`,
             );
         } else if (parsed.command === 'serve') {
             const server = await runServe({

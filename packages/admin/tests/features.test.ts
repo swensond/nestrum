@@ -36,7 +36,7 @@ async function setup(configured = true) {
     });
     const features: FeaturesDefinition = {
         kind: 'nestrum-features',
-        database: undefined,
+        persistent: false,
         protectedModels: [],
         createApp: () => ({ name: 'unused' }),
         async initialize() {
@@ -52,12 +52,8 @@ async function setup(configured = true) {
     };
     const application = defineApplication({
         apps: [],
-        databases: {
-            default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-            identity: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-        },
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
         auth: defineAuth({
-            database: 'identity',
             baseURL: BASE_URL,
             secret: 'nestrum-admin-test-secret-longer-than-thirty-two-characters',
             prisma: () => memory.binding,

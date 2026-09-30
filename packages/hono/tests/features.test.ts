@@ -13,7 +13,7 @@ const flags = () =>
 function definition(features: ReturnType<typeof flags>): FeaturesDefinition {
     return {
         kind: 'nestrum-features',
-        database: undefined,
+        persistent: false,
         protectedModels: [],
         createApp: () => ({ name: 'unused' }),
         async initialize() {
@@ -29,7 +29,7 @@ function build(withFeatures = true) {
     const features = flags();
     const application = defineApplication({
         apps: [],
-        databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
         ...(withFeatures ? { features: definition(features) } : {}),
     });
     const runtime = createHonoRuntime({
@@ -150,7 +150,7 @@ describe('feature flags in the request runtime', () => {
         const features = flags();
         const application = defineApplication({
             apps: [],
-            databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+            database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
             features: definition(features),
             policies: [
                 {

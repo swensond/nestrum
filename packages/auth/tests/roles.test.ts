@@ -28,11 +28,8 @@ async function setup() {
     const memory = storage();
     const application = defineApplication({
         apps: [],
-        databases: {
-            default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-            identity: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-        },
-        auth: defineAuth({ database: 'identity', baseURL: BASE_URL, secret: SECRET, prisma: () => memory.binding }),
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
+        auth: defineAuth({ baseURL: BASE_URL, secret: SECRET, prisma: () => memory.binding }),
     });
     const runtime = createHonoRuntime({ application, onError: () => {} });
     await runtime.start();

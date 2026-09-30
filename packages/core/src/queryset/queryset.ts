@@ -350,7 +350,6 @@ export function bindResourceQuerySets<
                 'objects',
                 'managers',
                 'model',
-                'database',
                 'identity',
                 'api',
                 'metadata',

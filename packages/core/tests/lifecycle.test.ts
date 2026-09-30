@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { defineApplication } from '../src/index.js';
 
-const DATABASES = {
-    default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-    documents: { kind: 'prisma', provider: 'mongodb', connection: 'unused' },
-} as const;
+const DATABASE = { kind: 'prisma', provider: 'postgresql', connection: 'unused' } as const;
 
 describe('Managed lifecycle barriers', () => {
     it('prepares, connects, validates models, configures, registers routes, readies, then cleans up in order', async () => {
@@ -28,12 +25,9 @@ describe('Managed lifecycle barriers', () => {
                     shutdown: record('shutdown:parent'),
                 },
             ],
-            databases: DATABASES,
+            database: DATABASE,
             prepare: record('prepare'),
-            databaseLifecycle: {
-                documents: { connect: record('connect:documents'), disconnect: record('disconnect:documents') },
-                default: { connect: record('connect:default'), disconnect: record('disconnect:default') },
-            },
+            databaseLifecycle: { connect: record('connect'), disconnect: record('disconnect') },
             resourceModels: () => {
                 events.push('models');
                 return [];
@@ -44,8 +38,7 @@ describe('Managed lifecycle barriers', () => {
         await application.shutdown();
         expect(events).toEqual([
             'prepare',
-            'connect:default',
-            'connect:documents',
+            'connect',
             'models',
             'configure:parent',
             'configure:child',
@@ -55,32 +48,21 @@ describe('Managed lifecycle barriers', () => {
             'shutdown:child',
             'shutdown:parent',
             'di',
-            'disconnect:documents',
-            'disconnect:default',
+            'disconnect',
         ]);
     });
-    it('cleans partially connected databases after failed connection, following DI cleanup', async () => {
+    it('disconnects a database whose connection failed, following DI cleanup', async () => {
         const events: string[] = [];
         const configure = vi.fn();
         const application = defineApplication({
             apps: [{ name: 'app', configure }],
-            databases: DATABASES,
+            database: DATABASE,
             databaseLifecycle: {
-                default: {
-                    connect: () => {
-                        events.push('default');
-                    },
-                    disconnect: () => {
-                        events.push('disconnect:default');
-                    },
+                connect: () => {
+                    throw new Error('connect failed');
                 },
-                documents: {
-                    connect: () => {
-                        throw new Error('partial connect');
-                    },
-                    disconnect: () => {
-                        events.push('disconnect:documents');
-                    },
+                disconnect: () => {
+                    events.push('disconnect');
                 },
             },
         });
@@ -90,11 +72,11 @@ describe('Managed lifecycle barriers', () => {
                     events.push('di');
                 },
             }),
-        ).rejects.toThrow('partial connect');
+        ).rejects.toThrow('connect failed');
         expect(configure).not.toHaveBeenCalled();
-        expect(events).toEqual(['default', 'di', 'disconnect:documents', 'disconnect:default']);
+        expect(events).toEqual(['di', 'disconnect']);
         await application.shutdown();
-        expect(events).toHaveLength(4);
+        expect(events).toHaveLength(2);
     });
     it('rolls back before ready on route failure and continues all cleanup after errors', async () => {
         const events: string[] = [];
@@ -110,14 +92,12 @@ describe('Managed lifecycle barriers', () => {
                     },
                 },
             ],
-            databases: DATABASES,
+            database: DATABASE,
             databaseLifecycle: {
-                default: {
-                    connect: () => {},
-                    disconnect: () => {
-                        events.push('database');
-                        throw new Error('db cleanup');
-                    },
+                connect: () => {},
+                disconnect: () => {
+                    events.push('database');
+                    throw new Error('db cleanup');
                 },
             },
         });
@@ -148,8 +128,8 @@ describe('Managed lifecycle barriers', () => {
                     },
                 },
             ],
-            databases: DATABASES,
-            databaseLifecycle: { default: { connect: () => {}, disconnect } },
+            database: DATABASE,
+            databaseLifecycle: { connect: () => {}, disconnect },
         });
         await application.start({
             afterApps: () => {
@@ -164,16 +144,12 @@ describe('Managed lifecycle barriers', () => {
         await application.shutdown();
         expect(disconnect).toHaveBeenCalledOnce();
     });
-    it('rejects unknown or malformed managed database registrations at construction', () => {
+    it('rejects malformed managed database registrations at construction', () => {
+        expect(() => defineApplication({ apps: [], database: DATABASE, databaseLifecycle: {} as never })).toThrow(
+            expect.objectContaining({ code: 'DATABASE_LIFECYCLE_INVALID' }),
+        );
         expect(() =>
-            defineApplication({
-                apps: [],
-                databases: DATABASES,
-                databaseLifecycle: { missing: { connect: () => {}, disconnect: () => {} } },
-            }),
+            defineApplication({ apps: [], database: DATABASE, databaseLifecycle: { connect: () => {} } as never }),
         ).toThrow(expect.objectContaining({ code: 'DATABASE_LIFECYCLE_INVALID' }));
-        expect(() =>
-            defineApplication({ apps: [], databases: DATABASES, databaseLifecycle: { default: {} as never } }),
-        ).toThrow();
     });
 });

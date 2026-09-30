@@ -28,7 +28,6 @@
     },
     "dependencies": {
         "@nestrum/core": "workspace:*",
-        "@prisma/orm-mongo": "8.0.0-rc.13",
         "@prisma/orm-postgres": "8.0.0-rc.13",
         "prisma": "8.0.0-rc.13"
     },

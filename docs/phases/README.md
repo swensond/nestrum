@@ -1,6 +1,6 @@
 # Implementation phases
 
-Phases 0–15 are complete. Phase 16 now has passing Docker SQL/Mongo integration and browser evidence; its final MVP completion gate remains open for atomic object-policy mutations. Each task should introduce one primary abstraction or integrate two existing abstractions, and leave the repository green.
+Phases 0–15 are complete. Phase 16 has passing PostgreSQL integration and browser evidence (MongoDB and named databases were later removed; see [decision 0018](../decisions/0018-postgresql-single-database.md) — phase records below describe the original design); its final MVP completion gate remains open for atomic object-policy mutations. Each task should introduce one primary abstraction or integrate two existing abstractions, and leave the repository green.
 
 | Phase | Goal | Packages | Status |
 | --- | --- | --- | --- |

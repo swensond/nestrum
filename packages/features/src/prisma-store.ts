@@ -1,4 +1,4 @@
-import type { FeatureRule, FeatureRuleScope, FeatureStore, PrismaProvider, QueryBackend } from '@nestrum/core';
+import type { FeatureRule, FeatureRuleScope, FeatureStore, QueryBackend } from '@nestrum/core';
 import { AppError, FEATURE_RULE_SCOPES } from '@nestrum/core';
 
 type Row = Record<string, unknown>;
@@ -43,15 +43,9 @@ function toRule(row: Row): FeatureRule {
 }
 
 /** Feature overrides on Nestrum's `FeatureOverride` model, through the same Prisma query backend resources use. */
-export function createPrismaFeatureStore(backend: QueryBackend, provider: PrismaProvider): FeatureStore {
-    // MongoDB `_id` is an ObjectId, written as its 24-character hex string like every other Nestrum Mongo model.
-    const newId = () =>
-        provider === 'mongodb'
-            ? Array.from(crypto.getRandomValues(new Uint8Array(12)), (byte) => byte.toString(16).padStart(2, '0')).join(
-                  '',
-              )
-            : crypto.randomUUID();
-    const stamp = () => (provider === 'mongodb' ? new Date() : new Date().toISOString());
+export function createPrismaFeatureStore(backend: QueryBackend): FeatureStore {
+    const newId = () => crypto.randomUUID();
+    const stamp = () => new Date().toISOString();
     const find = async (flag: string, scope: FeatureRuleScope, target: string): Promise<Row | undefined> =>
         (await backend.all({ ...where(flag, scope, target), limit: 1 }))[0] as Row | undefined;
     const write = async (existing: Row | undefined, input: Input): Promise<Row | undefined> => {

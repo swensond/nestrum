@@ -18,9 +18,8 @@ const FIELD = {
     hasUpdateDefault: false,
 } as const;
 const METADATA = {
-    database: 'default',
     name: 'Project',
-    identity: 'default.Project',
+    identity: 'Project',
     provider: 'postgresql',
     namespace: 'public',
     relations: [],
@@ -65,12 +64,8 @@ async function setup(policies: PolicyDefinition[] = roleBasedAdminPolicies()) {
     };
     const application = defineApplication({
         apps: [],
-        databases: {
-            default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-            identity: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-        },
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
         auth: defineAuth({
-            database: 'identity',
             baseURL: BASE_URL,
             secret: 'nestrum-admin-test-secret-longer-than-thirty-two-characters',
             prisma: () => memory.binding,
@@ -92,7 +87,7 @@ async function setup(policies: PolicyDefinition[] = roleBasedAdminPolicies()) {
         policies: [
             ...policies,
             {
-                resource: 'default.Project',
+                resource: 'Project',
                 actions: {
                     read: { scope: ({ subject }) => eq('ownerId', (subject.owner as { id: string }).id) },
                     create: { authorize: () => allow() },

@@ -33,7 +33,7 @@ export async function runConsumerBrowserChecks({ baseURL, email, password }) {
             html.includes('site: nestrum-example'),
             `Expected server-rendered markup in the HTML response. Received:\n${html.slice(0, 1500)}`,
         );
-        for (const secret of [process.env.AUTH_SECRET, process.env.INTEGRATION_IDENTITY_URL].filter(Boolean)) {
+        for (const secret of [process.env.AUTH_SECRET, process.env.INTEGRATION_POSTGRES_URL].filter(Boolean)) {
             assert.ok(!html.includes(secret), 'Server-only values must not reach the page.');
         }
         console.log('consumer browser load and public config ok');

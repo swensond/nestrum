@@ -26,7 +26,7 @@ import { defineConfig } from '@nestrum/cli';
 import { helper } from './src/helper';
 export default defineConfig({
     application: defineApplication({
-        databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://user:secret@127.0.0.1:1/x' } },
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://user:secret@127.0.0.1:1/x' },
         ${body}
     }),
     server: { port: 4321 },
@@ -35,7 +35,7 @@ export default defineConfig({
 `;
 const helper = "export const helper = 'ok' as string;\n";
 const valid = config(
-    `apps: [{ name: helper === 'ok' ? 'models' : 'x', prismaSource: { default: ${JSON.stringify(PROJECT)} }, resources: [defineResource({ model: 'Project' })] }]`,
+    `apps: [{ name: helper === 'ok' ? 'models' : 'x', prismaSource: ${JSON.stringify(PROJECT)}, resources: [defineResource({ model: 'Project' })] }]`,
 );
 
 describe('nestrum build', () => {
@@ -45,21 +45,21 @@ describe('nestrum build', () => {
 
         expect(directory).toBe(join(root, '.nestrum'));
         expect(manifest).toMatchObject({
-            manifestVersion: 1,
+            manifestVersion: 2,
             apps: ['models'],
             resources: 1,
             auth: false,
             admin: null,
             server: { port: 4321 },
             entry: { path: 'server/index.mjs' },
-            databases: [{ name: 'default', provider: 'postgresql' }],
+            database: { provider: 'postgresql' },
         });
         const bundle = await readFile(join(directory, 'server/index.mjs'), 'utf8');
         expect(bundle).toContain('"ok"');
         expect(bundle).not.toContain("from './src/helper'");
-        const models = JSON.parse(await readFile(join(directory, manifest.databases[0]?.metadata ?? ''), 'utf8'));
-        expect(models[0]).toMatchObject({ name: 'Project', database: 'default' });
-        expect(await readFile(join(directory, manifest.databases[0]?.contract ?? ''), 'utf8')).toContain('Project');
+        const models = JSON.parse(await readFile(join(directory, manifest.database?.metadata ?? ''), 'utf8'));
+        expect(models[0]).toMatchObject({ name: 'Project', identity: 'Project' });
+        expect(await readFile(join(directory, manifest.database?.contract ?? ''), 'utf8')).toContain('Project');
         await expect(readManifest(root, manifest.nestrumVersion)).resolves.toMatchObject({ apps: ['models'] });
         expect(JSON.stringify(manifest)).not.toContain('secret');
     });
@@ -76,18 +76,18 @@ describe('nestrum build', () => {
         await expect(readManifest(root, manifest.nestrumVersion)).rejects.toMatchObject({ code: 'BUILD_NOT_FOUND' });
     });
 
-    it('emits into per-database contract directories and keeps a stable copy in the build', async () => {
+    it('emits into the configured contract directory and keeps a stable copy in the build', async () => {
         const root = await project({
             'nestrum.config.ts': valid.replace(
                 'server: { port: 4321 },',
-                "server: { port: 4321 }, contractDirs: { default: 'emit/here' },",
+                "server: { port: 4321 }, contractDir: 'emit/here',",
             ),
             'src/helper.ts': helper,
         });
         const { manifest, directory } = await runBuild({ cwd: root });
 
-        expect(manifest.databases[0]?.contract).toBe('contracts/default.json');
-        expect(await readFile(join(directory, 'contracts/default.json'), 'utf8')).toContain('Project');
+        expect(manifest.database?.contract).toBe('contracts/database.json');
+        expect(await readFile(join(directory, 'contracts/database.json'), 'utf8')).toContain('Project');
         expect((await readdir(join(root, 'emit/here'))).some((entry) => entry.startsWith('run-'))).toBe(true);
         await runBuild({ cwd: root });
         expect((await readdir(join(root, 'emit/here'))).filter((entry) => entry.startsWith('run-'))).toHaveLength(1);

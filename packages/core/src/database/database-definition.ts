@@ -12,11 +12,8 @@ export function validateDatabaseDefinition(value: unknown): asserts value is Dat
         throw new DatabaseRegistryError('INVALID_DATABASE_CONFIG', 'Database definitions must use kind "prisma".');
     }
 
-    if (definition.provider !== 'postgresql' && definition.provider !== 'mongodb') {
-        throw new DatabaseRegistryError(
-            'INVALID_DATABASE_CONFIG',
-            'Database provider must be "postgresql" or "mongodb".',
-        );
+    if (definition.provider !== 'postgresql') {
+        throw new DatabaseRegistryError('INVALID_DATABASE_CONFIG', 'Database provider must be "postgresql".');
     }
 
     if (

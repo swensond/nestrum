@@ -36,7 +36,7 @@ const FIELDS = [
     field('budget', 'bigint'),
 ];
 const OWNER_POLICY: PolicyDefinition = {
-    resource: 'default.Project',
+    resource: 'Project',
     actions: {
         read: { scope: ({ subject }) => eq('ownerId', subject.id as string) },
         create: { object: ({ subject, resource }) => (resource?.ownerId === subject.id ? allow() : deny('NOT_OWNER')) },
@@ -52,16 +52,13 @@ function fixture(
         policies?: readonly PolicyDefinition[];
         fields?: readonly FieldMetadata[];
         relations?: ModelMetadata['relations'];
-        database?: string;
         publicApi?: PublicApiOptions;
     } = {},
 ) {
-    const database = options.database ?? 'default';
     const metadata: ModelMetadata = {
-        database,
         name: 'Project',
-        identity: `${database}.Project`,
-        provider: database === 'default' ? 'postgresql' : 'mongodb',
+        identity: 'Project',
+        provider: 'postgresql',
         namespace: 'public',
         relations: options.relations ?? [],
         fields: options.fields ?? FIELDS,
@@ -78,14 +75,10 @@ function fixture(
     const shutdown = vi.fn();
     const app = defineApplication({
         apps: [{ name: 'projects', shutdown }],
-        databases: {
-            default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-            documents: { kind: 'prisma', provider: 'mongodb', connection: 'unused' },
-        },
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
         resources: [
             defineResource({
                 model: 'Project',
-                database,
                 api: options.api === undefined ? ALL_OPERATIONS : options.api,
                 ...(options.schemas ? { schemas: options.schemas } : {}),
             }),
@@ -186,7 +179,7 @@ describe('Opt-in public resource routes', () => {
             }
             const document = runtime.getOpenApiDocument();
             expect(Object.values(document.paths ?? {}).flatMap((path) => Object.keys(path ?? {}))).toHaveLength(1);
-            expect(JSON.stringify(document)).toContain(`default.Project.${operation}`);
+            expect(JSON.stringify(document)).toContain(`Project.${operation}`);
             await runtime.shutdown();
         },
     );
@@ -201,26 +194,9 @@ describe('Opt-in public resource routes', () => {
         await runtime.shutdown();
     });
 
-    it('namespaces named databases and validates Mongo ObjectId primary keys', async () => {
-        const id = '0123456789abcdef01234567';
-        const { runtime, backend } = fixture({
-            database: 'documents',
-            fields: [field('id', 'string', { codec: 'mongo/objectId@1' }), ...FIELDS.slice(1)],
-        });
-        backend.all.mockResolvedValue([{ ...ROW, id }]);
-        await runtime.start();
-        expect((await runtime.hono.request(`/api/documents/projects/${id}`)).status).toBe(200);
-        expect(backend.all.mock.lastCall?.[0].filters[0]).toEqual({ id });
-        expect((await runtime.hono.request('/api/documents/projects/bad')).status).toBe(400);
-        expect((await runtime.hono.request('/api/projects')).status).toBe(404);
-        expect(runtime.getOpenApiDocument().paths).toHaveProperty('/api/documents/projects/{id}');
-        await runtime.shutdown();
-    });
-
-    it('isolates equal model names across databases and omits private resources from shared discovery', async () => {
+    it('omits private resources from shared discovery', async () => {
         const resources = [
             defineResource({ model: 'Project', api: { list: true } }),
-            defineResource({ model: 'Project', database: 'documents', api: { list: true } }),
             defineResource({ model: 'User', api: false }),
         ];
         const all = vi.fn(async (_query: QuerySpec) => [{ ...ROW }]);
@@ -234,10 +210,9 @@ describe('Opt-in public resource routes', () => {
         };
         const models = resources.map((resource) => ({
             ...generateModelSchemas({
-                database: resource.database,
                 name: resource.model,
                 identity: resource.identity,
-                provider: resource.database === 'default' ? 'postgresql' : 'mongodb',
+                provider: 'postgresql',
                 namespace: 'public',
                 relations: [],
                 fields: FIELDS,
@@ -248,10 +223,7 @@ describe('Opt-in public resource routes', () => {
             apps: [],
             resources,
             resourceModels: models,
-            databases: {
-                default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-                documents: { kind: 'prisma', provider: 'mongodb', connection: 'unused' },
-            },
+            database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
             policies: resources.map((resource) => ({
                 resource: resource.identity,
                 actions: { read: { authorize: () => allow() } },
@@ -260,13 +232,9 @@ describe('Opt-in public resource routes', () => {
         const runtime = createHonoRuntime({ application: app });
         await runtime.start();
         expect((await runtime.hono.request('/api/projects')).status).toBe(200);
-        expect((await runtime.hono.request('/api/documents/projects')).status).toBe(200);
         expect((await runtime.hono.request('/api/users')).status).toBe(404);
-        expect(Object.keys(runtime.getOpenApiDocument().paths ?? {})).toEqual([
-            '/api/projects',
-            '/api/documents/projects',
-        ]);
-        expect(JSON.stringify(runtime.getOpenApiDocument())).not.toContain('default.User');
+        expect(Object.keys(runtime.getOpenApiDocument().paths ?? {})).toEqual(['/api/projects']);
+        expect(JSON.stringify(runtime.getOpenApiDocument())).not.toContain('User');
         await runtime.shutdown();
     });
 });
@@ -280,7 +248,7 @@ describe('Public validation and authorization', () => {
         ];
         const { runtime, backend } = fixture({
             fields: arrays,
-            policies: [{ resource: 'default.Project', actions: { create: { authorize: () => allow() } } }],
+            policies: [{ resource: 'Project', actions: { create: { authorize: () => allow() } } }],
         });
         backend.create.mockImplementation(async (data) => ({ id: 1, ...data }));
         await runtime.start();
@@ -318,8 +286,7 @@ describe('Public validation and authorization', () => {
             }
         }
         const metadata: ModelMetadata = {
-            identity: 'default.Event',
-            database: 'default',
+            identity: 'Event',
             name: 'Event',
             namespace: 'public',
             provider: 'postgresql',
@@ -337,10 +304,10 @@ describe('Public validation and authorization', () => {
         };
         const app = defineApplication({
             apps: [],
-            databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+            database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
             resources: [defineResource({ model: 'Event', api: { create: true } })],
             resourceModels: [{ ...generateModelSchemas(metadata, { temporal: { Instant } }), queryBackend: backend }],
-            policies: [{ resource: 'default.Event', actions: { create: { authorize: () => allow() } } }],
+            policies: [{ resource: 'Event', actions: { create: { authorize: () => allow() } } }],
         });
         const runtime = createHonoRuntime({ application: app, publicApi: { temporal: { Instant } }, onError: vi.fn() });
         await runtime.start();
@@ -442,7 +409,7 @@ describe('Public validation and authorization', () => {
         expect(absent.backend.delete).not.toHaveBeenCalled();
         await absent.runtime.shutdown();
         const onlyRead = fixture({
-            policies: [{ resource: 'default.Project', actions: { read: { authorize: () => allow() } } }],
+            policies: [{ resource: 'Project', actions: { read: { authorize: () => allow() } } }],
         });
         await onlyRead.runtime.start();
         expect((await onlyRead.runtime.hono.request('/api/projects')).status).toBe(200);
@@ -457,7 +424,7 @@ describe('Public validation and authorization', () => {
         const write = fixture({
             policies: [
                 {
-                    resource: 'default.Project',
+                    resource: 'Project',
                     actions: { update: { authorize: () => allow() }, delete: { authorize: () => allow() } },
                 },
             ],
@@ -492,7 +459,7 @@ describe('Public validation and authorization', () => {
         const actions = Object.fromEntries(
             ['read', 'create', 'update', 'delete'].map((name) => [name, { object: () => deny('NOT_OWNER') }]),
         );
-        const { runtime, backend } = fixture({ policies: [{ resource: 'default.Project', actions }] });
+        const { runtime, backend } = fixture({ policies: [{ resource: 'Project', actions }] });
         await runtime.start();
         expect((await runtime.hono.request('/api/projects/1')).status).toBe(403);
         expect(
@@ -612,7 +579,7 @@ describe('Generated OpenAPI and bootstrap', () => {
             relations: [
                 {
                     name: 'owner',
-                    target: 'default.User',
+                    target: 'User',
                     cardinality: 'one',
                     nullable: false,
                     localFields: ['ownerId'],
@@ -654,8 +621,7 @@ describe('Generated OpenAPI and bootstrap', () => {
         const names = ['Project', 'project'];
         const models = names.map((name) =>
             generateModelSchemas({
-                identity: `default.${name}`,
-                database: 'default',
+                identity: name,
                 name,
                 namespace: 'public',
                 provider: 'postgresql',
@@ -666,7 +632,7 @@ describe('Generated OpenAPI and bootstrap', () => {
         const shutdown = vi.fn();
         const app = defineApplication({
             apps: [{ name: 'projects', shutdown }],
-            databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+            database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
             resources: names.map((model) => defineResource({ model, api: { list: true } })),
             resourceModels: models,
         });

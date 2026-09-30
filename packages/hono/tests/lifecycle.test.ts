@@ -2,7 +2,7 @@ import { defineApplication } from '@nestrum/core';
 import { describe, expect, it, vi } from 'vitest';
 import { createHonoRuntime, createRuntimeContainer } from '../src/index.js';
 
-const DATABASES = { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } } as const;
+const DATABASE = { kind: 'prisma', provider: 'postgresql', connection: 'unused' } as const;
 
 describe('Final HTTP lifecycle ordering', () => {
     it('times out draining without disposing active resources and permits a later safe shutdown retry', async () => {
@@ -19,8 +19,8 @@ describe('Final HTTP lifecycle ordering', () => {
         const stopTraffic = vi.fn();
         const app = defineApplication({
             apps: [{ name: 'app', shutdown }],
-            databases: DATABASES,
-            databaseLifecycle: { default: { connect: () => {}, disconnect } },
+            database: DATABASE,
+            databaseLifecycle: { connect: () => {}, disconnect },
         });
         const runtime = createHonoRuntime({ application: app, drainTimeoutMs: 5, stopTraffic });
         runtime.hono.get('/', async (context) => {
@@ -62,15 +62,13 @@ describe('Final HTTP lifecycle ordering', () => {
                     },
                 },
             ],
-            databases: DATABASES,
+            database: DATABASE,
             databaseLifecycle: {
-                default: {
-                    connect: () => {
-                        events.push('connect');
-                    },
-                    disconnect: () => {
-                        events.push('database');
-                    },
+                connect: () => {
+                    events.push('connect');
+                },
+                disconnect: () => {
+                    events.push('database');
                 },
             },
         });
@@ -107,13 +105,11 @@ describe('Final HTTP lifecycle ordering', () => {
                     },
                 },
             ],
-            databases: DATABASES,
+            database: DATABASE,
             databaseLifecycle: {
-                default: {
-                    connect: () => {},
-                    disconnect: () => {
-                        events.push('database');
-                    },
+                connect: () => {},
+                disconnect: () => {
+                    events.push('database');
                 },
             },
         });
@@ -156,13 +152,11 @@ describe('Final HTTP lifecycle ordering', () => {
                     },
                 },
             ],
-            databases: DATABASES,
+            database: DATABASE,
             databaseLifecycle: {
-                default: {
-                    connect: () => {},
-                    disconnect: () => {
-                        events.push('database');
-                    },
+                connect: () => {},
+                disconnect: () => {
+                    events.push('database');
                 },
             },
         });

@@ -1,4 +1,0 @@
-model Article {
-    id ObjectId @id @map("_id")
-    title String
-}

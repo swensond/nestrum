@@ -56,7 +56,7 @@ Run provisioning/auth tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm 
 
 ## Known Limitations
 
-`resolveUser` needs the optional `transaction` hook on the auth Prisma binding (PostgreSQL only; the MongoDB client has no transaction API). Without it, it fails closed with `SSO_USER_RESOLUTION_REQUIRES_NATIVE_TRANSACTIONS` and creates no user or session. Nestrum does not install Better Auth's organization plugin, so organization membership provisioning and domain-based organization assignment are not active (`organizationId` is an opaque identifier). An SSO-only administrator cannot complete the password-based second factor and so cannot reach admin.
+`resolveUser` needs the optional `transaction` hook on the auth Prisma binding (PostgreSQL clients provide `client.transaction`). Without it, it fails closed with `SSO_USER_RESOLUTION_REQUIRES_NATIVE_TRANSACTIONS` and creates no user or session. Nestrum does not install Better Auth's organization plugin, so organization membership provisioning and domain-based organization assignment are not active (`organizationId` is an opaque identifier). An SSO-only administrator cannot complete the password-based second factor and so cannot reach admin.
 
 ## Follow-Ups
 

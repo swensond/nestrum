@@ -7,7 +7,6 @@ import type {
     FeaturesDefinition,
 } from '@nestrum/core';
 import {
-    AppError,
     bindFeatureFlags,
     createFeatures,
     defineApp,
@@ -16,26 +15,20 @@ import {
     MemoryFeatureStore,
     modelIdentity,
 } from '@nestrum/core';
-import type { PrismaQueryBackendOptions } from '@nestrum/prisma/querysets';
 import { createPrismaQueryBackend } from '@nestrum/prisma/querysets';
 import { FEATURE_MODELS, featureContract } from '#features/contract';
 import { createPrismaFeatureStore } from '#features/prisma-store';
 
 export type FeaturePrismaBinding = {
-    readonly database: string;
-    /** The `FeatureOverride` collection of the selected database's Prisma client. */
+    /** The `FeatureOverride` collection of the application database's Prisma client. */
     readonly collection: Parameters<typeof createPrismaQueryBackend>[0];
-    /** MongoDB only: the count callback the Prisma query backend needs. Feature storage itself never counts. */
-    readonly count?: Extract<PrismaQueryBackendOptions, { provider: 'mongodb' }>['count'];
 };
 
 export type FeaturesConfig = {
     /** The declared flags. Their handles evaluate through this application once it has started. */
     readonly flags: { readonly registry: FeatureRegistry };
-    /** Database storing overrides. Omit (with no `prisma`) for non-persistent, in-memory overrides. */
-    readonly database?: string;
+    /** Binds the `FeatureOverride` collection. Omit for non-persistent, in-memory overrides. */
     readonly prisma?: (context: {
-        readonly database: string;
         readonly definition: DatabaseDefinition;
         readonly application: Application;
     }) => FeaturePrismaBinding | Promise<FeaturePrismaBinding>;
@@ -92,12 +85,6 @@ export function defineFeatures(config: FeaturesConfig): FeaturesDefinition {
     if (!(registry instanceof FeatureRegistry)) {
         throw new FeatureError('FEATURE_CONFIG_INVALID', 'defineFeatures requires flags from defineFeatureFlags().');
     }
-    if ((config.database === undefined) !== (config.prisma === undefined)) {
-        throw new FeatureError(
-            'FEATURE_CONFIG_INVALID',
-            'Persistent features need both a database name and a prisma binding.',
-        );
-    }
     if (config.prisma !== undefined && typeof config.prisma !== 'function') {
         throw new FeatureError('FEATURE_CONFIG_INVALID', 'features.prisma must be a function.');
     }
@@ -107,10 +94,9 @@ export function defineFeatures(config: FeaturesConfig): FeaturesDefinition {
     ) {
         throw new FeatureError('FEATURE_CONFIG_INVALID', 'features.environment must be a short printable name.');
     }
-    const { database, flags } = config;
-    const protectedModels = Object.freeze(
-        database === undefined ? [] : FEATURE_MODELS.map((model) => modelIdentity(model, database)),
-    );
+    const { flags } = config;
+    const persistent = config.prisma !== undefined;
+    const protectedModels = Object.freeze(persistent ? FEATURE_MODELS.map((model) => modelIdentity(model)) : []);
     const overrides = { ...(config.overrides ?? {}), ...developmentOverrides() };
     for (const name of Object.keys(overrides)) {
         registry.get(name);
@@ -118,44 +104,19 @@ export function defineFeatures(config: FeaturesConfig): FeaturesDefinition {
 
     return Object.freeze({
         kind: 'nestrum-features' as const,
-        database,
+        persistent,
         protectedModels,
-        createApp: (provider) =>
+        createApp: () =>
             defineApp({
                 name: 'nestrum.features',
-                prismaSource: { [database as string]: featureContract(provider) },
+                prismaSource: featureContract(),
                 shutdown: () => bindFeatureFlags(flags, undefined),
             }),
         async initialize(application: Application): Promise<Features> {
             let store: FeatureStore = new MemoryFeatureStore();
-            if (database !== undefined && config.prisma !== undefined) {
-                const definition = application.databases.get(database);
-                const binding = await config.prisma({ application, database, definition });
-                if (binding.database !== database) {
-                    throw new AppError(
-                        'FEATURES_DATABASE_MISMATCH',
-                        'Feature storage must bind its selected database.',
-                    );
-                }
-                store = createPrismaFeatureStore(
-                    createPrismaQueryBackend(
-                        binding.collection,
-                        definition.provider === 'postgresql'
-                            ? { provider: 'postgresql' }
-                            : {
-                                  provider: 'mongodb',
-                                  count:
-                                      binding.count ??
-                                      (async () => {
-                                          throw new AppError(
-                                              'FEATURE_STORAGE_INVALID',
-                                              'Feature storage does not count records.',
-                                          );
-                                      }),
-                              },
-                    ),
-                    definition.provider,
-                );
+            if (config.prisma !== undefined) {
+                const binding = await config.prisma({ application, definition: application.database });
+                store = createPrismaFeatureStore(createPrismaQueryBackend(binding.collection));
             }
             const features = createFeatures({
                 registry,

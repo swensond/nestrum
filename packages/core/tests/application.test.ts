@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AppContext, AppDefinition, DatabaseConfig } from '../src/index.js';
+import type { AppContext, AppDefinition, DatabaseDefinition } from '../src/index.js';
 import {
     AppError,
     AppLifecycleError,
@@ -9,9 +9,11 @@ import {
     defineApplication,
 } from '../src/index.js';
 
-const DATABASES = {
-    default: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://localhost/nestrum_test' },
-} as const satisfies DatabaseConfig;
+const DATABASE = {
+    kind: 'prisma',
+    provider: 'postgresql',
+    connection: 'postgresql://localhost/nestrum_test',
+} as const satisfies DatabaseDefinition;
 
 function gate(): { promise: Promise<void>; release: () => void } {
     let release!: () => void;
@@ -168,7 +170,7 @@ describe('Application lifecycle', () => {
         const events: string[] = [];
 
         expect(() =>
-            defineApplication({ databases: DATABASES, apps: [recordingApp('projects', events, ['users'])] }),
+            defineApplication({ database: DATABASE, apps: [recordingApp('projects', events, ['users'])] }),
         ).toThrow(AppRegistryError);
         expect(events).toEqual([]);
     });
@@ -176,7 +178,7 @@ describe('Application lifecycle', () => {
     it('configures all apps before ready and shuts down in reverse topological order', async () => {
         const events: string[] = [];
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [recordingApp('projects', events, ['users']), recordingApp('users', events)],
         });
 
@@ -201,7 +203,7 @@ describe('Application lifecycle', () => {
     it('passes the application and registry through a frozen hook context', async () => {
         const contexts: AppContext[] = [];
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [
                 defineApp({
                     name: 'users',
@@ -234,7 +236,7 @@ describe('Application lifecycle', () => {
         const blocked = gate();
         const events: string[] = [];
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [
                 defineApp({
                     name: 'users',
@@ -262,7 +264,7 @@ describe('Application lifecycle', () => {
         const entered = gate();
         const blocked = gate();
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [
                 defineApp({
                     name: 'users',
@@ -287,7 +289,7 @@ describe('Application lifecycle', () => {
         const blocked = gate();
         const events: string[] = [];
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [
                 recordingApp('users', events),
                 defineApp({
@@ -314,7 +316,7 @@ describe('Application lifecycle', () => {
 
     it('allows missing hooks and an empty application', async () => {
         for (const apps of [[], [defineApp({ name: 'users' })]]) {
-            const application = defineApplication({ databases: DATABASES, apps });
+            const application = defineApplication({ database: DATABASE, apps });
             await application.start();
             expect(application.state).toBe('ready');
             await application.shutdown();
@@ -324,7 +326,7 @@ describe('Application lifecycle', () => {
 
     it('does not repeat hooks for completed start/shutdown calls', async () => {
         const events: string[] = [];
-        const application = defineApplication({ databases: DATABASES, apps: [recordingApp('users', events)] });
+        const application = defineApplication({ database: DATABASE, apps: [recordingApp('users', events)] });
 
         await application.start();
         await application.start();
@@ -337,7 +339,7 @@ describe('Application lifecycle', () => {
 
     it('shuts down an unstarted application without running hooks', async () => {
         const events: string[] = [];
-        const application = defineApplication({ databases: DATABASES, apps: [recordingApp('users', events)] });
+        const application = defineApplication({ database: DATABASE, apps: [recordingApp('users', events)] });
 
         await application.shutdown();
         expect(application.state).toBe('stopped');
@@ -348,7 +350,7 @@ describe('Application lifecycle', () => {
     it('rejects overlapping lifecycle calls during startup', async () => {
         const blocked = gate();
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [defineApp({ name: 'users', configure: () => blocked.promise })],
         });
         const starting = application.start();
@@ -363,7 +365,7 @@ describe('Application lifecycle', () => {
     it('rejects overlapping lifecycle calls during shutdown', async () => {
         const blocked = gate();
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [defineApp({ name: 'users', shutdown: () => blocked.promise })],
         });
         await application.start();
@@ -379,7 +381,7 @@ describe('Application lifecycle', () => {
         const events: string[] = [];
         const original = new Error('configure failure');
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [
                 recordingApp('users', events),
                 defineApp({
@@ -415,7 +417,7 @@ describe('Application lifecycle', () => {
         const events: string[] = [];
         const original = new Error('ready failure');
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [
                 defineApp({
                     name: 'users',
@@ -443,7 +445,7 @@ describe('Application lifecycle', () => {
         const original = new Error('configure failure');
         const cleanup = new Error('cleanup failure');
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [
                 recordingApp('users', events),
                 defineApp({
@@ -478,7 +480,7 @@ describe('Application lifecycle', () => {
     it('attempts remaining shutdown hooks after failures and reports all errors', async () => {
         const events: string[] = [];
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [
                 defineApp({
                     name: 'users',

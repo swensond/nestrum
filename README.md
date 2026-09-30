@@ -1,8 +1,8 @@
 # Nestrum
 
-A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–15 are implemented:** workspace tooling, explicit apps, lifecycle, named databases, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, default-deny ABAC, a Hono/InferDI runtime, opt-in public CRUD with OpenAPI, framework-owned Better Auth, a private session/ABAC-protected admin backend, and a prebuilt metadata-driven admin shell with generic CRUD, custom widgets, and authorized per-record actions.
+A Django-like TypeScript framework with strong conventions and runtime registration. **Phases 0–15 are implemented:** workspace tooling, explicit apps, lifecycle, a single PostgreSQL database, Prisma fragment assembly/emission, metadata, generated Zod families, resource registration/composition, QuerySets/managers, default-deny ABAC, a Hono/InferDI runtime, opt-in public CRUD with OpenAPI, framework-owned Better Auth, a private session/ABAC-protected admin backend, and a prebuilt metadata-driven admin shell with generic CRUD, custom widgets, and authorized per-record actions.
 
-The [Docker-backed integration example](apps/example/README.md) now proves fresh PostgreSQL/Mongo resources, selected-database auth, generated public/admin CRUD, generic Svelte forms/browser flows, CLI migrations, and shutdown. MVP completion remains gated on the documented atomic object-policy mutation follow-up.
+The [Docker-backed integration example](apps/example/README.md) proves PostgreSQL resources, auth in the same database, generated public/admin CRUD, generic Svelte forms/browser flows, CLI migrations, and shutdown. MVP completion remains gated on the documented atomic object-policy mutation follow-up.
 
 ## Development
 
@@ -40,10 +40,7 @@ const projects = defineApp({
 
 const application = defineApplication({
     apps: [projects, users],
-    databases: {
-        default: prismaDatabase({ provider: 'postgresql', connection: 'postgresql://localhost/nestrum' }),
-        documents: prismaDatabase({ provider: 'mongodb', connection: 'mongodb://localhost/nestrum_documents' })
-    }
+    database: prismaDatabase({ provider: 'postgresql', connection: 'postgresql://localhost/nestrum' })
 });
 await application.start();
 await application.shutdown();
@@ -51,13 +48,13 @@ await application.shutdown();
 
 The database configuration and app graph validate when the application is defined. All apps configure in dependency order before any ready hook runs; shutdown reverses that order. See [Phase 1](docs/phases/phase-01-application.md) for lifecycle states and failure behavior.
 
-Every application must configure default. Access definitions through application.databases.get() or get('documents'); has(name) checks registration. Hooks receive the same databases registry. modelIdentity('Project') returns default.Project; modelIdentity('Article', 'documents') returns documents.Article.
+Every application has exactly one PostgreSQL database ([decision 0018](docs/decisions/0018-postgresql-single-database.md)): read it from application.database, and hooks receive the same definition. A model's identity is its name: modelIdentity('Project') returns 'Project'.
 
-Phase 2 registers immutable settings without creating Prisma clients or connecting to databases. See [Phase 2](docs/phases/phase-02-databases.md) for configuration rules.
+Phase 2 registers immutable settings without creating Prisma clients or connecting to the database. See [Phase 2](docs/phases/phase-02-databases.md) for configuration rules.
 
 ## Prisma contracts
 
-Apps explicitly contribute files or recursively discovered directories to named databases:
+Apps explicitly contribute files or recursively discovered directories to the database:
 
 ```ts
 const projects = defineApp({
@@ -78,7 +75,7 @@ const generated = await generatePrismaContracts(application, {
 await application.start();
 ```
 
-This offline step emits contract.json and contract.d.ts for each contributed database in a fresh run directory. It does not connect or migrate. Native Prisma 8 authoring is the default. PostgreSQL can opt into authoring: { default: 'prisma7' } for legacy syntax through the official adapter. See [Phase 3](docs/phases/phase-03-prisma-contracts.md) for artifacts and [Phase 4](docs/phases/phase-04-zod-generation.md) for metadata, schema generation, and compatibility details.
+This offline step emits contract.json and contract.d.ts in a fresh run directory. It does not connect or migrate. Native Prisma 8 authoring is the default. PostgreSQL can opt into authoring: 'prisma7' for legacy syntax through the official adapter. See [Phase 3](docs/phases/phase-03-prisma-contracts.md) for artifacts and [Phase 4](docs/phases/phase-04-zod-generation.md) for metadata, schema generation, and compatibility details.
 
 ## Metadata and Zod
 
@@ -105,7 +102,7 @@ Register definitions through app.resources or application.resources and supply g
 
 Every registered resource exposes objects. Bind a Prisma 8 collection through ResourceModel.queryBackend using createPrismaQueryBackend from @nestrum/prisma/querysets. Queries use authorizedFor(subject, 'read').filter(...).orderBy('-createdAt').limit(20) before all()/first()/get()/exists()/count(); writes use create/update/delete. Named managers compose the same immutable QuerySets. bindResourceQuerySets provides typed access such as Project.active when using a typed Prisma collection.
 
-raw() returns the original Prisma collection and bypasses Nestrum validation, manager filters, and automatic ABAC. Applications currently own clients and bindings; Mongo count requires a database-count callback. See [Phase 6](docs/phases/phase-06-querysets.md) for usage, semantics, and provider limitations.
+raw() returns the original Prisma collection and bypasses Nestrum validation, manager filters, and automatic ABAC. Applications currently own clients and bindings. See [Phase 6](docs/phases/phase-06-querysets.md) for usage, semantics, and provider limitations.
 
 ## Authorization
 
@@ -115,7 +112,7 @@ Register policies through application policies or app policies. Missing policies
 import { allow, definePolicy, deny, eq } from '@nestrum/core';
 
 const ProjectPolicy = definePolicy({
-    resource: 'default.Project',
+    resource: 'Project',
     authorize: ({ subject }) => typeof subject.id === 'string' ? allow() : deny('ANONYMOUS'),
     actions: {
         read: { scope: ({ subject }) => eq('ownerId', subject.id as string) },
@@ -139,14 +136,13 @@ Scopes constrain database reads/counts/writes. Object callbacks reject an entire
 import { defineAuth, field } from '@nestrum/auth';
 
 const auth = defineAuth({
-    database: 'identity',
     baseURL: 'https://app.example.com',
     secret: process.env.BETTER_AUTH_SECRET!,
-    prisma: ({ database }) => configuredPrismaAuthCollections(database)
+    prisma: () => configuredPrismaAuthCollections()
 });
 ```
 
-`auth.database` selects the configured store. Nestrum contributes prebaked, protected User, Session, Account, Verification, TwoFactor, and ApiKey contracts (Better Auth's `twoFactor`, `admin`, and `apiKey` plugins are enabled; `SsoProvider` is added for enterprise SSO) and owns the Better Auth Prisma 8 adapter. The User model is not extensible. Users have a role (`user`, `staff`, `admin`); create the first administrator with `nestrum auth create-admin --email you@example.com` (password from `NESTRUM_ADMIN_PASSWORD` or a prompt, run against a previous `nestrum build`), then manage staff in the admin interface at `/admin/access`. `roleBasedAdminPolicies()` from `@nestrum/admin` provides the standard admin policies. Email/password, session, logout, and session retrieval are available under `/api/auth`. Valid sessions become ABAC subjects; absent, expired, or invalid sessions are anonymous. Domain profile data remains separate from the core auth user. See [Phase 10](docs/phases/phase-10-auth.md).
+Nestrum contributes prebaked, protected User, Session, Account, Verification, TwoFactor, and ApiKey contracts (Better Auth's `twoFactor`, `admin`, and `apiKey` plugins are enabled; `SsoProvider` is added for enterprise SSO) and owns the Better Auth Prisma 8 adapter. The User model is not extensible. Users have a role (`user`, `staff`, `admin`); create the first administrator with `nestrum auth create-admin --email you@example.com` (password from `NESTRUM_ADMIN_PASSWORD` or a prompt, run against a previous `nestrum build`), then manage staff in the admin interface at `/admin/access`. `roleBasedAdminPolicies()` from `@nestrum/admin` provides the standard admin policies. Email/password, session, logout, and session retrieval are available under `/api/auth`. Valid sessions become ABAC subjects; absent, expired, or invalid sessions are anonymous. Domain profile data remains separate from the core auth user. See [Phase 10](docs/phases/phase-10-auth.md).
 
 ## API keys
 
@@ -177,9 +173,8 @@ export const features = defineFeatureFlags({
 defineApplication({
     features: defineFeatures({
         flags: features,
-        database: 'identity',
         environment: 'production',
-        prisma: ({ database }) => ({ database, collection: client.orm.public.FeatureOverride }),
+        prisma: () => ({ collection: client.orm.public.FeatureOverride }),
     }),
     // ...
 });
@@ -253,17 +248,17 @@ Use createRuntimeContainer(application) to register typed services and provide a
 Export defineCliConfig({ application }) from nestrum.config.ts, then build and use the workspace executable:
 
 ```bash
-pnpm exec nestrum db generate --database documents
+pnpm exec nestrum db generate
 pnpm exec nestrum db migrate --plan --name initial
 pnpm exec nestrum db migrate
 pnpm exec nestrum db status
 ```
 
-Generation and migration planning are offline; migration application/status use the selected database connection. Review and commit prisma/migrations/<database> before applying. Config loading, named targeting, native Prisma delegation, provider extensions, and ownership are documented in [database workflow](docs/database-workflow.md).
+Generation and migration planning are offline; migration application/status use the database connection. Review and commit prisma/migrations before applying. Config loading, native Prisma delegation, provider extensions, and ownership are documented in [database workflow](docs/database-workflow.md).
 
 ## Public API
 
-The example Project resource above exposes GET /api/projects. Enable retrieve/create/update/delete individually to add GET /api/projects/:id, POST /api/projects, PATCH /api/projects/:id, and DELETE /api/projects/:id. Named databases use /api/<database>/<plural-model>. Resources with api: false contribute no routes or OpenAPI entries.
+The example Project resource above exposes GET /api/projects. Enable retrieve/create/update/delete individually to add GET /api/projects/:id, POST /api/projects, PATCH /api/projects/:id, and DELETE /api/projects/:id. Resources with api: false contribute no routes or OpenAPI entries.
 
 List requests accept limit (default 20, maximum 100) and comma-separated orderBy, such as -createdAt,name. They return arrays. Retrieve returns a Read-validated record; create returns that record with status 201. Item update/delete return 204 without a body. Unknown query/body fields and nested writes are rejected. Each operation uses the trusted request subject/environment and its read/create/update/delete policy through QuerySets. Missing grants deny; object-policy update/delete remain denied until atomic object mutation support exists.
 

@@ -1,21 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { ResourceConfig, ResourceModel } from '../src/index.js';
-import {
-    DatabaseRegistry,
-    defineApp,
-    defineApplication,
-    defineResource,
-    ResourceError,
-    ResourceRegistry,
-} from '../src/index.js';
+import { defineApp, defineApplication, defineResource, ResourceError, ResourceRegistry } from '../src/index.js';
 
-const DATABASES = {
-    default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-    documents: { kind: 'prisma', provider: 'mongodb', connection: 'unused' },
-} as const;
+const DATABASE = { kind: 'prisma', provider: 'postgresql', connection: 'unused' } as const;
 
-function model(name = 'Project', database = 'default'): ResourceModel {
+function model(name = 'Project'): ResourceModel {
     const scalarFields = Object.freeze([
         Object.freeze({
             name: 'id',
@@ -44,10 +34,9 @@ function model(name = 'Project', database = 'default'): ResourceModel {
 
     return Object.freeze({
         metadata: Object.freeze({
-            database,
             name,
-            identity: `${database}.${name}` as `${string}.${string}`,
-            provider: database === 'documents' ? 'mongodb' : 'postgresql',
+            identity: name,
+            provider: 'postgresql',
             namespace: 'public',
             fields: scalarFields,
             relations: Object.freeze([]),
@@ -62,14 +51,13 @@ function model(name = 'Project', database = 'default'): ResourceModel {
 }
 
 function registry(definitions = [defineResource({ model: 'Project' })]) {
-    return new ResourceRegistry(definitions, new DatabaseRegistry(DATABASES));
+    return new ResourceRegistry(definitions, DATABASE);
 }
 
 describe('Resource definitions', () => {
-    it('defaults database and disables every public operation', () => {
+    it('identifies a resource by model name and disables every public operation', () => {
         const definition = defineResource({ model: 'Project' });
-        expect(definition.database).toBe('default');
-        expect(definition.identity).toBe('default.Project');
+        expect(definition.identity).toBe('Project');
         expect(definition.api).toEqual({ list: false, retrieve: false, create: false, update: false, delete: false });
         expect(defineResource({ model: 'User', api: false }).api).toEqual(definition.api);
     });
@@ -84,7 +72,7 @@ describe('Resource definitions', () => {
         api.list = false;
         schemas.create = (schema) => schema;
         config.model = 'Renamed';
-        expect(definition.identity).toBe('documents.Article');
+        expect(definition.identity).toBe('Article');
         expect(definition.api).toEqual({ list: true, retrieve: false, create: false, update: false, delete: false });
         for (const value of [definition, definition.api, definition.schemas]) {
             expect(Object.isFrozen(value)).toBe(true);
@@ -98,8 +86,6 @@ describe('Resource definitions', () => {
         [],
         { model: '' },
         { model: 'default.Project' },
-        { model: 'Project', database: '' },
-        { model: 'Project', database: null },
         { model: 'Project', api: true },
         { model: 'Project', api: { list: 'true' } },
         { model: 'Project', api: { archive: true } },
@@ -115,21 +101,14 @@ describe('Resource definitions', () => {
 
 describe('ResourceRegistry', () => {
     it('requires initialized models and returns immutable registered resources in declaration order', () => {
-        const resources = registry([
-            defineResource({ model: 'Project' }),
-            defineResource({ model: 'Article', database: 'documents' }),
-        ]);
+        const resources = registry([defineResource({ model: 'Project' }), defineResource({ model: 'Article' })]);
         expect(() => resources.all()).toThrow(expect.objectContaining({ code: 'RESOURCE_REGISTRY_NOT_READY' }));
-        resources.initialize([model('Article', 'documents'), model()]);
-        expect(resources.all().map((resource) => resource.identity)).toEqual(['default.Project', 'documents.Article']);
-        expect(resources.has('default.Project')).toBe(true);
-        expect(resources.has('Project')).toBe(false);
-        expect(resources.get('documents.Article').metadata.name).toBe('Article');
-        for (const value of [
-            resources.all(),
-            resources.get('default.Project'),
-            resources.get('default.Project').schemas,
-        ]) {
+        resources.initialize([model('Article'), model()]);
+        expect(resources.all().map((resource) => resource.identity)).toEqual(['Project', 'Article']);
+        expect(resources.has('Project')).toBe(true);
+        expect(resources.has('default.Project')).toBe(false);
+        expect(resources.get('Article').metadata.name).toBe('Article');
+        for (const value of [resources.all(), resources.get('Project'), resources.get('Project').schemas]) {
             expect(Object.isFrozen(value)).toBe(true);
         }
         expect(() => resources.get('missing.Project')).toThrow(expect.objectContaining({ code: 'RESOURCE_NOT_FOUND' }));
@@ -138,27 +117,18 @@ describe('ResourceRegistry', () => {
         );
     });
 
-    it('rejects duplicate canonical identities but allows the same model name in different databases', () => {
-        expect(() =>
-            registry([defineResource({ model: 'Project' }), defineResource({ model: 'Project', database: 'default' })]),
-        ).toThrow(expect.objectContaining({ code: 'RESOURCE_DUPLICATE' }));
-        const resources = registry([
-            defineResource({ model: 'Project' }),
-            defineResource({ model: 'Project', database: 'documents' }),
-        ]);
-        resources.initialize([model(), model('Project', 'documents')]);
-        expect(resources.all()).toHaveLength(2);
+    it('rejects duplicate canonical identities', () => {
+        expect(() => registry([defineResource({ model: 'Project' }), defineResource({ model: 'Project' })])).toThrow(
+            expect.objectContaining({ code: 'RESOURCE_DUPLICATE' }),
+        );
     });
 
-    it('rejects unknown databases immediately and missing models during initialization', () => {
-        expect(() => registry([defineResource({ database: 'identity', model: 'User' })])).toThrow(
-            expect.objectContaining({ code: 'RESOURCE_DATABASE_UNKNOWN' }),
-        );
+    it('rejects missing models during initialization', () => {
         const resources = registry();
         expect(() => resources.initialize([model('Other')])).toThrow(
             expect.objectContaining({ code: 'RESOURCE_MODEL_MISSING' }),
         );
-        expect(() => resources.get('default.Project')).toThrow(
+        expect(() => resources.get('Project')).toThrow(
             expect.objectContaining({ code: 'RESOURCE_REGISTRY_NOT_READY' }),
         );
     });
@@ -179,7 +149,7 @@ describe('ResourceRegistry', () => {
             }),
         ]);
         resources.initialize([baseline]);
-        const schemas = resources.get('default.Project').schemas;
+        const schemas = resources.get('Project').schemas;
         expect(schemas.create.safeParse({ name: 'abcd' }).success).toBe(true);
         for (const key of ['model', 'create', 'update', 'read'] as const) {
             expect(
@@ -195,8 +165,8 @@ describe('ResourceRegistry', () => {
         const baseline = model();
         const resources = registry();
         resources.initialize([baseline]);
-        expect(resources.get('default.Project').schemas.create).toBe(baseline.create);
-        expect(resources.get('default.Project').metadata).toBe(baseline.metadata);
+        expect(resources.get('Project').schemas.create).toBe(baseline.create);
+        expect(resources.get('Project').metadata).toBe(baseline.metadata);
     });
 
     it('wraps composer errors with resource/family identity and publishes nothing after a failure', () => {
@@ -235,7 +205,7 @@ describe('ResourceRegistry', () => {
             expect.objectContaining({ code: 'RESOURCE_MODELS_INVALID' }),
         );
         expect(() =>
-            registry().initialize([{ ...model(), metadata: { ...model().metadata, provider: 'mongodb' } }]),
+            registry().initialize([{ ...model(), metadata: { ...model().metadata, provider: 'mysql' as never } }]),
         ).toThrow(expect.objectContaining({ code: 'RESOURCE_MODELS_INVALID' }));
     });
 });
@@ -244,14 +214,14 @@ describe('Application resource bootstrap', () => {
     it('loads models before every configure/ready hook and exposes the registry in context', async () => {
         const events: string[] = [];
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [
                 defineApp({
                     name: 'projects',
                     dependsOn: ['users'],
                     resources: [defineResource({ model: 'Project' })],
                     configure({ resources }) {
-                        events.push(`configure:${resources.get('default.Project').model}`);
+                        events.push(`configure:${resources.get('Project').model}`);
                     },
                 }),
                 defineApp({
@@ -272,22 +242,19 @@ describe('Application resource bootstrap', () => {
         await application.start();
         await application.start();
         expect(events).toEqual(['load', 'configure:Project', 'ready:users']);
-        expect(application.resources.all().map((resource) => resource.identity)).toEqual([
-            'default.User',
-            'default.Project',
-        ]);
+        expect(application.resources.all().map((resource) => resource.identity)).toEqual(['User', 'Project']);
         await application.shutdown();
     });
 
     it('fails startup on a missing model before invoking any hook', async () => {
         const hook = vi.fn();
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             resources: [defineResource({ model: 'Missing' })],
             apps: [{ name: 'projects', configure: hook, ready: hook, shutdown: hook }],
             resourceModels: [model()],
         });
-        await expect(application.start()).rejects.toThrow('default.Missing');
+        await expect(application.start()).rejects.toThrow('Missing');
         expect(application.state).toBe('failed');
         expect(hook).not.toHaveBeenCalled();
         await application.shutdown();
@@ -296,7 +263,7 @@ describe('Application resource bootstrap', () => {
 
     it('fails closed when resources exist without supplying models', async () => {
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [{ name: 'projects', resources: [defineResource({ model: 'Project' })] }],
         });
         await expect(application.start()).rejects.toMatchObject({ code: 'RESOURCE_MODEL_MISSING' });
@@ -306,7 +273,7 @@ describe('Application resource bootstrap', () => {
         const cause = new Error('Emit failed');
         const configure = vi.fn();
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [{ name: 'projects', configure }],
             resourceModels() {
                 throw cause;
@@ -323,7 +290,7 @@ describe('Application resource bootstrap', () => {
         const rootResources = [defineResource({ model: 'User' })];
         const models = [model(), model('User')];
         const application = defineApplication({
-            databases: DATABASES,
+            database: DATABASE,
             apps: [app],
             resources: rootResources,
             resourceModels: models,
@@ -332,10 +299,7 @@ describe('Application resource bootstrap', () => {
         rootResources.length = 0;
         models.length = 0;
         await application.start();
-        expect(application.resources.all().map((resource) => resource.identity)).toEqual([
-            'default.User',
-            'default.Project',
-        ]);
+        expect(application.resources.all().map((resource) => resource.identity)).toEqual(['User', 'Project']);
         expect(Object.isFrozen(app.resources)).toBe(true);
         await application.shutdown();
     });
@@ -344,7 +308,7 @@ describe('Application resource bootstrap', () => {
         const project = defineResource({ model: 'Project' });
         expect(() =>
             defineApplication({
-                databases: DATABASES,
+                database: DATABASE,
                 resources: [project],
                 apps: [{ name: 'projects', resources: [project] }],
             }),

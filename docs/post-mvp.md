@@ -107,7 +107,6 @@ Node-specific listener APIs stay in the Node adapter, outside core and CLI. Prod
 ## Data and database
 
 - Advanced cross-database orchestration and distributed transactions.
-- Mongo collection compression and custom physical collection storage options.
 - PostgreSQL extensions, partitioning, and custom physical indexes not represented by Prisma.
 - GridFS and blob storage.
 - Advanced aggregate APIs; generated Select/Include/Cursor/Aggregate schema families.
@@ -144,4 +143,4 @@ Phase 4 leaves Decimal, JSON/BSON, binary, composite/embedded fields, arbitrary 
 
 Phase 9 leaves composite-key HTTP item routes, configurable route aliases/English irregular inflection, advanced pagination/filtering, interactive documentation UI, and complete OpenAPI expression of custom/native validators deferred. Phase 16 now proves application-owned client preparation/cleanup and real Docker database integration. Atomic object-policy mutation support remains required MVP work, not a post-MVP deferral. Scope-based public writes work now; per-object write policies continue to deny.
 
-Phase 16 found that native Mongo AST parameters require model codec hints for ObjectId equality. Its application-owned binding supplies them through public AST rewrite/parameter APIs. Generalize the framework adapter with explicit metadata/codec ownership before promising metadata-free ObjectId/date filtering to other consumers; do not infer codecs from arbitrary strings. The live example and proof remain application-owned.
+Phase 16's Mongo ObjectId codec-hint finding no longer applies: MongoDB support was removed ([decision 0018](decisions/0018-postgresql-single-database.md)).

@@ -3,40 +3,26 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
-import { assemblePrismaContracts } from './contracts.assembly.js';
+import { assemblePrismaContract } from './contracts.assembly.js';
 import { PrismaContractError } from './contracts.errors.js';
-import type {
-    ContractApplication,
-    GeneratedPrismaContract,
-    GeneratePrismaOptions,
-    PrismaGeneration,
-} from './contracts.types.js';
+import type { ContractApplication, GeneratePrismaOptions, PrismaGeneration } from './contracts.types.js';
 
 const EXEC_FILE = promisify(execFile);
 const DEFAULT_EMIT_TIMEOUT_MS = 30_000;
 const MAX_EMIT_OUTPUT_BYTES = 1024 * 1024;
 
-export async function generatePrismaContracts(
+export async function generatePrismaContract(
     application: ContractApplication,
     options: GeneratePrismaOptions,
 ): Promise<PrismaGeneration> {
-    const contracts = await assemblePrismaContracts(application, options);
+    const contract = await assemblePrismaContract(application, options);
 
-    if (contracts.length === 0) {
+    if (contract === undefined) {
         throw new PrismaContractError('PRISMA_FRAGMENTS_EMPTY', 'No installed app contributes Prisma fragments.');
     }
 
-    for (const [database, authoring] of Object.entries(options.authoring ?? {})) {
-        if (
-            !application.databases.has(database) ||
-            !['native', 'prisma7'].includes(authoring) ||
-            (authoring === 'prisma7' && application.databases.get(database).provider !== 'postgresql')
-        ) {
-            throw new PrismaContractError(
-                'PRISMA_EMIT_FAILED',
-                `Invalid authoring mode for database "${database}". prisma7 authoring requires PostgreSQL.`,
-            );
-        }
+    if (options.authoring !== undefined && !['native', 'prisma7'].includes(options.authoring)) {
+        throw new PrismaContractError('PRISMA_EMIT_FAILED', 'Invalid authoring mode; use "native" or "prisma7".');
     }
 
     const timeout = options.timeoutMs ?? DEFAULT_EMIT_TIMEOUT_MS;
@@ -52,10 +38,8 @@ export async function generatePrismaContracts(
         const outputDir = resolve(options.rootDir, options.outputDir);
         await mkdir(outputDir, { recursive: true });
         const directory = await mkdtemp(join(outputDir, 'run-'));
-        const generated: GeneratedPrismaContract[] = [];
-
-        for (const contract of contracts) {
-            const databaseDir = join(directory, contract.database);
+        {
+            const databaseDir = directory;
             const fragmentDir = join(databaseDir, 'fragments');
             await mkdir(fragmentDir, { recursive: true });
 
@@ -68,14 +52,13 @@ export async function generatePrismaContracts(
             const configPath = join(databaseDir, 'prisma.config.mjs');
             const sourcePath = join(databaseDir, 'contract.prisma');
             await writeFile(sourcePath, contract.source, 'utf8');
-            const providerConfig =
-                contract.provider === 'postgresql' ? '@prisma/orm-postgres/config' : '@prisma/orm-mongo/config';
-            const legacy = options.authoring?.[contract.database] === 'prisma7';
+            const providerConfig = '@prisma/orm-postgres/config';
+            const legacy = options.authoring === 'prisma7';
             const contractExpression = legacy
                 ? `prisma7Schema(${JSON.stringify(sourcePath)})`
                 : JSON.stringify(sourcePath);
             const controlModules = (options.extensions ?? []).filter(
-                (extension) => extension.database === contract.database && extension.controlModule !== undefined,
+                (extension) => extension.controlModule !== undefined,
             );
             const extensionImports = controlModules
                 .map(
@@ -111,7 +94,7 @@ export async function generatePrismaContracts(
                 const sources = contract.fragments.map((fragment) => `${fragment.app}: ${fragment.path}`).join('\n');
                 throw new PrismaContractError(
                     'PRISMA_EMIT_FAILED',
-                    `Prisma emission failed for database "${contract.database}".\n${output.stderr ?? ''}\n${output.stdout ?? ''}\nSources:\n${sources}`,
+                    `Prisma emission failed.\n${output.stderr ?? ''}\n${output.stdout ?? ''}\nSources:\n${sources}`,
                     { cause },
                 );
             }
@@ -120,10 +103,11 @@ export async function generatePrismaContracts(
             const typesPath = join(databaseDir, 'contract.d.ts');
             await readFile(contractPath, 'utf8');
             await readFile(typesPath, 'utf8');
-            generated.push(Object.freeze({ ...contract, configPath, sourcePath, contractPath, typesPath }));
+            return Object.freeze({
+                directory,
+                contract: Object.freeze({ ...contract, configPath, sourcePath, contractPath, typesPath }),
+            });
         }
-
-        return Object.freeze({ directory, contracts: Object.freeze(generated) });
     } catch (cause) {
         if (cause instanceof PrismaContractError) {
             throw cause;

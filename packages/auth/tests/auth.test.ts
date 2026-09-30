@@ -6,10 +6,7 @@ import { storage } from './fixtures.js';
 
 const BASE_URL = 'http://localhost:3000';
 const SECRET = 'nestrum-test-secret-longer-than-thirty-two-characters';
-const DATABASES = {
-    default: { kind: 'prisma' as const, provider: 'postgresql' as const, connection: 'unused' },
-    identity: { kind: 'prisma' as const, provider: 'postgresql' as const, connection: 'unused' },
-};
+const DATABASE = { kind: 'prisma' as const, provider: 'postgresql' as const, connection: 'unused' };
 function request(path: string, body?: object, cookie?: string) {
     return new Request(`${BASE_URL}${path}`, {
         method: body ? 'POST' : 'GET',
@@ -28,18 +25,17 @@ function cookies(response: Response): string {
 }
 
 describe('Framework-owned Better Auth', () => {
-    it('registers, hashes passwords, logs in/out, retrieves sessions and binds subjects on a named database', async () => {
+    it('registers, hashes passwords, logs in/out, retrieves sessions and binds subjects', async () => {
         const memory = storage();
         const prisma = vi.fn(() => memory.binding);
         const auth = defineAuth({
-            database: 'identity',
             baseURL: BASE_URL,
             secret: SECRET,
             prisma,
         });
         const application = defineApplication({
             apps: [],
-            databases: DATABASES,
+            database: DATABASE,
             auth,
             policies: [
                 {
@@ -68,7 +64,7 @@ describe('Framework-owned Better Auth', () => {
         });
         await runtime.start();
         expect(prisma).toHaveBeenCalledOnce();
-        expect(prisma.mock.calls[0]).toEqual([{ application, database: 'identity', definition: DATABASES.identity }]);
+        expect(prisma.mock.calls[0]).toEqual([{ application, definition: DATABASE }]);
         expect(application.apps.has('nestrum.auth')).toBe(true);
         const signup = await runtime.fetch(
             request('/api/auth/sign-up/email', {
@@ -126,8 +122,8 @@ describe('Framework-owned Better Auth', () => {
         const memory = storage();
         const application = defineApplication({
             apps: [],
-            databases: DATABASES,
-            auth: defineAuth({ database: 'identity', baseURL: BASE_URL, secret: SECRET, prisma: () => memory.binding }),
+            database: DATABASE,
+            auth: defineAuth({ baseURL: BASE_URL, secret: SECRET, prisma: () => memory.binding }),
         });
         const runtime = createHonoRuntime({ application });
         await runtime.start();
@@ -162,7 +158,7 @@ describe('Framework-owned Better Auth', () => {
         await runtime.shutdown();
     });
 
-    it('protects auth models and rejects invalid database/extension configuration', async () => {
+    it('protects auth models and rejects invalid configuration', async () => {
         const options = { baseURL: BASE_URL, secret: SECRET, prisma: () => storage().binding };
         expect(() => defineAuth({ ...options, secret: 'short' })).toThrow();
         for (const twoFactor of [
@@ -176,34 +172,22 @@ describe('Framework-owned Better Auth', () => {
         expect(() =>
             defineApplication({
                 apps: [],
-                databases: DATABASES,
-                auth: defineAuth({ ...options, database: 'missing' }),
-            }),
-        ).toThrow();
-        expect(() =>
-            defineApplication({
-                apps: [],
-                databases: DATABASES,
-                auth: defineAuth({ ...options, database: 'identity' }),
-                resources: [defineResource({ database: 'identity', model: 'User' })],
+                database: DATABASE,
+                auth: defineAuth({ ...options }),
+                resources: [defineResource({ model: 'User' })],
             }),
         ).toThrowError(/ordinary resources/);
-        const mismatch = defineApplication({ apps: [], databases: DATABASES, auth: defineAuth({ ...options }) });
-        await expect(mismatch.start()).rejects.toMatchObject({ code: 'AUTH_DATABASE_MISMATCH' });
     });
 
-    it('emits owned provider contracts only for the selected database and keeps core fields protected', () => {
-        const postgres = authContract('postgresql');
-        const mongo = authContract('mongodb');
+    it('emits the owned contract and keeps core fields protected', () => {
+        const postgres = authContract();
         for (const model of AUTH_MODELS) {
             expect(postgres).toContain(`model ${model}`);
-            expect(mongo).toContain(`model ${model}`);
         }
         expect(postgres).toContain('twoFactorEnabled Boolean?');
         expect(postgres).toContain('model TwoFactor');
         expect(postgres).toContain('email String @unique');
         expect(postgres).not.toContain('model UserProfile');
-        expect(mongo).toContain('@map("_id")');
         expect(postgres).not.toContain('identity');
     });
 });
@@ -211,10 +195,7 @@ describe('Framework-owned Better Auth', () => {
 describe('Owned Prisma 8 adapter and subjects', () => {
     it('implements constrained CRUD, selects, counts, pagination and one-row deletion', async () => {
         const memory = storage();
-        const adapter = createPrismaAuthAdapter(
-            memory.binding,
-            'postgresql',
-        )({
+        const adapter = createPrismaAuthAdapter(memory.binding)({
             user: { modelName: 'User' },
             session: { modelName: 'Session' },
             account: { modelName: 'Account' },

@@ -41,7 +41,7 @@ export function projectsApp(events) {
         dependsOn: ['nestrum.auth'],
         resources: [Project],
         policies: [projectsPolicy],
-        prisma: { default: ['src/apps/projects/prisma'] },
+        prisma: ['src/apps/projects/prisma'],
         configure: () => {
             events.push('configure:projects');
         },

@@ -21,7 +21,7 @@ export async function writePrismaWorkflowConfig(
     contract: GeneratedPrismaContract,
     migrationsDir: string,
 ): Promise<string> {
-    const provider = contract.provider === 'postgresql' ? '@prisma/orm-postgres/config' : '@prisma/orm-mongo/config';
+    const provider = '@prisma/orm-postgres/config';
     const imports =
         `import { ormOptions } from ${JSON.stringify(pathToFileURL(contract.configPath).href)};\n` +
         `import { definePrismaConfig } from ${JSON.stringify(import.meta.resolve('prisma/config'))};\n` +

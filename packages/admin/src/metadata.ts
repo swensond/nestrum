@@ -32,7 +32,6 @@ export type AdminResourceMetadata = {
     readonly identity: string;
     readonly slug: string;
     readonly model: string;
-    readonly database: string;
     readonly label: string;
     readonly primaryKey: string;
     readonly listDisplay: readonly string[];
@@ -100,7 +99,6 @@ export function resourceMetadata(
         identity: resource.identity,
         slug,
         model: resource.model,
-        database: resource.database,
         label: humanize(resource.model),
         primaryKey,
         listDisplay: Object.freeze([...configuration.listDisplay]),

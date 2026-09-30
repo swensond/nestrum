@@ -140,12 +140,8 @@ async function provisioned(provisioning: object, transactions = false) {
     const memory = storage('identity', { transactions });
     const application = defineApplication({
         apps: [],
-        databases: {
-            default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-            identity: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-        },
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
         auth: defineAuth({
-            database: 'identity',
             baseURL: BASE_URL,
             secret: SECRET,
             prisma: () => memory.binding,

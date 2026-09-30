@@ -1,15 +1,11 @@
-export type PrismaProvider = 'postgresql' | 'mongodb';
+export type PrismaProvider = 'postgresql';
 
+/** The application's one database. Nestrum targets a single PostgreSQL database through Prisma 8. */
 export type DatabaseDefinition = {
     readonly kind: 'prisma';
     readonly provider: PrismaProvider;
     readonly connection: string;
 };
 
-export type DatabaseConfig = {
-    readonly default: DatabaseDefinition;
-    readonly [name: string]: DatabaseDefinition;
-};
-
-export type DatabaseEntry = readonly [name: string, definition: DatabaseDefinition];
-export type ModelIdentity = `${string}.${string}`;
+/** A model's canonical identity is its model name, unique within the application's one database. */
+export type ModelIdentity = string;

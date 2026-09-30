@@ -22,7 +22,7 @@ const ROW = { id: 1, name: 'One', ownerId: 'alice', createdAt: new Date('2026-01
 const WIRE_ROW = { ...ROW, createdAt: ROW.createdAt.toISOString(), budget: '42' };
 const ACCESS: PolicyDefinition = { resource: 'admin.access', actions: { access: { authorize: () => allow() } } };
 const RESOURCE_POLICY: PolicyDefinition = {
-    resource: 'default.Project',
+    resource: 'Project',
     actions: {
         read: { scope: ({ subject }) => eq('ownerId', subject.id as string) },
         create: { object: ({ subject, resource }) => (resource?.ownerId === subject.id ? allow() : deny('NOT_OWNER')) },
@@ -46,9 +46,8 @@ function field(name: string, kind: FieldMetadata['kind'] = 'string'): FieldMetad
     };
 }
 const METADATA: ModelMetadata = {
-    database: 'default',
     name: 'Project',
-    identity: 'default.Project',
+    identity: 'Project',
     provider: 'postgresql',
     namespace: 'public',
     relations: [],
@@ -79,7 +78,6 @@ function fixture(
     const metadata = options.metadata ?? METADATA;
     const resource = defineResource({
         model: metadata.name,
-        database: metadata.database,
         api: false,
         ...(options.schemas ? { schemas: options.schemas } : {}),
     });
@@ -105,7 +103,6 @@ function fixture(
     );
     const auth: AuthenticationDefinition = options.auth ?? {
         kind: 'better-auth',
-        database: 'default',
         protectedModels: [],
         createApp: () => ({ name: 'test.auth' }),
         initialize: async () => ({
@@ -148,11 +145,7 @@ function fixture(
     };
     const application = defineApplication({
         apps: [{ name: 'projects', ...(options.configureRegistration ? { configure: register } : {}) }],
-        databases: {
-            default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-            identity: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
-            documents: { kind: 'prisma', provider: 'mongodb', connection: 'unused' },
-        },
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
         auth,
         admin,
         resources: [resource],
@@ -161,7 +154,7 @@ function fixture(
     });
     const onError = vi.fn();
     const runtime = createHonoRuntime({ application, onError });
-    const slug = `${metadata.database === 'default' ? '' : `${metadata.database}--`}projects`;
+    const slug = 'projects';
     function request(path: string, init: RequestInit = {}, authenticated = true) {
         const headers = new Headers(init.headers);
         if (authenticated && !headers.has('cookie')) {
@@ -193,7 +186,7 @@ describe('Private admin backend', () => {
         const metadata = await response.json();
         expect(metadata).toMatchObject([
             {
-                identity: 'default.Project',
+                identity: 'Project',
                 slug: 'projects',
                 listDisplay: ['id', 'name'],
                 primaryKey: 'id',
@@ -322,7 +315,7 @@ describe('Private admin backend', () => {
             policies: [
                 ACCESS,
                 {
-                    resource: 'default.Project',
+                    resource: 'Project',
                     actions: {
                         read: { authorize: () => allow() },
                         archive: { object: () => deny('NOT_ALLOWED') },
@@ -388,7 +381,7 @@ describe('Private admin backend', () => {
             policies: [
                 ACCESS,
                 {
-                    resource: 'default.Project',
+                    resource: 'Project',
                     actions: { read: { authorize: () => allow() }, archive: { authorize: () => deny('NO_ARCHIVE') } },
                 },
             ],
@@ -440,7 +433,7 @@ describe('Private admin backend', () => {
             policies: [
                 ACCESS,
                 {
-                    resource: 'default.Project',
+                    resource: 'Project',
                     actions: {
                         read: { authorize: () => allow() },
                         archive: {
@@ -600,18 +593,6 @@ describe('Private admin backend', () => {
         await runtime.shutdown();
     });
 
-    it('supports named database resources independently of public routes', async () => {
-        const { runtime, request } = fixture({
-            metadata: { ...METADATA, database: 'documents', identity: 'documents.Project', provider: 'mongodb' },
-        });
-        await runtime.start();
-        expect((await request('/__admin/documents--projects')).status).toBe(200);
-        expect(await (await request('/__admin/resources')).json()).toMatchObject([
-            { identity: 'documents.Project', slug: 'documents--projects' },
-        ]);
-        await runtime.shutdown();
-    });
-
     it('fails closed on route conflicts, invalid fields and unusable primary keys', async () => {
         const conflict = fixture();
         conflict.runtime.hono.get('/__admin/resources', (context) => context.text('bypass'));
@@ -638,7 +619,7 @@ describe('Private admin backend', () => {
         expect(() =>
             defineApplication({
                 apps: [],
-                databases: { default: { kind: 'prisma', provider: 'postgresql', connection: 'unused' } },
+                database: { kind: 'prisma', provider: 'postgresql', connection: 'unused' },
                 admin,
             }),
         ).toThrow(/authentication/);
@@ -651,7 +632,6 @@ describe('Private admin backend', () => {
         const { runtime, request, application } = fixture({
             admin: { security: { twoFactor: { required: false } } },
             auth: defineAuth({
-                database: 'identity',
                 baseURL: BASE_URL,
                 secret: 'nestrum-admin-test-secret-longer-than-thirty-two-characters',
                 prisma: () => memory.binding,

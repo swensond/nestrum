@@ -114,7 +114,7 @@ describe('Metadata-driven administration', () => {
         const state = { status: 'ready' as const, resources: [project] };
         for (const view of ['list', 'new', 'detail'] as const) {
             const workspace = selectWorkspace(state, 'projects', view, view === 'detail' ? 'record-one' : undefined);
-            expect(workspace?.resource.identity).toBe('default.Project');
+            expect(workspace?.resource.identity).toBe('Project');
         }
         expect(selectWorkspace(state, 'missing', 'list')).toBeNull();
         expect(selectWorkspace({ status: 'sign-in', message: 'Sign in' }, 'projects', 'new')).toBeNull();

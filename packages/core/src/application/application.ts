@@ -2,7 +2,8 @@ import type { AdminApi, AdminDefinition } from '#core/admin/admin.types';
 import type { Authentication, AuthenticationDefinition } from '#core/auth/auth.types';
 import { AuthorizationEngine } from '#core/authorization/authorization';
 import { PolicyError } from '#core/authorization/authorization.errors';
-import { DatabaseRegistry } from '#core/database/database-registry';
+import type { DatabaseDefinition } from '#core/database/database.types';
+import { validateDatabaseDefinition } from '#core/database/database-definition';
 import type { Features, FeaturesDefinition } from '#core/features/features.types';
 import { ResourceError } from '#core/resource/resource.errors';
 import type { ResourceModel } from '#core/resource/resource.types';
@@ -26,20 +27,25 @@ export class Application {
     private readonly authDefinition: AuthenticationDefinition | undefined;
     private readonly adminDefinition: AdminDefinition | undefined;
     readonly apps: AppRegistry;
-    readonly databases: DatabaseRegistry;
+    readonly database: DatabaseDefinition;
     readonly resources: ResourceRegistry;
     readonly authorization: AuthorizationEngine;
     private readonly resourceModels: ApplicationConfig['resourceModels'];
     private readonly prepare: ApplicationConfig['prepare'];
-    private readonly databaseLifecycle: NonNullable<ApplicationConfig['databaseLifecycle']>;
-    private connectedDatabases: string[] = [];
+    private readonly databaseLifecycle: ApplicationConfig['databaseLifecycle'];
+    private databaseConnected = false;
     private lifecycle: ApplicationLifecycle = {};
     private currentState: ApplicationState = 'created';
     private startedApps: AppDefinition[] = [];
     private readonly context: AppContext;
 
     constructor(config: ApplicationConfig) {
-        this.databases = new DatabaseRegistry(config.databases);
+        validateDatabaseDefinition(config.database);
+        this.database = Object.freeze({
+            kind: config.database.kind,
+            provider: config.database.provider,
+            connection: config.database.connection,
+        });
         this.prepare = config.prepare;
         if (config.prepare !== undefined && typeof config.prepare !== 'function') {
             throw new AppError('APPLICATION_CONFIG_INVALID', 'Application prepare must be callable.');
@@ -47,28 +53,15 @@ export class Application {
         if (
             config.databaseLifecycle !== undefined &&
             (!config.databaseLifecycle ||
-                typeof config.databaseLifecycle !== 'object' ||
-                Array.isArray(config.databaseLifecycle))
+                typeof config.databaseLifecycle.connect !== 'function' ||
+                typeof config.databaseLifecycle.disconnect !== 'function')
         ) {
-            throw new AppError('DATABASE_LIFECYCLE_INVALID', 'Database lifecycle must be a named record.');
+            throw new AppError(
+                'DATABASE_LIFECYCLE_INVALID',
+                'A managed database requires connect and disconnect callbacks.',
+            );
         }
-        const databaseLifecycle: Record<string, NonNullable<ApplicationConfig['databaseLifecycle']>[string]> =
-            Object.create(null);
-        for (const [name, lifecycle] of Object.entries(config.databaseLifecycle ?? {})) {
-            if (
-                !this.databases.has(name) ||
-                !lifecycle ||
-                typeof lifecycle.connect !== 'function' ||
-                typeof lifecycle.disconnect !== 'function'
-            ) {
-                throw new AppError(
-                    'DATABASE_LIFECYCLE_INVALID',
-                    'Managed databases require a registered name and connect/disconnect callbacks.',
-                );
-            }
-            databaseLifecycle[name] = Object.freeze({ ...lifecycle });
-        }
-        this.databaseLifecycle = Object.freeze(databaseLifecycle);
+        this.databaseLifecycle = config.databaseLifecycle && Object.freeze({ ...config.databaseLifecycle });
         this.authDefinition = config.auth;
         this.adminDefinition = config.admin;
         this.featuresDefinition = config.features;
@@ -77,13 +70,10 @@ export class Application {
             (config.features.kind !== 'nestrum-features' ||
                 typeof config.features.createApp !== 'function' ||
                 typeof config.features.initialize !== 'function' ||
-                !Array.isArray(config.features.protectedModels) ||
-                (config.features.database !== undefined && !this.databases.has(config.features.database)))
+                typeof config.features.persistent !== 'boolean' ||
+                !Array.isArray(config.features.protectedModels))
         ) {
-            throw new AppError(
-                'FEATURES_CONFIG_INVALID',
-                'Features require a Nestrum features definition and, when persistent, a configured database.',
-            );
+            throw new AppError('FEATURES_CONFIG_INVALID', 'Features require a Nestrum features definition.');
         }
         if (
             config.admin &&
@@ -101,22 +91,15 @@ export class Application {
         if (
             config.auth &&
             (config.auth.kind !== 'better-auth' ||
-                !this.databases.has(config.auth.database) ||
                 typeof config.auth.createApp !== 'function' ||
                 typeof config.auth.initialize !== 'function' ||
                 !Array.isArray(config.auth.protectedModels))
         ) {
-            throw new AppError(
-                'AUTH_CONFIG_INVALID',
-                'Authentication requires a Nestrum Better Auth definition and a configured database.',
-            );
+            throw new AppError('AUTH_CONFIG_INVALID', 'Authentication requires a Nestrum Better Auth definition.');
         }
-        const featuresDatabase = config.features?.database;
         this.apps = new AppRegistry([
-            ...(config.auth ? [config.auth.createApp(this.databases.get(config.auth.database).provider)] : []),
-            ...(config.features && featuresDatabase !== undefined
-                ? [config.features.createApp(this.databases.get(featuresDatabase).provider)]
-                : []),
+            ...(config.auth ? [config.auth.createApp()] : []),
+            ...(config.features?.persistent ? [config.features.createApp()] : []),
             ...config.apps,
         ]);
         if (config.resources !== undefined && !Array.isArray(config.resources)) {
@@ -149,14 +132,14 @@ export class Application {
                 'Authentication models cannot be registered as ordinary resources.',
             );
         }
-        this.resources = new ResourceRegistry(definitions, this.databases, this.authorization);
+        this.resources = new ResourceRegistry(definitions, this.database, this.authorization);
         this.resourceModels = Array.isArray(config.resourceModels)
             ? Object.freeze([...config.resourceModels])
             : config.resourceModels;
         this.context = Object.freeze({
             application: this,
             apps: this.apps,
-            databases: this.databases,
+            database: this.database,
             resources: this.resources,
             authorization: this.authorization,
         });
@@ -215,12 +198,9 @@ export class Application {
             if (this.prepare) {
                 await this.prepare(this);
             }
-            for (const name of this.databases.names()) {
-                const managed = this.databaseLifecycle[name];
-                if (managed) {
-                    this.connectedDatabases.push(name);
-                    await managed.connect();
-                }
+            if (this.databaseLifecycle) {
+                this.databaseConnected = true;
+                await this.databaseLifecycle.connect();
             }
             let models: readonly ResourceModel[];
             if (typeof this.resourceModels === 'function') {
@@ -335,11 +315,10 @@ export class Application {
         } catch (error) {
             errors.push(error);
         }
-        const databases = this.connectedDatabases;
-        this.connectedDatabases = [];
-        for (const name of databases.reverse()) {
+        if (this.databaseConnected) {
+            this.databaseConnected = false;
             try {
-                await this.databaseLifecycle[name]?.disconnect();
+                await this.databaseLifecycle?.disconnect();
             } catch (error) {
                 errors.push(error);
             }

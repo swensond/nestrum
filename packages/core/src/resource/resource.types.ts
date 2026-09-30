@@ -34,7 +34,6 @@ export type ResourceApiAccess = {
 export type ResourceManagers = Readonly<Record<string, (query: QuerySet) => QuerySet>>;
 export type ResourceConfig = {
     readonly model: string;
-    readonly database?: string;
     readonly api?:
         | false
         | (Partial<ResourceApi> & {
@@ -46,7 +45,6 @@ export type ResourceConfig = {
 };
 export type ResourceDefinition = {
     readonly model: string;
-    readonly database: string;
     readonly identity: ModelIdentity;
     readonly api: ResourceApi;
     readonly apiAccess: ResourceApiAccess;
@@ -56,7 +54,6 @@ export type ResourceDefinition = {
 export type RegisteredResource = {
     readonly authorization: AuthorizationEngine;
     readonly model: string;
-    readonly database: string;
     readonly identity: ModelIdentity;
     readonly api: ResourceApi;
     readonly apiAccess: ResourceApiAccess;

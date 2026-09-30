@@ -18,11 +18,8 @@ await writeFile(
 import { defineCliConfig } from ${JSON.stringify(cli)};
 export default defineCliConfig({
     application: defineApplication({
-        apps: [{ name: 'models', prismaSource: ${JSON.stringify({ default: 'model Project {\n id Int @id\n name String\n}\n', documents: 'model Article {\n id ObjectId @id @map("_id")\n name String\n}\n' })} }],
-        databases: {
-            default: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://user:secret@127.0.0.1:1/test' },
-            documents: { kind: 'prisma', provider: 'mongodb', connection: 'mongodb://127.0.0.1:1/test' }
-        }
+        apps: [{ name: 'models', prismaSource: ${JSON.stringify('model Project {\n id Int @id\n name String\n}\n')} }],
+        database: { kind: 'prisma', provider: 'postgresql', connection: 'postgresql://user:secret@127.0.0.1:1/test' }
     }),
     timeoutMs: 5000
 });\n`,
@@ -32,18 +29,13 @@ const run = (args) =>
 
 try {
     assert.ok((await execute(process.execPath, [bin, '--help'])).stdout.includes('db <generate|migrate|status>'));
-    for (const database of ['default', 'documents']) {
-        const generated = JSON.parse((await run(['db', 'generate', '--database', database, '--json'])).stdout);
-        assert.equal(generated.database, database);
-        assert.ok(
-            (await readFile(generated.contract, 'utf8')).includes(database === 'default' ? 'Project' : 'Article'),
-        );
-        assert.ok((await readFile(generated.types, 'utf8')).length > 0);
-        assert.deepEqual(await readdir(generated.directory), [database]);
-        const plan = await run(['db', 'migrate', '--database', database, '--plan', '--name', 'initial', '--json']);
-        assert.ok(plan.stdout.length > 0);
-        assert.ok((await readdir(join(directory, 'prisma/migrations', database))).length > 0);
-    }
+    const generated = JSON.parse((await run(['db', 'generate', '--json'])).stdout);
+    assert.ok((await readFile(generated.contract, 'utf8')).includes('Project'));
+    assert.ok((await readFile(generated.types, 'utf8')).length > 0);
+    assert.ok((await readdir(generated.directory)).includes('contract.json'));
+    const plan = await run(['db', 'migrate', '--plan', '--name', 'initial', '--json']);
+    assert.ok(plan.stdout.length > 0);
+    assert.ok((await readdir(join(directory, 'prisma/migrations'))).length > 0);
     const status = await run(['db', 'status']).then(
         () => {
             throw new Error('Unreachable database must fail status.');
@@ -53,14 +45,14 @@ try {
     assert.ok(status.code > 0);
     assert.ok(status.stderr.includes('CLI_DELEGATE_FAILED'));
     assert.ok(!status.stderr.includes('user:secret'));
-    const unknown = await run(['db', 'generate', '--database', 'missing']).then(
+    const removed = await run(['db', 'generate', '--database', 'default']).then(
         () => {
-            throw new Error('Unknown database must fail.');
+            throw new Error('The removed --database flag must be rejected.');
         },
         (error) => error,
     );
-    assert.equal(unknown.code, 1);
-    assert.ok(unknown.stderr.includes('DATABASE_NOT_FOUND'));
+    assert.equal(removed.code, 1);
+    assert.ok(removed.stderr.includes('CLI_ARGUMENT_INVALID'));
     // nestrum build -> nestrum serve (real process) -> HTTP -> signal -> graceful exit, for both signals.
     const built = await execute(process.execPath, [bin, 'build', '--config', configPath], {
         cwd: directory,
@@ -106,7 +98,7 @@ try {
         await assert.rejects(fetch(`${url}/__nestrum/health`));
     }
     console.log(
-        'Compiled Nestrum CLI: TS config loading, SQL/Mongo contract generation, offline migration plans, database selection, safe delegated failures, and build → serve → health → SIGTERM/SIGINT graceful exit passed.',
+        'Compiled Nestrum CLI: TS config loading, PostgreSQL contract generation, offline migration plans, safe delegated failures, and build → serve → health → SIGTERM/SIGINT graceful exit passed.',
     );
 } finally {
     await rm(directory, { recursive: true, force: true });

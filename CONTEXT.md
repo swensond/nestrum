@@ -1,32 +1,24 @@
 # Nestrum
 
-Nestrum groups application-owned models and behavior into explicitly installed apps. Database names distinguish independently configured data stores throughout the application.
+Nestrum groups application-owned models and behavior into explicitly installed apps. An application has one PostgreSQL database ([decision 0018](docs/decisions/0018-postgresql-single-database.md)).
 
 ## Language
 
 **Database definition**:
-The selected provider and connection settings for a data store. A definition is configuration, rather than a live database client.
+The provider and connection settings for the application's one data store. A definition is configuration, rather than a live database client.
 _Avoid_: Client, connection pool
 
-**Database name**:
-An application-local name for a configured data store. Different names may refer to the same physical store while retaining separate application identities.
-_Avoid_: Model name, provider name
-
-**Default database**:
-The required data store named default, used when a model reference omits a database name.
-_Avoid_: Primary database, global database
-
 **Model identity**:
-The combination of a database name and a model name that distinguishes a model within an application.
-_Avoid_: Unqualified model name, table name
+A model's name, which distinguishes it within the application's one database and is used as the resource and policy identity.
+_Avoid_: Table name, database-qualified name
 
 **Prisma fragment**:
-An app-owned part of a database's data contract, contributed to one or more named databases. Ownership stays with the contributing app.
+An app-owned part of the database's data contract. Ownership stays with the contributing app.
 _Avoid_: Global schema, generated contract
 
 **Assembled contract**:
-The combined data contract for one named database from its installed apps' fragments.
-_Avoid_: Cross-database schema, application-owned giant schema
+The combined data contract for the database from its installed apps' fragments.
+_Avoid_: Application-owned giant schema
 
 **Model metadata**:
 The framework's description of one model's fields, relationships, and data-store identity. It is distinct from records stored for that model.

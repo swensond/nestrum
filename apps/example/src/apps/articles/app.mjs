@@ -3,7 +3,6 @@ import { z } from 'zod';
 
 export const Article = defineResource({
     model: 'Article',
-    database: 'documents',
     api: false,
     managers: { published: (query) => query.filter({ status: 'published' }) },
     schemas: {
@@ -21,7 +20,7 @@ export function articlesApp(events) {
         name: 'articles',
         dependsOn: ['projects'],
         resources: [Article],
-        prisma: { documents: ['src/apps/articles/prisma'] },
+        prisma: ['src/apps/articles/prisma'],
         policies: [
             {
                 resource: Article.identity,
