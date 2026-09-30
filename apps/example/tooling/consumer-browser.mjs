@@ -29,7 +29,10 @@ export async function runConsumerBrowserChecks({ baseURL, email, password }) {
         const html = await (await context.request.get(`${baseURL}/`)).text();
         assert.ok(html.includes('id="__nestrum_config__"'));
         // The example renders on the server: the raw response already contains the app, not an empty container.
-        assert.ok(html.includes('site: nestrum-example'), 'Expected server-rendered markup in the HTML response.');
+        assert.ok(
+            html.includes('site: nestrum-example'),
+            `Expected server-rendered markup in the HTML response. Received:\n${html.slice(0, 1500)}`,
+        );
         for (const secret of [process.env.AUTH_SECRET, process.env.INTEGRATION_IDENTITY_URL].filter(Boolean)) {
             assert.ok(!html.includes(secret), 'Server-only values must not reach the page.');
         }
