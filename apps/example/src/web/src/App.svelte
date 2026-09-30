@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { AuthState } from '@nestrum/web/client';
 import { onMount } from 'svelte';
-import { api, auth } from './nestrum';
+import { api, auth, features } from './nestrum';
 
 // Public config arrives as a prop so the server render and the hydrating client agree.
 let { publicEnv }: { publicEnv: Readonly<Record<string, string>> } = $props();
@@ -10,9 +10,16 @@ let email = $state('');
 let password = $state('');
 let failure = $state('');
 let apiStatus = $state('not requested');
+let dashboard = $state('unknown');
 
 onMount(() => {
-    const stop = auth.state.subscribe((next) => (session = next));
+    const stop = auth.state.subscribe((next) => {
+        session = next;
+        // Flag values are evaluated per session on the server, so they are re-read whenever the session changes.
+        if (next.status !== 'loading') {
+            void features.load().then(() => (dashboard = features.enabled('newDashboard') ? 'on' : 'off'));
+        }
+    });
     void auth.refresh();
 
     return stop;
@@ -56,4 +63,5 @@ async function probe() {
     {/if}
     <button onclick={probe}>Ping public API</button>
     <p id="api-status">API: {apiStatus}</p>
+    <p id="dashboard">newDashboard: {dashboard}</p>
 </main>

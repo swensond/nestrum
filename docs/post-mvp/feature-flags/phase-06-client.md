@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -26,27 +26,27 @@ Depends on [PM5.5](phase-05-admin.md) and PM4 consumer hosting. Server evaluatio
 
 ## Implementation
 
-Planned server-to-client filtering and consumer helper integration. Define hydration/cache behavior so stale values are deterministic and safe. Ensure hidden flags cannot be inferred from generic registries or source maps.
+`exposeToClient: true` flags are evaluated on the server for the request subject and served by the reserved `GET /__nestrum/features` as `{ features: { name: boolean } }` with `Cache-Control: private, no-store` and `Vary: Cookie`; the route is registered only when features are configured and refuses to overlap application routes. `createFeatureClient()` (`@nestrum/web/client`) loads it, exposes `enabled(name)` and a store-compatible `state`, keeps only boolean values, and fails closed. The example consumer app shows `newDashboard: on|off`.
 
 ## Public API
 
-Planned `exposeToClient` declaration and consumer evaluated-values helper.
+`GET /__nestrum/features`, `createFeatureClient`, `FeatureClient`, `FeatureState`, `FEATURES_PATH`, `BoundFeatures.exposed`.
 
 ## Files / Packages Changed
 
-Planned web/auth/client integration, server filtering, tests, architecture, initiative index, and this record.
+`packages/hono/src/runtime/runtime.ts`, `packages/web/src/client/features.ts`, web/hono tests, example web app and browser check, architecture, roadmap, initiative index, and this record.
 
 ## Tests
 
-Cover exposed-only filtering, evaluated booleans, hidden flags/rules/attributes exclusion, server/client parity, and ABAC remaining server-side.
+Hono tests assert exposed-only booleans, absence of hidden names, rules, reasons and subject identifiers in the body, cache headers, method rejection and per-subject values; web tests cover the endpoint, credentials, snapshot reads, states and fail-closed behavior. The Playwright consumer check asserts `newDashboard: off` and the exact response, but was not run in this session (no browser-capable integration stack).
 
 ## Acceptance Criteria
 
-- [ ] Only `exposeToClient` flags appear.
-- [ ] Browser receives evaluated booleans only.
-- [ ] Hidden rules never reach client.
-- [ ] Consumer helper works.
-- [ ] Docs updated.
+- [x] Only `exposeToClient` flags appear.
+- [x] Browser receives evaluated booleans only.
+- [x] Hidden rules never reach client.
+- [x] Consumer helper works.
+- [x] Docs updated.
 
 ## Validation
 
@@ -54,7 +54,7 @@ Run client/filtering tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm c
 
 ## Known Limitations
 
-Client values are not an authorization mechanism and may become stale until refreshed according to the documented server-evaluation policy.
+Values are informational and can be stale until `load()` runs again; SSR renders with the client default (off) unless the application fetches values itself. Client values never replace server ABAC.
 
 ## Follow-Ups
 
@@ -62,4 +62,4 @@ Client values are not an authorization mechanism and may become stale until refr
 
 ## Completion Notes
 
-Pending implementation and validation.
+The browser never receives targeting rules, rollout internals, hidden flag names or attributes.

@@ -53,6 +53,7 @@ try {
         } else {
             const session = await runDev({
                 ...(parsed.config === undefined ? {} : { config: parsed.config }),
+                ...(parsed.features === undefined ? {} : { features: parsed.features }),
                 flags: {
                     ...(parsed.host === undefined ? {} : { host: parsed.host }),
                     ...(parsed.port === undefined ? {} : { port: parsed.port }),

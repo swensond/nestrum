@@ -98,6 +98,7 @@ export type {
 export { validateDatabaseDefinition } from './database/database-definition.js';
 export { DatabaseRegistry } from './database/database-registry.js';
 export { modelIdentity } from './database/model-identity.js';
+export * from './features/index.js';
 export { bindResourceQuerySets, QuerySet, QuerySetError, snapshotQueryValue } from './queryset/queryset.js';
 export type {
     QueryBackend,

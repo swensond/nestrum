@@ -56,6 +56,8 @@ export type DevOptions = {
     readonly log?: (line: string) => void;
     /** Quiet period that coalesces bursts of edits into one restart. */
     readonly debounceMs?: number;
+    /** Process-local feature overrides (`--feature name=true`); never written to storage. */
+    readonly features?: Readonly<Record<string, boolean>>;
     /** Set false to skip filesystem watching (tests drive `changed`). */
     readonly watch?: boolean;
 };
@@ -84,6 +86,20 @@ export function adminSecurityDiagnostics(security: { twoFactor: { required: bool
     return ['', 'Admin security', '  2FA required    no', '', 'WARNING', 'Admin 2FA is disabled for this application.'];
 }
 
+/** Development banner lines for `--feature` overrides; empty without any. */
+export function featureDiagnostics(features: Readonly<Record<string, boolean>> | undefined): string[] {
+    const entries = Object.entries(features ?? {});
+    if (entries.length === 0) {
+        return [];
+    }
+
+    return [
+        '',
+        'Feature overrides (this process only; storage is unchanged)',
+        ...entries.map(([name, value]) => `  ${name}=${value}`),
+    ];
+}
+
 function describe(error: unknown): string {
     if (error instanceof AppError) {
         return `${error.name}: ${error.code}: ${error.message}`;
@@ -107,6 +123,13 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
     const devDir = join(root, '.nestrum', 'dev');
     await rm(devDir, { recursive: true, force: true });
     await mkdir(join(devDir, 'server'), { recursive: true });
+    // The application reads these while its definition loads (`defineFeatures`), only when NESTRUM_ENV is development.
+    const featureEnv = ['NESTRUM_ENV', 'NESTRUM_DEV_FEATURES'] as const;
+    const previousFeatureEnv = featureEnv.map((name) => process.env[name]);
+    if (options.features !== undefined && Object.keys(options.features).length > 0) {
+        process.env.NESTRUM_ENV = 'development';
+        process.env.NESTRUM_DEV_FEATURES = JSON.stringify(options.features);
+    }
     const version = await cliVersion();
     const adapter = options.adapter ?? nodeRuntime;
     const debounceMs = options.debounceMs ?? 100;
@@ -231,6 +254,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
                     ...(web ? [`  Web        ${url}${web.basePath}/${web.ssr ? '  (SSR)' : ''}`] : []),
                     `  OpenAPI    ${url}/api/openapi.json`,
                     ...adminSecurityDiagnostics(config.application.adminSecurity),
+                    ...featureDiagnostics(options.features),
                     '',
                     'Watching for changes...',
                 ].join('\n'),
@@ -314,6 +338,14 @@ export async function runDev(options: DevOptions = {}): Promise<DevSession> {
             await stop();
             await devWeb?.close();
             devWeb = undefined;
+            featureEnv.forEach((name, index) => {
+                const previous = previousFeatureEnv[index];
+                if (previous === undefined) {
+                    delete process.env[name];
+                } else {
+                    process.env[name] = previous;
+                }
+            });
         },
     };
 }

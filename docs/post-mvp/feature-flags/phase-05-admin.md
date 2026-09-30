@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -26,28 +26,28 @@ Depends on [PM5.4](phase-04-runtime.md) and PM2 admin assurance. Feature managem
 
 ## Implementation
 
-Planned metadata-driven admin UI/API, validation of names/targets/percentages, safe reason output, and event emission for changes. Persistent updates invalidate evaluation state deterministically if caching exists.
+`registerFeatureRoutes` (`packages/admin/src/feature-routes.ts`) adds, only when features are configured: `GET /__admin/features` (declared flags, defaults, exposure, overrides), `PUT /__admin/features/:flag/rules`, `DELETE /__admin/features/:flag/rules?scope=&target=`, `POST /__admin/features/:flag/explain` and `GET /__admin/features/capabilities`. They sit behind the complete admin boundary (same origin, session, `admin.access`, 2FA) and then need the `features` ABAC actions `read` (staff and admin) or `manage` (admin only), provided by `roleBasedAdminPolicies()`; writes go through the manager, invalidate evaluation state and emit audit events carrying the acting subject. Explanations accept only `subjectId`, `organizationId` and `environment` and return the winning source and target. The `/admin/features` Svelte page (`packages/admin-ui`) lists flags, overrides and the rollout form, shows management controls only with `manage`, and maps every failure to a fixed message.
 
 ## Public API
 
-Planned admin routes, actions, override/rollout inputs, and explanation response shape.
+`FEATURE_IDENTITY`, `FEATURE_ACTIONS`, `FeatureAction`, admin routes above, `FeatureAdminClient`, layout `canViewFeatures`.
 
 ## Files / Packages Changed
 
-Planned admin/admin-ui/core integration, event seam, tests, architecture, initiative index, and this record.
+`packages/admin/src/{feature-routes,policies,router,index}.ts`, `packages/admin-ui/src/lib/features.server.ts`, `packages/admin-ui/src/routes/features/*`, shell/layout, admin and admin-ui tests, architecture, roadmap, initiative index, and this record.
 
 ## Tests
 
-Cover admin 2FA, ABAC, same-origin, overrides/rollouts, explanations, invalid inputs, audit events, and direct API protection.
+`packages/admin/tests/features.test.ts` (real Better Auth sessions and TOTP): anonymous/user/unenrolled/staff denial, staff read-only, listing, every override scope, explanations, audit events with actor, invalid input, unknown flags, wrong methods, same-origin rejection, absent routes when unconfigured. `packages/admin-ui/tests/features.test.ts`: client, layout link, form validation, fixed error messages, page rendering with and without `manage`.
 
 ## Acceptance Criteria
 
-- [ ] Admin 2FA is required.
-- [ ] Feature-management ABAC is required.
-- [ ] Overrides are manageable.
-- [ ] Rollout is configurable.
-- [ ] Evaluation explanations are available.
-- [ ] Docs updated.
+- [x] Admin 2FA is required.
+- [x] Feature-management ABAC is required.
+- [x] Overrides are manageable.
+- [x] Rollout is configurable.
+- [x] Evaluation explanations are available.
+- [x] Docs updated.
 
 ## Validation
 
@@ -55,7 +55,7 @@ Run admin/API tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, 
 
 ## Known Limitations
 
-Consumer browser exposure and process-local development overrides remain PM5.6/PM5.7.
+The consumer surface and dev overrides are PM5.6/PM5.7. The Playwright admin flow is part of the Docker integration run, not run in this session.
 
 ## Follow-Ups
 
@@ -63,4 +63,4 @@ Consumer browser exposure and process-local development overrides remain PM5.6/P
 
 ## Completion Notes
 
-Pending implementation and validation.
+Feature management is privileged configuration, not ordinary resource CRUD.

@@ -19,6 +19,7 @@ import type { AdminAccess } from '#admin/access';
 import { assertSameOrigin, authorizeAccess, permits } from '#admin/access';
 import { registerAccessRoutes } from '#admin/access-routes';
 import { registerApiKeyRoutes } from '#admin/api-key-routes';
+import { registerFeatureRoutes } from '#admin/feature-routes';
 import type { AdminResourceMetadata } from '#admin/metadata';
 import { resourceMetadata } from '#admin/metadata';
 import type { AdminEntry, AdminOptions } from '#admin/registry';
@@ -83,7 +84,7 @@ export function createAdminRouter(
                     ? origin
                     : undefined,
             credentials: true,
-            allowMethods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+            allowMethods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
             allowHeaders: ['Content-Type'],
         }),
     );
@@ -103,6 +104,7 @@ export function createAdminRouter(
     });
     registerAccessRoutes(router, application);
     registerApiKeyRoutes(router, application);
+    registerFeatureRoutes(router, application);
 
     function entry(slug: string): AdminEntry {
         const found = bySlug.get(slug);

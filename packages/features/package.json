@@ -1,0 +1,30 @@
+{
+    "name": "@nestrum/features",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "imports": {
+        "#features/*": {
+            "nestrum-source": "./src/*.ts",
+            "types": "./dist/*.d.ts",
+            "default": "./dist/*.js"
+        }
+    },
+    "exports": {
+        ".": {
+            "nestrum-source": "./src/index.ts",
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc -p tsconfig.json"
+    },
+    "dependencies": {
+        "@nestrum/core": "workspace:*",
+        "@nestrum/prisma": "workspace:*"
+    }
+}

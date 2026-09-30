@@ -187,11 +187,11 @@ Hosting serves static/SPA output, or server-renders through an application-suppl
 
 ## Post-MVP feature flags
 
-The fifth post-MVP initiative is documented in the [feature-flag plan](post-mvp/feature-flags/README.md). It is planned work: PM5.0 documentation is complete, while PM5.1–PM5.7 have not started and feature flags are not currently evaluated by the runtime.
+The fifth post-MVP initiative ([feature-flag plan](post-mvp/feature-flags/README.md), [decision 0016](decisions/0016-feature-flags.md)) is implemented. Feature flags answer whether a capability is enabled; ABAC still decides whether a subject is authorized. Both may be required, and a flag never bypasses policy.
 
-Feature flags answer whether a capability is enabled; ABAC still decides whether a subject is authorized. Both may be required, and a flag never bypasses policy. The planned typed registry starts with boolean source defaults, Nestrum-owned persistent overrides, subject/organization/environment targeting, deterministic percentage rollout, and InferDI/request-context evaluation.
+`defineFeatureFlags` declares typed boolean flags with source defaults; `defineFeatures` (`@nestrum/features`) registers them with an application, optionally backed by Nestrum's `FeatureOverride` Prisma model on a chosen database (in memory otherwise). Evaluation resolves, first match wins: in-process override, subject, organization, deterministic percentage rollout (murmur3 of version + flag + stable key), environment, global, declared default. Storage failures fall back to the declared default and are reported. The runtime supplies `application.features`, a request-scoped InferDI `features` service bound to the trusted subject and environment, and the reserved `GET /__nestrum/features` endpoint.
 
-Planned management is `/admin/features` and `/__admin/features/*`, protected by Better Auth, admin 2FA, `admin.access`, feature-management ABAC, and same-origin policy. Only explicitly exposed flags reach the hosted consumer UI, as server-evaluated booleans; targeting rules, rollout internals, hidden flags, sensitive attributes, and server-only defaults remain private. Process-local development overrides and isolated test helpers never mutate persistent storage.
+Management is `/admin/features` and `/__admin/features/*`, protected by Better Auth, admin 2FA, `admin.access`, the `features` ABAC actions (`read`, `manage`) and same-origin policy, with evaluation explanations and an `onChange` audit seam. Only `exposeToClient` flags reach the hosted consumer UI, as server-evaluated booleans through `createFeatureClient()`; targeting rules, rollout internals, hidden flags and attributes stay private. `withFeatureFlags` and `nestrum dev --feature` overrides never mutate persistent storage.
 
 ## CLI and provider seams
 

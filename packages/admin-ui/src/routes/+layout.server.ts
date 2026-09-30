@@ -1,6 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import { AccessClient } from '$lib/access.server.js';
 import { ApiKeyClient } from '$lib/api-keys.server.js';
+import { FeatureAdminClient } from '$lib/features.server.js';
 import { loadAdminState } from '$lib/metadata.js';
 import { isAuthPath, twoFactorHref } from '$lib/return-to.js';
 import type { LayoutServerLoad } from './$types';
@@ -17,5 +18,8 @@ export const load = (async ({ fetch, depends, url }) => {
 
     const canManageApiKeys = admin.status === 'ready' && (await new ApiKeyClient(fetch).capabilities())?.read === true;
 
-    return { admin, path: url.pathname, canManageUsers, canManageApiKeys };
+    const canViewFeatures =
+        admin.status === 'ready' && (await new FeatureAdminClient(fetch).capabilities())?.read === true;
+
+    return { admin, path: url.pathname, canManageUsers, canManageApiKeys, canViewFeatures };
 }) satisfies LayoutServerLoad;
