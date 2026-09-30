@@ -11,6 +11,7 @@ import {
     totpSecretFromUri,
     totpStep,
 } from '../src/index.js';
+import { resolveSsoOptions } from '../src/sso/options.js';
 import { storage } from './fixtures.js';
 
 const BASE_URL = 'http://localhost:3000';
@@ -88,6 +89,10 @@ describe('Better Auth twoFactor plugin integration', () => {
             maxFailedAttempts: 10,
             lockoutSeconds: 900,
             apiKeys: resolveApiKeyOptions(undefined),
+            sso: {
+                options: resolveSsoOptions({ enabled: true, domainVerification: { enabled: true } }) as never,
+                registry: () => undefined,
+            },
         });
         const tables = (await instance.$context).tables as Record<
             string,

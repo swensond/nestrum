@@ -8,4 +8,5 @@ export { AUTH_MODELS, authContract } from './contracts/contracts.js';
 export { ASSIGNABLE_ROLES, AUTH_ROLES, effectiveRole } from './roles/roles.js';
 export type { SubjectMapper } from './session/subject-factory.js';
 export { SubjectFactory } from './session/subject-factory.js';
+export type { SsoConfig } from './sso/options.js';
 export { TOTP_PERIOD_SECONDS, totpCode, totpSecretFromUri, totpStep } from './testing.js';

@@ -88,6 +88,11 @@ export function sessionAssurance(
     if (session.user.twoFactorEnabled !== true) {
         return 'setup-required';
     }
+    // Enterprise SSO never satisfies the second factor: the plugin creates the session without a TOTP challenge, so
+    // an enrolled administrator must sign in again with their password and code. Upstream MFA claims are not trusted.
+    if (session.session.authMethod === 'sso') {
+        return 'challenge-required';
+    }
     const signedIn = instant(session.session.createdAt);
     const userUpdated = instant(session.user.updatedAt);
     if (

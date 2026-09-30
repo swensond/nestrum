@@ -9,6 +9,7 @@ let {
     canManageUsers = false,
     canManageApiKeys = false,
     canViewFeatures = false,
+    canManageSso = false,
 }: {
     state: AdminShellState;
     loading?: boolean;
@@ -16,6 +17,7 @@ let {
     canManageUsers?: boolean;
     canManageApiKeys?: boolean;
     canViewFeatures?: boolean;
+    canManageSso?: boolean;
 } = $props();
 </script>
-<AdminShell {state} {loading} {activePath} {canManageUsers} {canManageApiKeys} {canViewFeatures}><p>Protected workspace content</p></AdminShell>
+<AdminShell {state} {loading} {activePath} {canManageUsers} {canManageApiKeys} {canViewFeatures} {canManageSso}><p>Protected workspace content</p></AdminShell>

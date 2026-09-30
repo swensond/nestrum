@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -25,27 +25,27 @@ Depends on [PM6.3](phase-03-oidc.md) and [PM6.4](phase-04-saml.md). Follows the 
 
 ## Implementation
 
-Planned admin routes, ABAC policies, redacting serializers, audit event seam, and safe diagnostics.
+`registerSsoRoutes` (`packages/admin/src/sso-routes.ts`) adds, only when SSO is enabled: `GET|POST /__admin/auth/sso`, `GET|PATCH|DELETE /__admin/auth/sso/:providerId`, `POST …/test`, `POST …/enable`, `POST …/disable`, `POST …/domain-verification`, `POST …/domain-verification/verify` and `GET /__admin/auth/sso/capabilities`. They sit behind the complete admin boundary (same origin, session, `admin.access`, 2FA) and then need the `sso` ABAC actions `read`, `create`, `update`, `delete`, `enable`, `disable`, `test` (domain verification needs `update`), which `roleBasedAdminPolicies()` grants to `admin` only; a missing policy denies. Bodies go to the registry, which validates strictly. Responses are `no-store` and carry no stored secret. The acting subject ID is recorded as `createdBy`/`updatedBy` and as the audit actor. Unknown routes and methods under the prefix are 404s; everything is absent when SSO is off.
 
 ## Public API
 
-Planned routes, `sso.*` actions, provider request/response shapes, and the audit event shape.
+`SSO_IDENTITY`, `SSO_ACTIONS`, `SsoAction`, the routes above, `roleBasedAdminPolicies()` SSO policies.
 
 ## Files / Packages Changed
 
-Planned admin package, tests, architecture, initiative index, and this record.
+`packages/admin/src/{sso-routes,policies,router,index,security}.ts`, `packages/admin/tests/sso.test.ts`, and this record.
 
 ## Tests
 
-Cover 2FA, per-action ABAC, same-origin, OIDC and SAML CRUD, enable/disable, delete, test, redaction, invalid input, and audit events.
+Real Better Auth sessions and TOTP: anonymous, user, staff (every route denied, capabilities all false) and admin; cross-origin refusal; SSO off gives 404 and empty capabilities; OIDC lifecycle with secret non-disclosure and audit events carrying the actor; SAML lifecycle; invalid input and unknown routes.
 
 ## Acceptance Criteria
 
-- [ ] Every management endpoint protected.
-- [ ] Action-specific ABAC enforced.
-- [ ] OIDC and SAML manageable.
-- [ ] Secret values redacted.
-- [ ] Docs updated.
+- [x] Every management endpoint protected.
+- [x] Action-specific ABAC enforced.
+- [x] OIDC and SAML manageable.
+- [x] Secret values redacted.
+- [x] Docs updated.
 
 ## Validation
 
@@ -53,7 +53,7 @@ Run admin tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, and 
 
 ## Known Limitations
 
-No UI yet.
+Deleting a provider does not clean up linked Better Auth accounts; they remain and simply cannot sign in through it.
 
 ## Follow-Ups
 
@@ -61,4 +61,4 @@ No UI yet.
 
 ## Completion Notes
 
-Pending implementation and validation.
+Follows the API-key and feature-flag admin pattern.

@@ -195,11 +195,9 @@ Management is `/admin/features` and `/__admin/features/*`, protected by Better A
 
 ## Post-MVP enterprise SSO
 
-The sixth post-MVP initiative is documented in the [SSO plan](post-mvp/sso/README.md). It is planned work: PM6.0 documentation is complete, while PM6.1–PM6.8 have not started and SSO is not currently available.
+The sixth post-MVP initiative ([SSO plan](post-mvp/sso/README.md), [decision 0017](decisions/0017-enterprise-sso.md)) is implemented (PM6.0–PM6.8). `defineAuth({ sso: { enabled: true } })` registers Better Auth's official SSO plugin, which owns OIDC and SAML 2.0 protocol correctness. Nestrum owns the provider registry (`application.auth.sso`), AES-256-GCM sealing of provider secrets in the auth database adapter, enable/disable state, domain verification, provisioning policy, diagnostics, an audit seam and the admin experience. An SSO login produces a Better Auth session tagged `authMethod: 'sso'` that passes through the SubjectFactory and ABAC like any other. IdP attributes never become authorization, and an SSO session never satisfies Nestrum admin 2FA.
 
-Better Auth's official SSO plugin will own OIDC and SAML 2.0 protocol correctness; Nestrum will own the provider registry, encrypted secret persistence, organization and domain mapping, provisioning policy, diagnostics, and a prebuilt Svelte admin. An SSO login produces a Better Auth session that passes through the SubjectFactory and ABAC like any other. IdP attributes never become authorization, and SSO does not satisfy Nestrum admin 2FA.
-
-Planned management is `/admin/auth/sso` and `/__admin/auth/sso/*`, protected by Better Auth, admin 2FA, `admin.access`, the `sso.read`/`create`/`update`/`delete`/`enable`/`disable`/`test` ABAC actions, and same-origin policy. Stored secrets are write-only and redacted everywhere.
+Through `/api/auth` only sign-in, login discovery, the OIDC callback, the SAML ACS and SP metadata are reachable; the plugin's management endpoints are not. Management is `/admin/auth/sso` and `/__admin/auth/sso/*`, protected by Better Auth, admin 2FA, `admin.access`, the `sso.read`/`create`/`update`/`delete`/`enable`/`disable`/`test` ABAC actions and same-origin policy. Stored secrets are write-only and redacted everywhere. Existing applications migrate the `SsoProvider` table and two `Session` columns.
 
 ## CLI and provider seams
 

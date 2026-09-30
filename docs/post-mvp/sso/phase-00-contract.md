@@ -24,7 +24,7 @@ Better Auth's official SSO plugin (`@better-auth/sso`) owns protocol correctness
 
 ## Implementation
 
-Added the initiative index and PM6.0–PM6.8 records. PM6.0 is complete; PM6.1–PM6.8 are Not Started. No package, schema, route, or runtime code changed.
+Added the initiative index and PM6.0–PM6.8 records. No package, schema, route, or runtime code changed in this phase; PM6.1–PM6.8 implemented the contract afterwards.
 
 ## Public API
 
@@ -51,7 +51,7 @@ Verify all ten records, local links, standard sections, and `git diff --check`.
 
 ## Known Limitations
 
-SSO is not implemented. Exact schema, plugin option names, encryption facility, and response shapes require implementation decisions against the installed `@better-auth/sso` version.
+The contract was a plan when written; exact schema, plugin option names, encryption facility, and response shapes require implementation decisions against the installed `@better-auth/sso` version.
 
 ## Follow-Ups
 

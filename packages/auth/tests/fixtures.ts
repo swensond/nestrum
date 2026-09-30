@@ -57,6 +57,7 @@ export function storage(database = 'identity') {
         Verification: [],
         TwoFactor: [],
         ApiKey: [],
+        SsoProvider: [],
     };
     const operations: { model: AuthModel; operation: string }[] = [];
     const collection = (model: AuthModel, filters: Predicate[] = [], limit?: number, orders: Predicate[] = []) => {
@@ -114,6 +115,7 @@ export function storage(database = 'identity') {
                         (existing) =>
                             existing.id === row.id ||
                             (model === 'User' && existing.email === row.email) ||
+                            (model === 'SsoProvider' && existing.providerId === row.providerId) ||
                             (model === 'Session' && existing.token === row.token) ||
                             (model === 'Account' &&
                                 existing.providerId === row.providerId &&

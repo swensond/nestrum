@@ -34,6 +34,9 @@ export function createExample({
         baseURL,
         secret,
         prisma: () => ({ database: 'identity', collections: clients.get('identity').orm.public }),
+        // Enterprise SSO (OIDC and SAML 2.0): providers are managed at /admin/auth/sso. The identity migration adds
+        // the SsoProvider table. Identity providers on private networks would be listed in `trustedIdpOrigins`.
+        sso: { enabled: true },
     });
     const featureFlags = defineFeatures({
         flags: features,

@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -26,29 +26,29 @@ Depends on PM6.1–PM6.7. Disabled providers reject new SSO sign-ins. Admin 2FA 
 
 ## Implementation
 
-Planned final workflow checks and documentation of demonstrated behavior, provider limitations, and delete/account-cleanup semantics.
+Diagnostics are fixed-text categories returned by `test` and stored as last-validation time and status: OIDC discovery failed, issuer mismatch, endpoint missing, client secret missing, invalid SAML metadata, invalid certificate, IdP values missing, domain unverified, callback origin untrusted and provider disabled (`ORGANIZATION_MISSING` is declared but unused because organizations are opaque). The registry and routes log nothing; tests capture console output across sign-in and prove that client secrets, tokens and assertions do not appear there or in responses, audit events or stored rows. Audit events are verified for create, update, enable, disable, delete, test and domain verification. Disabled providers reject sign-in, callback, ACS and metadata; an SSO session never satisfies admin 2FA. Delete removes configuration only.
 
 ## Public API
 
-Finalize diagnostics, audit event, fixture, and provider-status contracts.
+No new API; documents the demonstrated behavior.
 
 ## Files / Packages Changed
 
-Planned integration fixtures, Playwright scripts, security tests, architecture, post-MVP roadmap, and all PM6 records.
+Tests and tooling (`sso-postgres.mjs`, `sso-admin-browser.mjs`, `fixtures/idp-metadata.xml`), example opt-in and README, architecture, roadmap, decision 0017, all PM6 records.
 
 ## Tests
 
-Vitest for redaction, audit, disabled providers, domain verification, and fixtures; Playwright for the OIDC and SAML admin workflows; integration for SSO login through SubjectFactory and ABAC.
+Full repository suite (`pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`, `verify:build`). `pnpm --filter @nestrum/example verify:sso` passes on a real PostgreSQL 16 (sealing at rest, concurrent creation, full OIDC sign-in, disable, delete). `pnpm --filter @nestrum/example e2e:sso` passes in Chromium: OIDC and SAML admin lifecycles, the secret never rendered, typed delete confirmation, a browser OIDC sign-in producing an ordinary user, and that user unable to see provider configuration.
 
 ## Acceptance Criteria
 
-- [ ] OIDC admin workflow E2E passes.
-- [ ] SAML admin workflow E2E passes.
-- [ ] Disabled providers reject new SSO login.
-- [ ] Sensitive material never logged.
-- [ ] Admin 2FA cannot be bypassed.
-- [ ] Docs updated.
-- [ ] Initiative complete.
+- [x] OIDC admin workflow E2E passes.
+- [x] SAML admin workflow E2E passes.
+- [x] Disabled providers reject new SSO login.
+- [x] Sensitive material never logged.
+- [x] Admin 2FA cannot be bypassed.
+- [x] Docs updated.
+- [x] Initiative complete.
 
 ## Validation
 
@@ -56,7 +56,7 @@ Run targeted SSO integration, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm
 
 ## Known Limitations
 
-Document any provider or plugin limitations demonstrated by implementation.
+The Docker + MongoDB `pnpm test:integration` run was not repeated for SSO (no Docker services were available); MongoDB contract emission is covered by the contract tests only. SAML sign-ins use signed fixtures, not a live IdP. Single logout, `private_key_jwt`, upstream-MFA trust, organization-plugin integration, a non-password admin assurance path for SSO-only administrators and audit history remain future work.
 
 ## Follow-Ups
 
@@ -64,4 +64,4 @@ Record trusted upstream MFA assurance, OAuth2-only providers, and audit history 
 
 ## Completion Notes
 
-Pending implementation and validation.
+PM6 is complete with the limitations above and in decision 0017.

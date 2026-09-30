@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -25,29 +25,29 @@ Depends on [PM6.2](phase-02-provider-registry.md). Better Auth owns discovery, t
 
 ## Implementation
 
-Planned OIDC registration and update mapped onto the plugin, validation service, and sign-in wiring.
+OIDC providers take display name, provider ID, organization, domains, issuer, client ID, client secret and enabled, with an advanced block (scopes, PKCE default on, discovery/authorization/token/JWKS/userinfo overrides, token-endpoint authentication, profile mapping). Saving an enabled provider runs the plugin's own `discoverOIDCConfig` and stores the hydrated endpoints; a disabled provider is stored without network access and validated when enabled. `test` and enablement return fixed diagnostics: `OIDC_DISCOVERY_FAILED`, `OIDC_ISSUER_MISMATCH`, `OIDC_ENDPOINT_MISSING`, `CALLBACK_ORIGIN_UNTRUSTED`, `OIDC_CLIENT_SECRET_MISSING`; remote bodies and URLs are never echoed. IdP URLs must be public HTTPS (hosts are resolved, so a public name pointing at a private address is refused) unless declared in `sso.trustedIdpOrigins`; origins of enabled providers are added to Better Auth's dynamic trusted origins, which the plugin requires before fetching them. Sign-in resolves an enabled provider, forwards an allowlisted body (client scopes and extra authorization parameters dropped) and the callback yields a Better Auth session tagged `authMethod: 'sso'` with the provider ID, which the SubjectFactory exposes to ABAC.
 
 ## Public API
 
-Planned `OIDCProvider` configuration and validation result types.
+`SsoOidcInput`, `SsoOidcAdvanced`, `SsoOidcSummary` (with `redirectUri`), `SsoTestResult`/`SsoDiagnostic`, `sso.trustedIdpOrigins`, `POST /api/auth/sign-in/sso`, `GET /api/auth/sso/callback/:providerId`.
 
 ## Files / Packages Changed
 
-Planned auth package, tests with an OIDC fixture IdP, architecture, initiative index, and this record.
+`packages/auth/src/sso/{service,network,routes}.ts`, `packages/auth/tests/{sso,sso-units}.test.ts` and `sso-fixtures.ts` (a local OpenID provider), `apps/example/tooling/sso-postgres.mjs`, and this record.
 
 ## Tests
 
-Cover registration, discovery success and failure, issuer mismatch, advanced overrides, secret protection, sign-in to a Better Auth session, and SubjectFactory receiving that session.
+Against a real local OIDC provider: create and hydrate, discovery failure and issuer mismatch, refusal to enable or create an enabled provider that fails discovery, a full authorization-code sign-in producing a session with `authMethod`/`ssoProviderId` and subject context, scope injection dropped, untrusted redirect targets refused, IdP claims unable to set a role, network-policy unit tests.
 
 ## Acceptance Criteria
 
-- [ ] Provider registration works.
-- [ ] Discovery works.
-- [ ] Discovery errors are understandable.
-- [ ] Sign-in produces a Better Auth session.
-- [ ] Nestrum SubjectFactory receives the session.
-- [ ] Secret protected.
-- [ ] Docs updated.
+- [x] Provider registration works.
+- [x] Discovery works.
+- [x] Discovery errors are understandable.
+- [x] Sign-in produces a Better Auth session.
+- [x] Nestrum SubjectFactory receives the session.
+- [x] Secret protected.
+- [x] Docs updated.
 
 ## Validation
 
@@ -55,7 +55,7 @@ Run OIDC tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, and `
 
 ## Known Limitations
 
-OAuth2-only enterprise providers are out of scope.
+`private_key_jwt` authentication and OAuth2-only providers are not offered. Validation proves configuration is well-formed; it is never a login.
 
 ## Follow-Ups
 
@@ -63,4 +63,4 @@ OAuth2-only enterprise providers are out of scope.
 
 ## Completion Notes
 
-Pending implementation and validation.
+Discovery and token validation are the plugin's; Nestrum adds origin policy, sealing and fixed diagnostics.

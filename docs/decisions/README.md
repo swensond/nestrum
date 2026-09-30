@@ -30,3 +30,4 @@ Use ADR-style records when future sessions need the reasoning for a durable deci
 - [0015 — First-class API keys](0015-api-keys.md): Better Auth's API-key plugin behind server-side calls, `X-API-Key` transport, explicit key subjects, scopes plus ABAC, and admin-managed keys.
 
 - [0016 — Typed boolean feature flags](0016-feature-flags.md): source-declared flags, persisted overrides, deterministic targeting and rollouts, request/InferDI evaluation, protected admin management, and evaluated client exposure.
+- [0017 — Enterprise SSO](0017-enterprise-sso.md): Better Auth's SSO plugin behind a Nestrum provider registry, encrypted secrets, OIDC and SAML 2.0, domain mapping, protected admin management, and the rule that SSO never satisfies admin 2FA.

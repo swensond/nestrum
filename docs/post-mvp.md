@@ -4,21 +4,23 @@ These features are outside the frozen MVP unless a small supporting abstraction 
 
 ## Plan 06 — Enterprise SSO
 
-The [enterprise SSO initiative](post-mvp/sso/README.md) is the sixth planned post-MVP initiative. It adds OIDC and SAML 2.0 single sign-on on Better Auth's official SSO plugin (`@better-auth/sso`), with a prebuilt Svelte admin at `/admin/auth/sso` for managing multiple providers, organization and domain mapping, encrypted secrets, provisioning policy, and validation, all behind admin 2FA and `sso.*` ABAC actions.
+The [enterprise SSO initiative](post-mvp/sso/README.md) is the sixth post-MVP initiative and is implemented. It adds OIDC and SAML 2.0 single sign-on on Better Auth's official SSO plugin (`@better-auth/sso`), with a prebuilt Svelte admin at `/admin/auth/sso` for managing multiple providers, domains, encrypted secrets and validation, all behind admin 2FA and `sso.*` ABAC actions.
 
-PM6.0 documentation is complete. PM6.1–PM6.8 are Not Started; SSO is not currently implemented. IdP claims never become Nestrum authorization, and an SSO login does not satisfy admin 2FA. The remaining MVP atomic object-policy write gate stays open independently.
+PM6.0–PM6.8 are complete. `defineAuth({ sso: { enabled: true } })` registers the plugin; providers are created and changed only through `application.auth.sso` and the admin (`/__admin/auth/sso/*`, `sso.read`/`create`/`update`/`delete`/`enable`/`disable`/`test`). Client secrets and SAML private keys are sealed at rest and never returned; IdP URLs must be public HTTPS unless the operator declares `trustedIdpOrigins`; disabled providers reject new sign-ins; deletion removes configuration only. Domain verification is opt-in, provisioning options pass through to Better Auth, and an SSO login tags the session `authMethod: 'sso'`, reaches ABAC through the SubjectFactory with `ssoProviderId`, and never satisfies admin 2FA. IdP claims never become Nestrum authorization. See [decision 0017](decisions/0017-enterprise-sso.md). Existing applications migrate the new `SsoProvider` table and two `Session` columns. Real PostgreSQL verification (`pnpm --filter @nestrum/example verify:sso`) and a real-browser admin lifecycle for both protocols plus an OIDC browser sign-in (`pnpm --filter @nestrum/example e2e:sso`) pass; the Docker + MongoDB `pnpm test:integration` run has not been repeated for SSO. The remaining MVP atomic object-policy write gate stays open independently.
 
 | Phase | Goal | Status |
 | --- | --- | --- |
 | [PM6.0](post-mvp/sso/phase-00-contract.md) | Document SSO contract | Complete |
-| [PM6.1](post-mvp/sso/phase-01-better-auth-integration.md) | Better Auth SSO plugin integration | Not Started |
-| [PM6.2](post-mvp/sso/phase-02-provider-registry.md) | Provider registry and secure persistence | Not Started |
-| [PM6.3](post-mvp/sso/phase-03-oidc.md) | OIDC | Not Started |
-| [PM6.4](post-mvp/sso/phase-04-saml.md) | SAML 2.0 | Not Started |
-| [PM6.5](post-mvp/sso/phase-05-admin-backend.md) | Private admin management API | Not Started |
-| [PM6.6](post-mvp/sso/phase-06-admin-ui.md) | Prebuilt Svelte SSO admin | Not Started |
-| [PM6.7](post-mvp/sso/phase-07-provisioning.md) | Provisioning and organization/domain mapping | Not Started |
-| [PM6.8](post-mvp/sso/phase-08-hardening.md) | Diagnostics, testing, hardening | Not Started |
+| [PM6.1](post-mvp/sso/phase-01-better-auth-integration.md) | Better Auth SSO plugin integration | Complete |
+| [PM6.2](post-mvp/sso/phase-02-provider-registry.md) | Provider registry and secure persistence | Complete |
+| [PM6.3](post-mvp/sso/phase-03-oidc.md) | OIDC | Complete |
+| [PM6.4](post-mvp/sso/phase-04-saml.md) | SAML 2.0 | Complete |
+| [PM6.5](post-mvp/sso/phase-05-admin-backend.md) | Private admin management API | Complete |
+| [PM6.6](post-mvp/sso/phase-06-admin-ui.md) | Prebuilt Svelte SSO admin | Complete |
+| [PM6.7](post-mvp/sso/phase-07-provisioning.md) | Provisioning and organization/domain mapping | Complete |
+| [PM6.8](post-mvp/sso/phase-08-hardening.md) | Diagnostics, testing, hardening | Complete |
+
+Future work: trusting upstream MFA assurance, OAuth2-only providers, single logout, `private_key_jwt`, Better Auth organization-plugin integration, a non-password admin assurance path for SSO-only administrators, and an audit-history product.
 
 ## Plan 05 — Feature flags
 
@@ -133,7 +135,7 @@ Node-specific listener APIs stay in the Node adapter, outside core and CLI. Prod
 - GraphQL, advanced relationship expansion, generated external SDKs, and public arbitrary Prisma expressions.
 - Field-level ABAC is excluded from the MVP; any later adoption requires revisiting stable response and admin contracts.
 - Organization-owned and service-identity API keys, external (Redis) API-key rate-limit providers, and key grace-period rotation. (API keys shipped in [Plan 03](post-mvp/api-keys/README.md).)
-- OAuth2-only enterprise providers and trusting upstream MFA assurance (`acr`/`amr`, `AuthnContext`) for admin 2FA. (OIDC and SAML SSO are planned in [Plan 06](post-mvp/sso/README.md).)
+- OAuth2-only enterprise providers and trusting upstream MFA assurance (`acr`/`amr`, `AuthnContext`) for admin 2FA. (OIDC and SAML SSO shipped in [Plan 06](post-mvp/sso/README.md).)
 - Social auth providers, non-admin MFA, passkeys/WebAuthn, QR-image enrollment, factor reset and backup-code/disable UI, independently expiring admin assurance, email verification delivery, account linking, and broader Better Auth plugin coverage. (Admin TOTP 2FA shipped in [Plan 02](post-mvp/admin-2fa/README.md).)
 
 ## Implementation follow-ups

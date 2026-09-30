@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -26,29 +26,29 @@ Depends on [PM6.2](phase-02-provider-registry.md). Better Auth owns assertion va
 
 ## Implementation
 
-Planned SAML registration mapped onto the plugin, metadata validation, SP value derivation, and IdP-initiated destination policy.
+SAML providers are set up from IdP metadata XML (preferred) or a manual SSO URL plus signing certificate. The SP entity ID (`<base>/api/auth/sso/saml2/sp/metadata?providerId=…`), ACS URL, metadata URL and callback are derived and returned for display. Validation parses the metadata with the plugin (`deriveSAMLIdentityProviderEntityID`), checks that signing certificates parse and have not expired, and reports `SAML_METADATA_INVALID`, `SAML_CERTIFICATE_INVALID` or `SAML_IDP_VALUES_MISSING`; invalid SAML is rejected on create and edit. Assertions are required to be signed by default. SP-initiated login uses the plugin's AuthnRequest/InResponseTo tracking. IdP-initiated login needs both `sso.saml.allowIdpInitiated` and a provider `idpInitiatedCallbackUrl` (a same-site path or an absolute URL; other origins must be trusted origins); unsolicited responses are recognized before the plugin runs and refused with `SAML_IDP_INITIATED_DISABLED` otherwise, and the plugin still validates the response and never redirects to an untrusted RelayState.
 
 ## Public API
 
-Planned `SAMLProvider` configuration, SP information, and validation result types.
+`SsoSamlInput`, `SsoSamlAdvanced`, `SsoSamlSummary` with `serviceProvider` (`acsUrl`, `entityId`, `metadataUrl`, `callbackUrl`) and `idpEntityId`, `sso.saml.allowIdpInitiated`, `POST /api/auth/sso/saml2/sp/acs/:providerId`, `GET /api/auth/sso/saml2/sp/metadata`.
 
 ## Files / Packages Changed
 
-Planned auth package, tests with a SAML fixture IdP, architecture, initiative index, and this record.
+`packages/auth/src/sso/{service,routes,options}.ts`, `packages/auth/tests/{sso,sso-saml}.test.ts` and fixtures (a long-lived test certificate), and this record.
 
 ## Tests
 
-Cover registration, metadata parsing, malformed metadata, certificate errors, SP values, SP-initiated login, configured IdP-initiated login, and rejection of untrusted redirect destinations.
+`sso-saml.test.ts` signs real SAML responses with samlify: SP-initiated sign-in creating a tagged session (and refusing a replay), IdP-initiated sign-in landing on the configured destination, refusal when the operator flag or destination is missing, untrusted RelayState ignored, altered and unsigned responses rejected with no user or session. `sso.test.ts`: SP values, malformed metadata, bad and expired certificates, manual settings, destination validation, metadata hidden and ACS refused for disabled providers. The admin browser check creates a SAML provider from pasted metadata.
 
 ## Acceptance Criteria
 
-- [ ] SAML registration works.
-- [ ] Metadata parsing works.
-- [ ] Malformed metadata fails clearly.
-- [ ] SP values are exposed for copy/setup.
-- [ ] SP-initiated login works.
-- [ ] IdP-initiated login works when configured.
-- [ ] Docs updated.
+- [x] SAML registration works.
+- [x] Metadata parsing works.
+- [x] Malformed metadata fails clearly.
+- [x] SP values are exposed for copy/setup.
+- [x] SP-initiated login works.
+- [x] IdP-initiated login works when configured.
+- [x] Docs updated.
 
 ## Validation
 
@@ -56,7 +56,7 @@ Run SAML tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, and `
 
 ## Known Limitations
 
-SAML single logout and encrypted-assertion options depend on what the installed plugin supports and are documented at implementation time.
+Single logout is not forwarded. Encrypted assertions and request signing are not configurable in the admin. Interactive SAML logins against a real IdP were not run; the fixtures sign responses with a test key.
 
 ## Follow-Ups
 
@@ -64,4 +64,4 @@ SAML single logout and encrypted-assertion options depend on what the installed 
 
 ## Completion Notes
 
-Pending implementation and validation.
+Assertion validation and NameID identity stay with Better Auth.

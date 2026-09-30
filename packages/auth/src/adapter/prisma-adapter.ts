@@ -42,7 +42,17 @@ export function authWhere(where: readonly CleanedWhere[] = []): object {
     return { ...(groups.AND.length ? { AND: groups.AND } : {}), ...(groups.OR.length ? { OR: groups.OR } : {}) };
 }
 
-export function createPrismaAuthAdapter(binding: AuthPrismaBinding, provider: PrismaProvider): DBAdapterInstance {
+/** Per-row value protection (for example encrypting provider secrets at rest), applied on every write and read. */
+export type AuthRowCodec = {
+    readonly seal: (model: string, row: Record<string, unknown>) => Promise<Record<string, unknown>>;
+    readonly open: (model: string, row: Record<string, unknown>) => Promise<Record<string, unknown>>;
+};
+
+export function createPrismaAuthAdapter(
+    binding: AuthPrismaBinding,
+    provider: PrismaProvider,
+    codec?: AuthRowCodec,
+): DBAdapterInstance {
     const backends: Record<string, QueryBackend> = Object.create(null) as Record<string, QueryBackend>;
     for (const model of AUTH_MODELS) {
         const collection = binding.collections[model];
@@ -102,6 +112,10 @@ export function createPrismaAuthAdapter(binding: AuthPrismaBinding, provider: Pr
                     : Object.fromEntries(
                           select.filter((field) => Object.hasOwn(row, field)).map((field) => [field, row[field]]),
                       );
+            const seal = async <T extends object>(model: string, row: T): Promise<T> =>
+                (codec ? await codec.seal(model, row as Record<string, unknown>) : row) as T;
+            const open = async (model: string, row: Record<string, unknown>): Promise<Record<string, unknown>> =>
+                codec ? codec.open(model, row) : row;
             const find = async (
                 model: string,
                 where: CleanedWhere[],
@@ -111,7 +125,7 @@ export function createPrismaAuthAdapter(binding: AuthPrismaBinding, provider: Pr
                     | Record<string, unknown>
                     | undefined;
 
-                return row === undefined ? null : project(row, select);
+                return row === undefined ? null : project(await open(model, row), select);
             };
             const guarded = (where: CleanedWhere[], row: Record<string, unknown>): CleanedWhere[] => [
                 ...where,
@@ -120,7 +134,10 @@ export function createPrismaAuthAdapter(binding: AuthPrismaBinding, provider: Pr
 
             return {
                 create: async <T extends Record<string, unknown>>({ model, data }: { model: string; data: T }) =>
-                    (await backend(model).create(data)) as T,
+                    (await open(
+                        model,
+                        (await backend(model).create(await seal(model, data))) as Record<string, unknown>,
+                    )) as T,
                 findOne: async <T>({
                     model,
                     where,
@@ -152,7 +169,11 @@ export function createPrismaAuthAdapter(binding: AuthPrismaBinding, provider: Pr
                     const selection = query(model, where, skip + limit);
                     const rows = await backend(model).all({ ...selection, orderBy: sortBy ? [sortBy] : [] });
 
-                    return rows.slice(skip).map((row) => project(row as Record<string, unknown>, select)) as T[];
+                    return (await Promise.all(
+                        rows
+                            .slice(skip)
+                            .map(async (row) => project(await open(model, row as Record<string, unknown>), select)),
+                    )) as T[];
                 },
                 count: async ({ model, where }) => backend(model).count(query(model, where)),
                 update: async <T>({ model, where, update }: { model: string; where: CleanedWhere[]; update: T }) => {
@@ -164,7 +185,10 @@ export function createPrismaAuthAdapter(binding: AuthPrismaBinding, provider: Pr
                         return null;
                     }
                     const matched = guarded(where, row);
-                    const count = await backend(model).update(query(model, matched), update as object);
+                    const count = await backend(model).update(
+                        query(model, matched),
+                        (await seal(model, update as object)) as object,
+                    );
                     if (count === 0) {
                         return null;
                     }
@@ -184,7 +208,7 @@ export function createPrismaAuthAdapter(binding: AuthPrismaBinding, provider: Pr
                         throw new AppError('AUTH_QUERY_UNSUPPORTED', 'Unscoped auth updates are forbidden.');
                     }
 
-                    return backend(model).update(query(model, where), update);
+                    return backend(model).update(query(model, where), await seal(model, update));
                 },
                 delete: async ({ model, where }) => {
                     if (!where.length) {

@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -26,27 +26,27 @@ Depends on [PM6.1](phase-01-better-auth-integration.md). Disabling is the normal
 
 ## Implementation
 
-Planned registry service, provider validation, encryption of sensitive fields, redacting serializers, and audit event emission.
+`SsoRegistry` (`packages/auth/src/sso/service.ts`) implements `SsoProviders` over the plugin's `ssoProvider` table. Nestrum state lives in the plugin's `additionalFields` on that table (`displayName`, `enabled`, `createdBy`, `updatedBy`, `lastValidatedAt`, `lastValidationStatus`, `lastSuccessfulLoginAt`, `createdAt`, `updatedAt`), so there is no second provider database. Inputs are validated strictly (zod, unknown keys rejected); provider IDs are 3–48 characters of lowercase letters, digits and hyphens, unique, permanent and never a reserved Better Auth or social ID; domains are normalized DNS names and several providers may share a domain or organization. OIDC client secrets and SAML private keys are sealed with AES-256-GCM (HKDF from the auth secret, `nsso1:` envelope) in the auth database adapter, so the plugin sees plaintext and the table never stores it. Summaries carry `clientSecretConfigured`, never a secret. Edits keep the stored secret unless a replacement is supplied. Disabling is an update; `delete` removes the provider row and its pending verification record only. An `onAudit` seam receives created/updated/enabled/disabled/deleted/test-attempted/domain-verification-changed events with the actor and changed setting names.
 
 ## Public API
 
-Planned `SSOProvider` types, registry service on `application.auth`, and the redacted provider representation.
+`application.auth.sso`: `list`, `get`, `create`, `update`, `setEnabled`, `delete`, `test`, `discover`, `requestDomainVerification`, `verifyDomain`; `SsoError` and its codes; `sso.onAudit`.
 
 ## Files / Packages Changed
 
-Planned auth/core packages, contracts if adjacent metadata is needed, tests, architecture, initiative index, and this record.
+`packages/auth/src/sso/{service,secrets}.ts`, `packages/auth/src/adapter/prisma-adapter.ts` (row codec), `packages/core/src/auth/sso.ts`, tests, decision 0017, and this record.
 
 ## Tests
 
-Cover provider ID validation and collisions, immutable IDs, multiple providers, enable/disable, encryption at rest, redaction of every read path, unchanged-secret edits, and organization/domain association.
+`packages/auth/tests/sso.test.ts` and `sso-units.test.ts`: creation, secret encryption at rest and non-disclosure, unchanged secret on edit, ID collision/reserved/malformed rejection and ID stability, several providers and organizations, private-host refusal, disabling without deletion, delete semantics (users, accounts, sessions kept), audit events, sealing round trips, tamper and wrong-key detection, SAML private-value sealing. `sso-postgres.mjs` repeats the essentials on real PostgreSQL, including a concurrent-creation race.
 
 ## Acceptance Criteria
 
-- [ ] Multiple providers supported.
-- [ ] IDs are unique.
-- [ ] Secrets cannot be read back.
-- [ ] Provider can be disabled without deletion.
-- [ ] Docs updated.
+- [x] Multiple providers supported.
+- [x] IDs are unique.
+- [x] Secrets cannot be read back.
+- [x] Provider can be disabled without deletion.
+- [x] Docs updated.
 
 ## Validation
 
@@ -54,7 +54,7 @@ Run registry/persistence tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pn
 
 ## Known Limitations
 
-No protocol-specific configuration or management surface yet.
+Rotating the auth secret makes stored provider secrets unreadable (`SSO_SECRET_UNREADABLE`) until re-entered. `organizationId` is an opaque application identifier; Nestrum does not validate it.
 
 ## Follow-Ups
 
@@ -62,4 +62,4 @@ No protocol-specific configuration or management surface yet.
 
 ## Completion Notes
 
-Pending implementation and validation.
+The registry is the only writer; the plugin's own registration and management endpoints are never reachable.
