@@ -5,6 +5,7 @@
     "type": "module",
     "scripts": {
         "integration": "node tooling/integration.mjs",
+        "e2e:admin-2fa": "node tooling/admin-2fa-browser.mjs",
         "dev": "nestrum dev",
         "build:app": "nestrum build",
         "start": "nestrum serve"

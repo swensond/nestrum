@@ -27,16 +27,44 @@ const auth = {
     initialize: async () => ({
         basePath: '/api/auth',
         handle: async () => new Response(null, { status: 404 }),
+        twoFactor: {
+            // `session=staff-setup` has no factor; `session=staff-challenge` has one but has not verified this session.
+            assurance: async (session) =>
+                session.session.id === 'setup'
+                    ? { level: 'single-factor', configured: false }
+                    : session.session.id === 'challenge'
+                      ? { level: 'single-factor', configured: true }
+                      : { level: 'two-factor', configured: true },
+            beginEnrollment: async () => ({
+                secret: 'JBSWY3DPEHPK3PXP',
+                otpauthUri: 'otpauth://totp/x?secret=JBSWY3DPEHPK3PXP',
+            }),
+            confirmEnrollment: async () => ({ assurance: { level: 'two-factor', configured: true } }),
+            verifyTotp: async () => ({ assurance: { level: 'two-factor', configured: true } }),
+            verifyRecovery: async () => ({ assurance: { level: 'two-factor', configured: true } }),
+            regenerateRecoveryCodes: async () => [],
+        },
         getSession: async (request) =>
-            ['session=staff', 'session=member'].includes(request.headers.get('cookie'))
+            ['session=staff', 'session=member', 'session=staff-setup', 'session=staff-challenge'].includes(
+                request.headers.get('cookie'),
+            )
                 ? {
                       user: { id: 'test-user' },
-                      session: { id: 'session', userId: 'test-user', expiresAt: new Date(Date.now() + 60_000) },
+                      session: {
+                          id:
+                              { 'session=staff-setup': 'setup', 'session=staff-challenge': 'challenge' }[
+                                  request.headers.get('cookie')
+                              ] ?? 'session',
+                          userId: 'test-user',
+                          expiresAt: new Date(Date.now() + 60_000),
+                      },
                   }
                 : null,
         resolveSubject: async (request) => ({
             id: 'test-user',
-            staff: request.headers.get('cookie') === 'session=staff',
+            staff: ['session=staff', 'session=staff-setup', 'session=staff-challenge'].includes(
+                request.headers.get('cookie'),
+            ),
         }),
     }),
 };
@@ -258,6 +286,48 @@ try {
         assert.ok(html.includes('Sign in'));
         assert.ok(!html.includes('href="/admin/projects"'));
     }
+    // Admin 2FA boundary in the compiled shell: browser navigation redirects, API calls get structured JSON errors.
+    for (const [cookie, page] of [
+        ['session=staff-setup', '/admin/auth/2fa/setup'],
+        ['session=staff-challenge', '/admin/auth/2fa'],
+    ]) {
+        const gate = await runtime.fetch(
+            new Request('http://localhost:3000/admin/projects?limit=50', { headers: { cookie } }),
+        );
+        assert.equal(gate.status, 303, cookie);
+        assert.equal(gate.headers.get('location'), `${page}?next=%2Fadmin%2Fprojects%3Flimit%3D50`);
+        assert.ok(!(await gate.text()).includes('Project One'));
+        const api = await request('/__admin/resources', cookie);
+        assert.equal(api.status, 403);
+        assert.equal((await api.json()).error.code, 'ADMIN_2FA_REQUIRED');
+    }
+    const challengePage = await request('/admin/auth/2fa?next=%2Fadmin%2Fprojects', 'session=staff-challenge');
+    assert.equal(challengePage.status, 200);
+    assert.equal(challengePage.headers.get('cache-control'), 'private, no-store');
+    const challengeHtml = await challengePage.text();
+    assert.ok(challengeHtml.includes('autocomplete="one-time-code"'));
+    assert.ok(challengeHtml.includes('name="next" value="/admin/projects"'));
+    assert.ok(!challengeHtml.includes('href="/admin/projects"'));
+    const setupPage = await (await request('/admin/auth/2fa/setup', 'session=staff-setup')).text();
+    assert.ok(setupPage.includes('Begin setup'));
+    const started = await runtime.fetch(
+        new Request('http://localhost:3000/admin/auth/2fa/setup?/start', {
+            method: 'POST',
+            headers: { cookie: 'session=staff-setup', origin: 'http://localhost:3000', accept: 'text/html' },
+            body: new URLSearchParams({ next: '/admin/projects' }),
+        }),
+    );
+    assert.equal(started.status, 200);
+    assert.ok((await started.text()).includes('JBSWY3DPEHPK3PXP'));
+    const challenged = await runtime.fetch(
+        new Request('http://localhost:3000/admin/auth/2fa', {
+            method: 'POST',
+            headers: { cookie: 'session=staff-challenge', origin: 'http://localhost:3000', accept: 'text/html' },
+            body: new URLSearchParams({ code: '123456', next: 'https://evil.example/' }),
+        }),
+    );
+    assert.equal(challenged.status, 303);
+    assert.equal(challenged.headers.get('location'), '/admin');
     const denied = await (await request('/admin', 'session=member')).text();
     assert.ok(denied.includes('Access denied'));
     assert.ok(!denied.includes('href="/admin/projects"'));

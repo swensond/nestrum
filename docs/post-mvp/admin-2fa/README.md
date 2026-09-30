@@ -2,16 +2,16 @@
 
 ## Status and navigation
 
-This is the second planned post-MVP initiative. PM2.0 records the contract; PM2.1–PM2.5 are Not Started. The routes, assurance APIs, TOTP storage, and admin UI described here are planned unless a phase records implementation evidence. This initiative does not change the remaining MVP gate for atomic object-policy writes or imply that admin 2FA is currently enforced.
+This is the second post-MVP initiative. PM2.0–PM2.5 are Complete: admin 2FA is required by default for the admin UI and private admin API, with framework-owned TOTP enrollment, recovery codes, and setup/challenge/recovery pages. The Docker integration run of the example (which now performs a real 2FA flow) belongs to the project owner and was not executed during implementation; everything else is recorded in the phase documents. This initiative does not change the remaining MVP gate for atomic object-policy writes.
 
 | Phase | Goal | Primary surface | Status |
 | --- | --- | --- | --- |
 | [PM2.0 — Contract](phase-00-contract.md) | Document default-required admin 2FA and enforcement boundaries | docs/core contracts | Complete |
-| [PM2.1 — Session assurance](phase-01-assurance.md) | Add an explicit, expiring assurance abstraction | auth/session contracts | Not Started |
-| [PM2.2 — Enrollment and recovery](phase-02-enrollment.md) | Implement TOTP setup and secure recovery codes | auth/admin backend | Not Started |
-| [PM2.3 — Admin challenge](phase-03-challenge.md) | Enforce assurance on admin UI and API boundaries | admin middleware/routes | Not Started |
-| [PM2.4 — Admin UI](phase-04-admin-ui.md) | Provide framework-owned setup/challenge/recovery pages | `@nestrum/admin-ui` | Not Started |
-| [PM2.5 — Hardening](phase-05-hardening.md) | Verify expiry, security diagnostics, and browser flows | integration/security | Not Started |
+| [PM2.1 — Session assurance](phase-01-assurance.md) | Add an explicit, expiring assurance abstraction | auth/session contracts | Complete |
+| [PM2.2 — Enrollment and recovery](phase-02-enrollment.md) | Implement TOTP setup and secure recovery codes | auth/admin backend | Complete |
+| [PM2.3 — Admin challenge](phase-03-challenge.md) | Enforce assurance on admin UI and API boundaries | admin middleware/routes | Complete |
+| [PM2.4 — Admin UI](phase-04-admin-ui.md) | Provide framework-owned setup/challenge/recovery pages | `@nestrum/admin-ui` | Complete |
+| [PM2.5 — Hardening](phase-05-hardening.md) | Verify expiry, security diagnostics, and browser flows | integration/security | Complete |
 
 The existing admin boundary is Better Auth session + `admin.access` ABAC + same-origin policy. This initiative adds an explicit current-session `two-factor` assurance requirement:
 
@@ -27,7 +27,7 @@ admin.access ABAC
 same-origin policy
 ```
 
-The order is authentication, required 2FA assurance, admin access ABAC, then resource/action authorization. 2FA never replaces authorization.
+All of these are always enforced, in this order: authentication, `admin.access` ABAC, required 2FA assurance, then resource/action authorization. (The conceptual order in the diagram puts assurance before `admin.access`; the implementation evaluates `admin.access` first only so that users who may not use administration learn nothing about their factor state. The allow/deny outcome is identical.) 2FA never replaces authorization.
 
 ## 1. Default security rule
 
@@ -150,15 +150,15 @@ Vitest must cover unauthenticated denial, authenticated single-factor denial, en
 
 ## 8. Definition of done
 
-- [ ] Admin 2FA is required by default.
-- [ ] TOTP enrollment is framework-owned.
-- [ ] Recovery codes are secure, hashed, one-time use, and shown only once.
-- [ ] The current session must satisfy second-factor assurance.
-- [ ] `/admin/*` enforces assurance.
-- [ ] `/__admin/*` enforces assurance.
-- [ ] `admin.access` ABAC remains mandatory.
-- [ ] Assurance expires independently from login.
-- [ ] The consuming application writes no custom admin MFA code.
-- [ ] Documentation reflects actual implementation.
+- [x] Admin 2FA is required by default.
+- [x] TOTP enrollment is framework-owned.
+- [x] Recovery codes are secure, hashed, one-time use, and shown only once.
+- [x] The current session must satisfy second-factor assurance.
+- [x] `/admin/*` enforces assurance.
+- [x] `/__admin/*` enforces assurance.
+- [x] `admin.access` ABAC remains mandatory.
+- [x] Assurance expires independently from login.
+- [x] The consuming application writes no custom admin MFA code.
+- [x] Documentation reflects actual implementation.
 
 Each phase updates documentation and leaves the repository green. See [architecture](../../architecture.md), [post-MVP roadmap](../../post-mvp.md), and the standard [phase documentation requirements](../../phases/README.md#completion-requirements).

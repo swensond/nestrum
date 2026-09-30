@@ -159,11 +159,13 @@ The planned package boundary is `@nestrum/runtime` for Node-free adapter/lifecyc
 
 ## Post-MVP admin 2FA
 
-The second post-MVP initiative is documented in the [admin 2FA plan](post-mvp/admin-2fa/README.md). It is planned work: PM2.0 documentation is complete, while PM2.1–PM2.5 have not started and admin 2FA is not currently enforced by the framework.
+The second post-MVP initiative is implemented; see the [admin 2FA plan](post-mvp/admin-2fa/README.md) and its phase records. Admin 2FA is required by default (`admin.security.twoFactor.required`, default `true`) and is enforced by the private admin router for every `/__admin/*` request; the admin UI redirects browser navigation to framework-owned pages.
 
-The target admin boundary becomes Better Auth session → current-session two-factor assurance → `admin.access` ABAC → same-origin policy. A configured factor is not sufficient: the current session must have completed a challenge. TOTP is the initial factor; recovery codes are one-time, cryptographically generated, hashed at rest, shown once, and invalidated on regeneration. Assurance may expire independently from the login session.
+The admin boundary is same-origin policy → Better Auth session → `admin.access` ABAC → current-session two-factor assurance → resource/action ABAC. `admin.access` is decided before assurance is disclosed so unauthorized users learn nothing about factor state. A configured factor is not sufficient: the current login session must have completed a challenge. Assurance is a framework-owned `AdminAssurance` row keyed by the Better Auth session id, expires independently (`assuranceTtlSeconds`, default 43200), and never changes the login session.
 
-The consuming application should not provide MFA middleware or pages. Planned framework routes are `/admin/auth/2fa/setup`, `/admin/auth/2fa`, and `/admin/auth/recovery`, with private API operations under `/__admin/auth/2fa/*`. Browser requests may navigate to framework-owned challenge/setup pages; private API requests return structured `ADMIN_2FA_REQUIRED` errors. Existing session, `admin.access`, resource/action ABAC, and same-origin checks remain mandatory. Passkeys/WebAuthn are future factors, not part of the initial plan.
+TOTP (RFC 6238, implemented on `node:crypto`) is the factor. Secrets are AES-256-GCM encrypted with a key derived from the auth secret; recovery codes are 60-bit CSPRNG values stored only as keyed hashes, one-time, shown once, and replaced as a set on regeneration. Repeated failures lock the factor (5 attempts, 300 s) across TOTP and recovery codes. The three storage models are auth-owned and included in the auth contract, so existing applications must migrate them.
+
+The consuming application writes no MFA middleware or pages. Framework routes are `/admin/auth/2fa/setup`, `/admin/auth/2fa`, and `/admin/auth/recovery`, with private API operations under `/__admin/auth/2fa/*` (only status, enrollment start/confirm, challenge, and recovery verification are reachable without existing assurance). Admin API requests without assurance receive `403 ADMIN_2FA_REQUIRED` (`reason`: `setup-required` | `challenge-required`), never an HTML redirect. Return URLs are restricted to same-origin `/admin` paths. Passkeys/WebAuthn are future factors.
 
 ## Post-MVP first-class API keys
 

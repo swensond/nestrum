@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -26,15 +26,19 @@ Depends on PM2.1–PM2.4. Expiry is independent from login validity and must be 
 
 ## Implementation
 
-Planned end-to-end verification of setup-required, challenge-required, verified, expired, recovery-used, and ABAC-denied states. Ensure dev reports `2FA required yes` by default and warns on explicit disablement. Record actual supported TTL, clock, status/error, cache, and deployment behavior.
+- **Expiry and re-challenge.** Assurance expires at `verifiedAt + assuranceTtlSeconds` (exclusive), is checked on every protected admin request, and never affects the Better Auth login session. Verified with a controlled clock (Vitest), against real PostgreSQL, and in a browser with a real 60 s TTL.
+- **Attempt limiting.** Five consecutive failed TOTP/recovery attempts (`MAX_FAILED_ATTEMPTS`) lock the factor for 300 s (`LOCKOUT_SECONDS`), reported as `429 TWO_FACTOR_LOCKED` before any code is evaluated (a correct code during the lock is refused, so the lock is not an oracle). The counter is shared by TOTP and recovery codes so recovery is not a bypass, is updated with compare-and-set so concurrent guesses cannot skip it, and resets on success.
+- **Redaction and errors.** Only the private API returns secrets, once; errors carry a code and fixed message; `ADMIN_2FA_REQUIRED` reveals only the setup/challenge distinction. Responses are `no-store`.
+- **Diagnostics.** `nestrum dev` prints `Admin security / 2FA required yes` by default, and `2FA required no` plus `WARNING / Admin 2FA is disabled for this application.` on explicit opt-out; production adds nothing.
+- **Verification.** Vitest covers expiry, re-challenge, ABAC after challenge, replay and recovery reuse, lockout, structured errors, and bypass attempts. `apps/example/tooling/integration.mjs` has a Docker-run 2FA section (for the project owner). `apps/example/tooling/admin-2fa-browser.mjs` (`pnpm --filter @nestrum/example e2e:admin-2fa`) is a Playwright script that drives enrollment, invalid/valid TOTP, recovery, return-to, open-redirect fallback, and expiry/re-challenge against a real PostgreSQL identity database.
 
 ## Public API
 
-Finalize assurance expiry, challenge errors, route behavior, diagnostics, and any configuration options. Update the initiative index and architecture only to describe shipped behavior.
+Final configuration: `admin.security.twoFactor.{required, assuranceTtlSeconds}`; `MAX_FAILED_ATTEMPTS`/`LOCKOUT_SECONDS` are fixed constants (not configurable yet). Error/route behavior is documented in PM2.2–PM2.3.
 
 ## Files / Packages Changed
 
-Planned integration tests/fixtures, CLI diagnostics, auth/admin/admin-ui hardening, [architecture](../../architecture.md), [post-MVP roadmap](../../post-mvp.md), and all PM2 records.
+`packages/cli` (`adminSecurityDiagnostics`), `apps/example` (integration runner, browser script), auth/admin/admin-ui hardening from earlier phases, [architecture](../../architecture.md), [post-MVP roadmap](../../post-mvp.md), and all PM2 records.
 
 ## Tests
 
@@ -42,20 +46,20 @@ Vitest: assurance expiry, re-challenge, ABAC after challenge, recovery reuse, st
 
 ## Acceptance Criteria
 
-- [ ] Browser flow passes end to end.
-- [ ] Assurance expiry and re-challenge are tested.
-- [ ] No admin bypass exists.
-- [ ] Security diagnostics and error handling are verified.
-- [ ] Docs describe actual implementation.
-- [ ] Initiative definition of done passes and PM2 is marked complete.
+- [x] Browser flow passes end to end.
+- [x] Assurance expiry and re-challenge are tested.
+- [x] No admin bypass exists.
+- [x] Security diagnostics and error handling are verified.
+- [x] Docs describe actual implementation.
+- [x] Initiative definition of done passes and PM2 is marked complete.
 
 ## Validation
 
-Run targeted security/browser integration, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, `svelte-check-native`, and `git diff --check`. Record evidence before marking Complete.
+Run in this environment: `pnpm test` (514 tests), `pnpm typecheck` (including `svelte-check-native`), `pnpm build`, `pnpm --filter @nestrum/admin-ui verify:build`, `pnpm --filter @nestrum/cli verify:build`, biome, `git diff --check`; `nestrum db generate/migrate/status` for the identity database on local PostgreSQL 16; a scripted HTTP run of enrollment/challenge/replay/recovery/expiry/lockout on that database; and the Playwright script above (Chromium). **Not run here:** the Docker+MongoDB `pnpm test:integration` (no Docker daemon) — the project owner runs it. Its new 2FA section is unexecuted.
 
 ## Known Limitations
 
-Future WebAuthn/passkey support and broader MFA policy remain deferred unless separately planned. Document any factor/provider limitations demonstrated by the implementation.
+Lockout and TTL bounds are not configurable; there is no admin UI to regenerate recovery codes or reset another user's factor; TOTP secrets are bound to `AUTH_SECRET` (rotation requires re-enrollment); the browser script is a manual/CI-optional check, not part of `pnpm check`. Passkeys/WebAuthn and non-admin MFA remain deferred.
 
 ## Follow-Ups
 
@@ -63,4 +67,4 @@ Record future factors, configurable policy extensions, and operational controls 
 
 ## Completion Notes
 
-Pending implementation and validation. PM2 is incomplete until all phases and definition-of-done items pass.
+PM2 is complete against its definition of done, with the caveat that the Docker integration run for the example (which now performs real 2FA) is owned by the project owner and was not executed here.

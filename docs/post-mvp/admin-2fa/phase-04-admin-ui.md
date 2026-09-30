@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -26,15 +26,20 @@ Depends on [PM2.3](phase-03-challenge.md) and existing admin-ui conventions. Pag
 
 ## Implementation
 
-Add routes/components to the existing Svelte admin shell. Handle setup-required, challenge-required, recovery, invalid-code, expired-assurance, and retry states. Make return-to-admin navigation explicit and safe. Do not require consuming applications to register components or routes.
+- **Routes** (SvelteKit under `packages/admin-ui/src/routes/auth/`): `2fa/setup` (begin → key/`otpauth` link → activate → one-time recovery codes), `2fa` (TOTP challenge), and `recovery` (recovery-code challenge). Applications register nothing.
+- **Native forms.** Every step is a plain `<form method="POST">` handled by SvelteKit form actions (`lib/two-factor.server.ts`), so the pages work without client JavaScript and reuse SvelteKit's origin check. Server actions call the private API through `event.fetch`, whose `handleFetch` already forwards the session cookie, `Origin`, and `Sec-Fetch-Site`.
+- **Return-to.** Forms carry a hidden `next` that is re-validated with `safeReturnTo` on the server; success redirects `303` to it.
+- **No secret persistence.** The setup key appears only in the `start` action's result; a failed activation never re-renders it and offers "Start over with a new key". The recovery codes appear only in the `confirm` action's result and cannot be fetched again. Responses carry the existing `Cache-Control: private, no-store`. The setup page deliberately does not redirect away from a freshly verified session, because the reload after activation would otherwise hide the recovery codes.
+- **Accessibility.** Labeled inputs, `autocomplete="one-time-code"`/`inputmode="numeric"` for TOTP, `role="alert"` for errors, plain links between challenge and recovery. Visual polish beyond function is out of scope.
+- **Messages.** Backend failures map to fixed safe messages (invalid code, locked, expired session, generic); response bodies are never echoed.
 
 ## Public API
 
-Framework-owned browser routes listed in the initiative README. Document form/API interactions and accessibility expectations after implementation.
+Browser routes `/admin/auth/2fa/setup`, `/admin/auth/2fa`, `/admin/auth/recovery`; form actions `?/start` and `?/confirm` on setup and the default action elsewhere, all taking `code` (bounded, single value) and `next`.
 
 ## Files / Packages Changed
 
-Planned `packages/admin-ui` routes/components, private API client helpers, tests, [architecture](../../architecture.md), [initiative index](README.md), and this record.
+`packages/admin-ui` (`routes/auth/**`, `lib/two-factor.server.ts`, `lib/return-to.ts`, `AdminShell.svelte` two-factor state, `vitest.config.ts` `$lib` alias), tests, [architecture](../../architecture.md), [initiative index](README.md), and this record.
 
 ## Tests
 
@@ -42,20 +47,20 @@ Cover Svelte rendering/forms, setup/challenge/recovery states, successful return
 
 ## Acceptance Criteria
 
-- [ ] No application-owned Svelte MFA code is required.
-- [ ] Setup, challenge, and recovery pages work.
-- [ ] Successful challenge returns to intended route.
-- [ ] Recovery flow works.
-- [ ] `svelte-check-native` passes.
-- [ ] Docs updated.
+- [x] No application-owned Svelte MFA code is required.
+- [x] Setup, challenge, and recovery pages work.
+- [x] Successful challenge returns to intended route.
+- [x] Recovery flow works.
+- [x] `svelte-check-native` passes.
+- [x] Docs updated.
 
 ## Validation
 
-Run targeted admin-ui tests, `svelte-check-native`, `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm check`, and applicable browser checks. Record asset/cache behavior and `git diff --check`.
+`packages/admin-ui/tests/two-factor.test.ts` (server-rendered pages for every setup step, form parsing, safe-message mapping, network failure, malformed forms rejected before any API call), `pnpm --filter @nestrum/admin-ui check` (`svelte-check-native`), `pnpm build`/`verify:build`, `pnpm test`, `pnpm typecheck`, `pnpm check`. The pages were then driven end to end in Chromium (see PM2.5).
 
 ## Known Limitations
 
-Full Playwright enrollment/challenge/expiry coverage and security diagnostics are PM2.5.
+No rendered QR image; users add the account via the `otpauth://` link or manual key. Pages are functional, not visually designed. No UI for regenerating recovery codes yet (the API exists).
 
 ## Follow-Ups
 
@@ -63,4 +68,4 @@ Full Playwright enrollment/challenge/expiry coverage and security diagnostics ar
 
 ## Completion Notes
 
-Pending implementation and validation.
+PM2.4 is complete. The build/asset behavior is unchanged: the pages compile into the existing prebuilt admin shell.
