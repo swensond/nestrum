@@ -69,4 +69,4 @@ Owners are entered as user IDs (no picker). No edit-in-place (rename, rescope): 
 
 ## Completion Notes
 
-Pending implementation and validation.
+Management uses the same boundary as staff management, plus its own ABAC actions.

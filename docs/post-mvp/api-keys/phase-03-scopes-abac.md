@@ -67,4 +67,4 @@ Scope vocabulary is string-based and is not registered or checked against resour
 
 ## Completion Notes
 
-Pending implementation and validation.
+Effective authorization is the intersection of scope and ABAC, enforced before any data access.

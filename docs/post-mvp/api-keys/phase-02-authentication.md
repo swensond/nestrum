@@ -68,4 +68,4 @@ HTTP only (no WebSocket or other transports). Only the canonical header is accep
 
 ## Completion Notes
 
-Pending implementation and validation.
+Keys authenticate as their own principal; resources that do not opt in behave exactly as before.

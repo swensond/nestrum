@@ -66,4 +66,4 @@ Only `user` owners (organization owners need Better Auth's organization plugin).
 
 ## Completion Notes
 
-Pending implementation and validation.
+Implemented with the official plugin; Nestrum adds validation, the typed service, and the prebaked contract. Key format, hash, and storage decisions are in [decision 0015](../../decisions/0015-api-keys.md).
