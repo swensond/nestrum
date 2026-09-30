@@ -13,6 +13,7 @@ const STATUS = Object.freeze({
     ADMIN_ACTION_DUPLICATE: 500,
     ADMIN_ORIGIN_DENIED: 403,
     ADMIN_AUTHENTICATION_REQUIRED: 401,
+    ADMIN_2FA_REQUIRED: 403,
 });
 
 export type AdminErrorCode = keyof typeof STATUS;
@@ -21,5 +22,16 @@ export class AdminError extends AppError {
     constructor(code: AdminErrorCode, message: string, options?: ErrorOptions) {
         super(code, message, STATUS[code], options);
         this.name = 'AdminError';
+    }
+}
+
+/** Why the current session lacks required admin assurance. */
+export type AdminTwoFactorReason = 'setup-required' | 'challenge-required';
+
+/** Structured, minimally informative denial for a session that has not satisfied the second factor. */
+export class AdminTwoFactorRequiredError extends AdminError {
+    constructor(readonly reason: AdminTwoFactorReason) {
+        super('ADMIN_2FA_REQUIRED', 'Admin access requires two-factor verification.');
+        this.name = 'AdminTwoFactorRequiredError';
     }
 }

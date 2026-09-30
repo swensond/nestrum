@@ -106,6 +106,14 @@ function fixture(
         initialize: async () => ({
             basePath: '/api/auth',
             handle: async () => new Response(null, { status: 404 }),
+            twoFactor: {
+                assurance: async () => ({ level: 'two-factor', configured: true }),
+                beginEnrollment: async () => ({ secret: 'unused', otpauthUri: 'otpauth://unused' }),
+                confirmEnrollment: async () => ({ assurance: { level: 'two-factor', configured: true } }),
+                verifyTotp: async () => ({ assurance: { level: 'two-factor', configured: true } }),
+                verifyRecovery: async () => ({ assurance: { level: 'two-factor', configured: true } }),
+                regenerateRecoveryCodes: async () => [],
+            },
             getSession,
             resolveSubject: async (request) =>
                 (await getSession(request)) ? { id: 'alice', anonymous: false } : { anonymous: true },
@@ -622,6 +630,7 @@ describe('Private admin backend', () => {
     it('uses a real Better Auth session and SubjectFactory, rejects expired sessions and logout', async () => {
         const memory = storage();
         const { runtime, request, application } = fixture({
+            admin: { security: { twoFactor: { required: false } } },
             auth: defineAuth({
                 database: 'identity',
                 baseURL: BASE_URL,

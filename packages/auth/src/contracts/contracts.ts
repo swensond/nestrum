@@ -3,6 +3,10 @@ import type { AuthFieldDescriptor } from './fields.js';
 
 export const AUTH_MODELS = ['User', 'Session', 'Account', 'Verification'] as const;
 export type AuthModel = (typeof AUTH_MODELS)[number];
+/** Framework-owned second-factor models. Better Auth never reads or writes these. */
+export const TWO_FACTOR_MODELS = ['AdminAssurance', 'TwoFactorFactor', 'TwoFactorRecoveryCode'] as const;
+export type TwoFactorModel = (typeof TWO_FACTOR_MODELS)[number];
+export type AuthStorageModel = AuthModel | TwoFactorModel;
 
 export function authContract(
     provider: PrismaProvider,
@@ -19,6 +23,9 @@ export function authContract(
         )
         .join('\n');
     const reference = mongo ? '' : '\n    user User @relation(fields: [userId], references: [id], onDelete: Cascade)';
+    const sessionReference = mongo
+        ? ''
+        : '\n    session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)';
 
     return `model User {
     id ${key}
@@ -63,6 +70,34 @@ model Verification {
     expiresAt ${date}
     createdAt ${date}
     updatedAt ${date}
+}
+model AdminAssurance {
+    id ${key}
+    sessionId String @unique
+    userId String
+    method String
+    verifiedAt ${date}
+    expiresAt ${date}
+    createdAt ${date}${sessionReference}
+}
+model TwoFactorFactor {
+    id ${key}
+    userId String @unique
+    type String
+    secret String
+    confirmedAt ${date}?
+    lastUsedStep Int?
+    failedAttempts Int
+    lockedUntil ${date}?
+    createdAt ${date}
+    updatedAt ${date}${reference}
+}
+model TwoFactorRecoveryCode {
+    id ${key}
+    userId String
+    codeHash String @unique
+    usedAt ${date}?
+    createdAt ${date}${reference}
 }
 `;
 }

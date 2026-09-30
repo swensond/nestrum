@@ -9,11 +9,12 @@ import { AppError, defineApp, modelIdentity } from '@nestrum/core';
 import { betterAuth } from 'better-auth';
 import type { AuthPrismaBinding } from '#auth/adapter/prisma-adapter';
 import { createPrismaAuthAdapter } from '#auth/adapter/prisma-adapter';
-import { AUTH_MODELS, authContract } from '#auth/contracts/contracts';
+import { AUTH_MODELS, authContract, TWO_FACTOR_MODELS } from '#auth/contracts/contracts';
 import type { AuthField } from '#auth/contracts/fields';
 import { userExtensions } from '#auth/contracts/fields';
 import type { SubjectMapper } from '#auth/session/subject-factory';
 import { SubjectFactory } from '#auth/session/subject-factory';
+import { createTwoFactorService } from '#auth/two-factor/service';
 
 export type AuthConfig = {
     readonly database?: string;
@@ -27,6 +28,12 @@ export type AuthConfig = {
     readonly extend?: { readonly user?: Readonly<Record<string, AuthField>> };
     readonly trustedOrigins?: readonly string[];
     readonly subjectFactory?: SubjectMapper;
+    readonly twoFactor?: {
+        /** Authenticator-app issuer label. Defaults to "Nestrum". */
+        readonly issuer?: string;
+        /** Test seam: clock in milliseconds since the epoch used for TOTP steps, lockout and assurance expiry. */
+        readonly now?: () => number;
+    };
 };
 
 function origin(value: string): string {
@@ -61,7 +68,13 @@ export function defineAuth(config: AuthConfig): AuthenticationDefinition {
         );
     }
     const database = config.database ?? 'default';
-    const protectedModels = Object.freeze(AUTH_MODELS.map((model) => modelIdentity(model, database)));
+    const protectedModels = Object.freeze(
+        [...AUTH_MODELS, ...TWO_FACTOR_MODELS].map((model) => modelIdentity(model, database)),
+    );
+    const issuer = config.twoFactor?.issuer ?? 'Nestrum';
+    if (typeof issuer !== 'string' || !issuer.trim() || issuer.includes(':') || issuer.length > 64) {
+        throw new AppError('AUTH_CONFIG_INVALID', 'Two-factor issuer must be a short label without a colon.');
+    }
     const baseURL = origin(config.baseURL);
     if (config.trustedOrigins !== undefined && !Array.isArray(config.trustedOrigins)) {
         throw new AppError('AUTH_CONFIG_INVALID', 'Trusted auth origins must be an array.');
@@ -111,8 +124,17 @@ export function defineAuth(config: AuthConfig): AuthenticationDefinition {
 
                 return session as AuthSession | null;
             };
+            const twoFactor = createTwoFactorService({
+                binding,
+                provider: definition.provider,
+                secret,
+                issuer,
+                ...(config.twoFactor?.now === undefined ? {} : { now: config.twoFactor.now }),
+            });
+
             return Object.freeze({
                 basePath: '/api/auth' as const,
+                twoFactor,
                 async handle(request: Request): Promise<Response> {
                     const path = new URL(request.url).pathname;
                     const requestOrigin = request.headers.get('origin');

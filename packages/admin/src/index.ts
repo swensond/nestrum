@@ -13,3 +13,5 @@ export { defineAdmin } from './admin.js';
 export type { AdminActionMetadata, AdminFieldMetadata, AdminResourceMetadata } from './metadata.js';
 export type { AdminOptions } from './registry.js';
 export { ADMIN_BASE_PATH } from './router.js';
+export type { AdminSecurityOptions } from './security.js';
+export { DEFAULT_ASSURANCE_TTL_SECONDS, resolveTwoFactorPolicy } from './security.js';
