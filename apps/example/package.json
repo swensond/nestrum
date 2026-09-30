@@ -5,7 +5,9 @@
     "type": "module",
     "scripts": {
         "integration": "node tooling/integration.mjs",
-        "start": "node src/server.mjs"
+        "dev": "nestrum dev",
+        "build:app": "nestrum build",
+        "start": "nestrum serve"
     },
     "dependencies": {
         "@nestrum/core": "workspace:*",

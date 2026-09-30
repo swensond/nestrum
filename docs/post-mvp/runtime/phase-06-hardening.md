@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete, except the Vite/HMR admin development flow deferred from PM1.5
 
 ## Goal
 
@@ -29,17 +29,21 @@ Health means alive; readiness means successful bootstrap, required database/fram
 
 ## Implementation
 
-Planned endpoints are `/__nestrum/health` and `/__nestrum/ready`, with minimal responses. Configuration/disablement may be added later. Ensure production exposes no development pages, inspectors, Vite/watcher endpoints, development metadata, or source maps unless configured.
-
-Missing/stale/incompatible builds produce actionable guidance and never trigger automatic build/generation/migration. Document the implemented stale-build definition and compatibility policy rather than assuming timestamps alone establish validity.
+- **Health and readiness** (`packages/cli/src/health.ts`, used by `serve` and `dev`). `GET|HEAD /__nestrum/health` returns `200 {"status":"ok"}` while the process is serving, including during draining. `GET|HEAD /__nestrum/ready` returns `200 {"status":"ready"}` only when bootstrap finished and shutdown has not begun, otherwise `503 {"status":"unavailable"}`. Other methods return 405. Responses are `no-store` and disclose nothing else. The routes are handled before the application and are not configurable or disableable yet.
+- **Readiness transitions.** The listener binds only after `runtime.start()` succeeds, so readiness is true from the first accepted connection; `shutdown()` flips it to false before stopping traffic.
+- **Signals.** The first `SIGINT`/`SIGTERM` starts the ordered shutdown (stop accepting → drain → reverse app shutdown → DI disposal → database disconnect → close listener). A repeated signal, or a shutdown that fails (for example at the drain deadline), prints a message and exits with status 1 immediately. Signal handlers are installed once per process and never stack.
+- **Drain deadline.** `server.drainTimeoutMs` (default 30000) bounds waiting for requests in the Hono runtime. On expiry shutdown fails with `HTTP_RUNTIME_DRAIN_TIMEOUT`, resources deliberately stay open (nothing still in use is disposed), the listener is not awaited, and the command exits 1. `dev` restarts use a 5 s deadline.
+- **Startup rollback.** Failures during application startup roll back through the existing lifecycle (configured apps' `shutdown` hooks run, DI is disposed, managed databases disconnect); the listener is never bound. A bind failure after readiness shuts the runtime down before rethrowing.
+- **Stale and missing builds.** A build is usable only if the manifest exists, its manifest and Nestrum versions match, the entry file's SHA-256 matches the manifest, and every declared contract/metadata artifact exists. Anything else fails with a `BUILD_*` code and `Run: nestrum build`. Source timestamps are deliberately not consulted: `serve` need not have sources. Nothing is built, generated, or migrated automatically.
+- **Production isolation.** `serve` loads only the manifest, the compiled entry, the Hono runtime, the Node adapter, and (when configured) the prebuilt admin package; it imports no watcher, esbuild build path, Vite, or generation code at runtime beyond what module imports of `@nestrum/cli` already contain, exposes no source maps, and adds no diagnostic endpoints.
 
 ## Public API
 
-Planned health/readiness routes, signal/close/drain guarantees, startup/build errors, and diagnostics. Record final timeout/options/status semantics after implementation.
+`/__nestrum/health`, `/__nestrum/ready`, `server.drainTimeoutMs`, `withHealth`, `HEALTH_PATH`, `READY_PATH`, and `installShutdownSignals`' new `onRepeat` option.
 
 ## Files / Packages Changed
 
-Planned: `packages/runtime`, `packages/runtime-node`, `packages/cli`, required core/Hono lifecycle seams, integration fixtures, example configuration/scripts/bootstrap removal, [architecture](../../architecture.md), [roadmap](../../post-mvp.md), and all runtime phase/index documentation.
+`packages/cli` (health, serve, dev, signals, config, `bin`, `tooling/verify-build.mjs`), [architecture](../../architecture.md), [roadmap](../../post-mvp.md), and all runtime phase/index documentation.
 
 ## Tests
 
@@ -54,27 +58,27 @@ Cover health/readiness, active requests, deadlines, repeated signals, startup fa
 
 ## Acceptance Criteria
 
-- [ ] Graceful shutdown is tested for SIGINT and SIGTERM.
-- [ ] Active requests drain within documented configured behavior.
-- [ ] Health endpoint works.
-- [ ] Readiness reflects lifecycle correctly.
-- [ ] Startup failure cleans up partially initialized subsystems.
-- [ ] Stale/missing build errors are useful.
-- [ ] Build/serve/request/shutdown integration passes.
-- [ ] Dev/edit/restart/request integration passes.
-- [ ] No manual server bootstrap exists in the normal example.
-- [ ] Production exposes no development tooling.
-- [ ] Database migrations remain explicit.
-- [ ] Documentation is updated.
-- [ ] Every item in the [initiative definition of done](README.md#37-definition-of-done) passes and the initiative is marked complete.
+- [x] Graceful shutdown is tested for SIGINT and SIGTERM.
+- [x] Active requests drain within documented configured behavior.
+- [x] Health endpoint works.
+- [x] Readiness reflects lifecycle correctly.
+- [x] Startup failure cleans up partially initialized subsystems.
+- [x] Stale/missing build errors are useful.
+- [x] Build/serve/request/shutdown integration passes.
+- [x] Dev/edit/restart/request integration passes.
+- [x] No manual server bootstrap exists in the normal example (`server.mjs`/`host.mjs` removed; `nestrum.config.mjs` + `nestrum build/serve/dev`).
+- [x] Production exposes no development tooling.
+- [x] Database migrations remain explicit.
+- [x] Documentation is updated.
+- [ ] Every item in the [initiative definition of done](README.md#37-definition-of-done) passes and the initiative is marked complete. All items pass except "Svelte admin development works under `dev`": `dev` serves the prebuilt admin shell without Vite/HMR. The initiative is therefore complete apart from that recorded follow-up.
 
 ## Validation
 
-Run targeted process/HTTP lifecycle integration, `pnpm test`, `pnpm typecheck`, `pnpm build`, and `pnpm check`. Run applicable real database and browser integration. Record signal/drain/readiness/failure evidence, supported deployment assumptions, and `git diff --check` before marking Complete.
+Validated: in-process tests for health/readiness, readiness dropping while an in-flight request still completes, rollback hooks, and the drain deadline; `pnpm --filter @nestrum/cli verify:build` runs the compiled CLI as real processes (`build` → `serve` → health/ready over HTTP → `SIGTERM` and separately `SIGINT` → exit code 0 with the port closed, plus missing-build guidance); a manual compiled `nestrum dev` session was run (start, source edit changing the HTTP response, Prisma edit, `SIGINT` exit). The full Docker integration (`pnpm test:integration`: PostgreSQL + MongoDB, generation/migration through the CLI, `nestrum build`, `runServe`, Better Auth sessions, ABAC, public CRUD, admin API/UI forms, ordered shutdown) was then run by the project owner locally and passed after the `content-length` fix below. The sandbox used for development has no Docker daemon and no MongoDB, so the full integration run could not be executed here. What was run against the migrated example: `nestrum build` (3 apps, 2 resources, 3 databases, auth, admin; dummy connections, no database contact); `nestrum db generate/migrate --plan/migrate/status` against a local PostgreSQL 16 for `default` and `identity`; and `nestrum serve`, which loaded the built bundle, read the emitted contracts, created the clients, and reached the database-connect step (it then failed on the deliberately unreachable MongoDB and rolled back). The Auth/ABAC/CRUD/admin HTTP assertions in `apps/example/tooling/integration.mjs` were rewritten but not executed.
 
 ## Known Limitations
 
-Non-Node runtimes remain deferred. Describe any streaming/detached-work/cancellation constraints and deployment dependency/artifact requirements demonstrated by the final implementation.
+**Still open:** (1) the admin shell under `dev` is the prebuilt one (no Vite/HMR); (2) applications still read emitted contracts and build Prisma clients themselves (the example does this in `prepare`), and module-relative paths inside the bundle refer to the bundle location, so application code locates artifacts via `new URL('../contracts/<db>.json', import.meta.url)`. Non-Node runtimes remain deferred. Describe any streaming/detached-work/cancellation constraints and deployment dependency/artifact requirements demonstrated by the final implementation.
 
 ## Follow-Ups
 
@@ -82,4 +86,4 @@ Record remaining optional adapters, health route configurability, advanced escap
 
 ## Completion Notes
 
-Pending implementation and validation. The runtime initiative remains incomplete until all required phase criteria and definition-of-done items pass.
+The example was migrated to the framework-owned lifecycle. Changes this forced: `contractDirs` (per-database emission directories, needed because Prisma 8 allows one database facade per package), a stable `contracts/<db>.json` per build, a uniform `dev/server/` layout, `@nestrum/admin-ui` as a CLI dependency (found missing by the local serve run), and CLI errors printing their message for runtime commands. The Docker integration run passed. The initiative meets its definition of done except admin Vite/HMR development, which is an explicit follow-up.

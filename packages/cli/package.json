@@ -21,7 +21,13 @@
         "verify:build": "node tooling/verify-build.mjs"
     },
     "dependencies": {
+        "@nestrum/admin-ui": "workspace:*",
         "@nestrum/core": "workspace:*",
-        "@nestrum/prisma": "workspace:*"
+        "@nestrum/hono": "workspace:*",
+        "@nestrum/prisma": "workspace:*",
+        "@nestrum/runtime": "workspace:*",
+        "@nestrum/runtime-node": "workspace:*",
+        "@nestrum/zod": "workspace:*",
+        "esbuild": "0.28.2"
     }
 }

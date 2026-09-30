@@ -140,6 +140,16 @@ export class Application {
         return this.currentState;
     }
 
+    /** Whether Better Auth was configured, known before startup so build tooling can validate it offline. */
+    get authConfigured(): boolean {
+        return this.authDefinition !== undefined;
+    }
+
+    /** Whether the admin was configured, known before startup. */
+    get adminConfigured(): boolean {
+        return this.adminDefinition !== undefined;
+    }
+
     get auth(): Authentication | undefined {
         return this.authentication;
     }

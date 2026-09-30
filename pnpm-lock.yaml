@@ -304,12 +304,30 @@ importers:
 
   packages/cli:
     dependencies:
+      '@nestrum/admin-ui':
+        specifier: workspace:*
+        version: link:../admin-ui
       '@nestrum/core':
         specifier: workspace:*
         version: link:../core
+      '@nestrum/hono':
+        specifier: workspace:*
+        version: link:../hono
       '@nestrum/prisma':
         specifier: workspace:*
         version: link:../prisma
+      '@nestrum/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@nestrum/runtime-node':
+        specifier: workspace:*
+        version: link:../runtime-node
+      '@nestrum/zod':
+        specifier: workspace:*
+        version: link:../zod
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
 
   packages/core:
     dependencies:
@@ -356,6 +374,27 @@ importers:
       prisma:
         specifier: 8.0.0-rc.13
         version: 8.0.0-rc.13(@types/node@26.6.3)(@vercel/nft@1.11.0)(magicast@0.5.5)(mongodb@7.7.0(@aws-sdk/credential-providers@3.1142.0))(pg@8.22.0)(typanion@3.14.0)(typescript@7.0.2)(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@5.0.2(@types/node@26.6.3)(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(ws@8.22.0)
+
+  packages/runtime: {}
+
+  packages/runtime-node:
+    dependencies:
+      '@hono/node-server':
+        specifier: 1.19.9
+        version: 1.19.9(hono@4.13.11)
+      '@nestrum/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+    devDependencies:
+      '@nestrum/core':
+        specifier: workspace:*
+        version: link:../core
+      '@nestrum/hono':
+        specifier: workspace:*
+        version: link:../hono
+      hono:
+        specifier: 4.13.11
+        version: 4.13.11
 
   packages/zod:
     dependencies:
@@ -4235,6 +4274,10 @@ snapshots:
   '@hono/node-server@1.19.9(hono@4.11.4)':
     dependencies:
       hono: 4.11.4
+
+  '@hono/node-server@1.19.9(hono@4.13.11)':
+    dependencies:
+      hono: 4.13.11
 
   '@hono/zod-openapi@1.6.3(hono@4.13.11)(zod@4.6.5)':
     dependencies:

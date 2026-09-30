@@ -7,7 +7,19 @@ export class CliError extends AppError {
             | 'CLI_CONFIG_INVALID'
             | 'CLI_CONFIG_LOAD_FAILED'
             | 'CLI_DATABASE_EMPTY'
-            | 'CLI_DELEGATE_FAILED',
+            | 'CLI_DELEGATE_FAILED'
+            | 'CLI_CONFIG_NOT_FOUND'
+            | 'CLI_ENVIRONMENT_CONFLICT'
+            | 'CLI_SERVER_OPTIONS_INVALID'
+            | 'BUILD_BUNDLE_FAILED'
+            | 'BUILD_VALIDATION_FAILED'
+            | 'BUILD_NOT_FOUND'
+            | 'BUILD_MANIFEST_INVALID'
+            | 'BUILD_INCOMPATIBLE'
+            | 'BUILD_INCOMPLETE'
+            | 'BUILD_STALE'
+            | 'SERVE_START_FAILED'
+            | 'DEV_START_FAILED',
         message: string,
         public readonly exitCode = 1,
         options?: ErrorOptions,

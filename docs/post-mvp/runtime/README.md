@@ -2,17 +2,17 @@
 
 ## Status and navigation
 
-This is the first post-MVP initiative. PM1.0 records the runtime contract; PM1.1–PM1.6 are not started. Commands, packages, configuration APIs, and build artifacts described below are planned unless a phase explicitly records implementation evidence. This initiative does not close the remaining MVP gate for atomic object-policy writes.
+This is the first post-MVP initiative. PM1.0 records the runtime contract; PM1.1–PM1.4 are complete; PM1.5 (backend loop; no admin HMR) is complete; PM1.6 is complete; the initiative meets its definition of done except admin Vite/HMR development are not started. Commands, packages, configuration APIs, and build artifacts described below are planned unless a phase explicitly records implementation evidence. This initiative does not close the remaining MVP gate for atomic object-policy writes.
 
 | Phase | Goal | Primary surface | Status |
 | --- | --- | --- | --- |
 | [PM1.0 — Runtime documentation and contract](phase-00-runtime-contract.md) | Document the self-serving runtime before implementation | docs/core contracts | Complete |
-| [PM1.1 — Runtime adapter abstraction](phase-01-runtime-adapter.md) | Define portable server contracts | `@nestrum/runtime` | Not Started |
-| [PM1.2 — Node production runtime](phase-02-node-runtime.md) | Implement the first HTTP adapter | `@nestrum/runtime-node` | Not Started |
-| [PM1.3 — Build](phase-03-build.md) | Produce validated production artifacts | CLI/build pipeline | Not Started |
-| [PM1.4 — Serve](phase-04-serve.md) | Start a previously built application | production startup | Not Started |
-| [PM1.5 — Dev](phase-05-dev.md) | Own regeneration, watching, and restart | development orchestrator | Not Started |
-| [PM1.6 — Runtime hardening](phase-06-hardening.md) | Verify health, readiness, shutdown, and integration | runtime lifecycle | Not Started |
+| [PM1.1 — Runtime adapter abstraction](phase-01-runtime-adapter.md) | Define portable server contracts | `@nestrum/runtime` | Complete |
+| [PM1.2 — Node production runtime](phase-02-node-runtime.md) | Implement the first HTTP adapter | `@nestrum/runtime-node` | Complete |
+| [PM1.3 — Build](phase-03-build.md) | Produce validated production artifacts | CLI/build pipeline | Complete |
+| [PM1.4 — Serve](phase-04-serve.md) | Start a previously built application | production startup | Complete |
+| [PM1.5 — Dev](phase-05-dev.md) | Own regeneration, watching, and restart | development orchestrator | Complete |
+| [PM1.6 — Runtime hardening](phase-06-hardening.md) | Verify health, readiness, shutdown, and integration | runtime lifecycle | Complete |
 
 Each phase updates its documentation and leaves the repository green. Read [architecture](../../architecture.md), [the post-MVP roadmap](../../post-mvp.md), and the relevant phase record before implementation. The phase records follow the [existing completion requirements](../../phases/README.md#completion-requirements).
 
@@ -97,7 +97,7 @@ export interface RuntimeAdapter {
 }
 ```
 
-This is a proposed contract shape, not an existing exported API. PM1.1 must resolve the exact application type and its ready Fetch interface against current core/Hono contracts.
+This is a proposed contract shape, not an existing exported API. PM1.1 resolved the application type as a Fetch-handler-only `ServableApplication` (see [PM1.1](phase-01-runtime-adapter.md)).
 
 Initial packages are `@nestrum/runtime` and `@nestrum/runtime-node`. Possible future adapters are `@nestrum/runtime-bun`, `@nestrum/runtime-deno`, and `@nestrum/runtime-cloudflare`. Only Node needs official support initially. Prisma and database driver compatibility remain portability constraints.
 
@@ -537,20 +537,20 @@ The server honors `HOST`, `PORT`, and `SIGTERM` without application-owned bootst
 
 ## 37. Definition of done
 
-- [ ] Users define `nestrum.config.ts`.
-- [ ] No application-owned HTTP bootstrap is necessary.
-- [ ] `nestrum dev` loads and serves the application.
-- [ ] Source changes reload automatically in development.
-- [ ] Prisma changes trigger framework regeneration.
-- [ ] Svelte admin development works under `dev`.
-- [ ] `nestrum build` produces a production build.
-- [ ] `nestrum serve` serves it without compilers/watchers.
-- [ ] Better Auth, public APIs, admin APIs, and Svelte admin work.
-- [ ] Graceful shutdown works.
-- [ ] Health/readiness work.
-- [ ] Database migrations remain explicit.
-- [ ] Node serving is isolated behind `@nestrum/runtime-node`.
-- [ ] Documentation accurately describes the finished implementation.
+- [x] Users define `nestrum.config.ts`.
+- [x] No application-owned HTTP bootstrap is necessary (the example is migrated; Docker integration passed).
+- [x] `nestrum dev` loads and serves the application.
+- [x] Source changes reload automatically in development.
+- [x] Prisma changes trigger framework regeneration.
+- [ ] Svelte admin development works under `dev` (prebuilt shell only; no HMR).
+- [x] `nestrum build` produces a production build.
+- [x] `nestrum serve` serves it without compilers/watchers.
+- [x] Better Auth, public APIs, admin APIs, and Svelte admin work (verified by the Docker integration run).
+- [x] Graceful shutdown works.
+- [x] Health/readiness work.
+- [x] Database migrations remain explicit.
+- [x] Node serving is isolated behind `@nestrum/runtime-node`.
+- [x] Documentation accurately describes the finished implementation (accurate for what exists; the initiative is unfinished).
 
 ## 38. Architectural summary
 

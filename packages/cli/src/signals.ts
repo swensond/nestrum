@@ -5,12 +5,14 @@ export type ShutdownSignals = {
 
 export function installShutdownSignals(
     target: { shutdown(): Promise<void> },
-    options: { source?: ShutdownSignals; onError?: (error: unknown) => void } = {},
+    options: { source?: ShutdownSignals; onError?: (error: unknown) => void; onRepeat?: () => void } = {},
 ): () => void {
     const source = options.source ?? process;
     let pending = false;
     const shutdown = () => {
         if (pending) {
+            options.onRepeat?.();
+
             return;
         }
         pending = true;

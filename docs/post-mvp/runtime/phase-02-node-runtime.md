@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -26,15 +26,23 @@ Depends on [PM1.1](phase-01-runtime-adapter.md). Node listener APIs stay here, o
 
 ## Implementation
 
-Planned. Implement listener creation, Fetch dispatch, host/port handling, startup failure cleanup, and asynchronous close. Specify the distinction between ceasing acceptance, draining active requests, and final closure so later CLI shutdown can preserve app/DI/database ordering.
+Added `packages/runtime-node` (`@nestrum/runtime-node`). `nodeRuntime` implements `RuntimeAdapter` with `node:http` `createServer` and `getRequestListener` from `@hono/node-server` (pinned 1.19.9) converting Node requests to the application's Fetch handler.
+
+- `serve` validates options (non-empty host, integer port 0–65535), listens, and resolves once bound. Bind failures (e.g. `EADDRINUSE`) reject with the original error and leave no listener.
+- The handle reports the actual bound port, so port `0` works.
+- `stopAccepting()` stops the listener synchronously and closes idle keep-alive connections; in-flight requests continue.
+- `close()` calls `stopAccepting()` and resolves only after every connection has ended, so pending requests finish first. Both operations are idempotent.
+- `getRequestListener` is called with `overrideGlobalObjects: false`. With the default, `@hono/node-server` replaces the global `Response` with its own class, and responses that set their own `content-length` (SvelteKit pages) were sent with two `Content-Length` headers, which clients reject (`HPE_UNEXPECTED_CONTENT_LENGTH`). Found by the Docker integration run; covered by a regression test.
+- The adapter does not own application shutdown; the orchestrator composes `stopAccepting` (as `stopTraffic`) with Hono request-scope draining, app shutdown, DI disposal, and database disconnects.
+- Drain deadlines and forced termination are deliberately absent (PM1.6).
 
 ## Public API
 
-Planned Node adapter implementation of `RuntimeAdapter` and corresponding `ServerHandle`. Document actual bound-address behavior and lifecycle guarantees when implemented.
+`@nestrum/runtime-node` exports `nodeRuntime: RuntimeAdapter`.
 
 ## Files / Packages Changed
 
-Planned: `packages/runtime-node`, necessary workspace wiring, [architecture](../../architecture.md), [initiative index](README.md), and this phase record. Change portable contracts only if required by the concrete adapter.
+`packages/runtime-node` (new), `vitest.workspace.ts`, `pnpm-lock.yaml`, [architecture](../../architecture.md), [initiative index](README.md), and this phase record. Portable contracts were unchanged.
 
 ## Tests
 
@@ -42,16 +50,16 @@ Serve a test Nestrum/Hono application over real local HTTP. Verify Fetch request
 
 ## Acceptance Criteria
 
-- [ ] Test Nestrum application serves over HTTP.
-- [ ] Hono requests work.
-- [ ] Configurable host/port work.
-- [ ] Runtime closes cleanly.
-- [ ] Runtime-neutral package remains Node-free.
-- [ ] Documentation describes the implemented adapter.
+- [x] Test Nestrum application serves over HTTP.
+- [x] Hono requests work.
+- [x] Configurable host/port work.
+- [x] Runtime closes cleanly.
+- [x] Runtime-neutral package remains Node-free.
+- [x] Documentation describes the implemented adapter.
 
 ## Validation
 
-Run targeted real HTTP tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, and `pnpm check`; verify compiled exports and `git diff --check`. Record results before marking Complete.
+Validated: 7 real-HTTP Vitest tests pass (Hono routing, POST bodies, fixed port, bind failure, option validation, pending-request draining, idempotent close/port release); `tsc --noEmit` clean; `pnpm -r build` compiles the package; biome clean.
 
 ## Known Limitations
 
@@ -63,4 +71,4 @@ No production manifest loading or development orchestration yet. Request cancell
 
 ## Completion Notes
 
-Pending implementation and validation.
+PM1.2 ships the Node listener only; no CLI consumes it yet. [PM1.3](phase-03-build.md) is next.

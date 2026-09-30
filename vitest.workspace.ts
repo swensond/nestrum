@@ -47,4 +47,18 @@ export default [
             include: ['packages/hono/tests/**/*.test.ts'],
         },
     }),
+    defineProject({
+        test: {
+            name: '@nestrum/runtime',
+            environment: 'node',
+            include: ['packages/runtime/tests/**/*.test.ts'],
+        },
+    }),
+    defineProject({
+        test: {
+            name: '@nestrum/runtime-node',
+            environment: 'node',
+            include: ['packages/runtime-node/tests/**/*.test.ts'],
+        },
+    }),
 ];

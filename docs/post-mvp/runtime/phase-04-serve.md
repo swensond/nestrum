@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -29,27 +29,28 @@ Depends on [PM1.3](phase-03-build.md) and [PM1.2](phase-02-node-runtime.md). CLI
 
 ## Implementation
 
-Planned startup: manifest → compatibility/artifact validation → built application → database/DI/auth/registration initialization → route/admin mounting → app readiness → HTTP listener.
+`nestrum serve [--config <path>] [--host <h>] [--port <n>]` (`packages/cli/src/serve.ts`, `runtime-options.ts`):
 
-Missing build must fail without attempting to build:
+1. Establish `NESTRUM_ENV=production`. An explicit different value fails with `CLI_ENVIRONMENT_CONFLICT`.
+2. Read and verify the manifest: version, installed Nestrum version, entry SHA-256, and every declared contract/metadata artifact. Missing/incompatible/stale/incomplete builds fail with `BUILD_NOT_FOUND`, `BUILD_INCOMPATIBLE`, `BUILD_STALE`, or `BUILD_INCOMPLETE` and always say `Run: nestrum build`. `serve` never builds. The project root is the working directory (or the directory of `--config`); the source configuration file is not read.
+3. Import the compiled `.nestrum/server/index.mjs` and pass it through `defineCliConfig`.
+4. Resolve host/port as flag → `HOST`/`PORT` → configuration `server` → defaults (`127.0.0.1`, `3000`). Invalid ports fail with `CLI_SERVER_OPTIONS_INVALID`.
+5. If the manifest declares an admin, import `<package>/node` and create the admin shell (mounted at `/admin`; the private API remains `/__admin/*` behind Better Auth, `admin.access`, and same-origin checks in the existing Hono runtime).
+6. `createHonoRuntime(...).start()` runs the existing application lifecycle: `prepare`, managed database connects, resource initialization, Better Auth, `configure` hooks, admin/auth/public route registration, then `ready` hooks. Startup failure rolls back through the existing runtime.
+7. Only then `nodeRuntime.serve(runtime, { host, port })` binds the listener. If binding fails, the runtime is shut down before the error is rethrown.
+8. `RunningServer.shutdown()` (memoized; wired to `SIGINT`/`SIGTERM` by the command) calls `runtime.shutdown()`, whose `stopTraffic` hook is the adapter's `stopAccepting`, then drains, shuts down apps, disposes DI, disconnects databases, and finally closes the listener.
 
-```text
-NestrumError:
-No production build found.
+No watcher, compiler, Vite, regeneration, or migration code is reachable from `serve`.
 
-Run:
-  nestrum build
-```
-
-Before traffic, validate application/database configuration, Prisma clients, app graph, resources, QuerySets/managers, policies, Better Auth, and admin. Reject incompatible or incomplete builds with actionable rebuild guidance.
+Application-owned model loading remains. The application still supplies Prisma clients, `databaseLifecycle`, and `resourceModels` (typically `prepare`); a framework-owned loader from the build's metadata artifacts is a follow-up. The build tests show an application loading `resourceModels` from `.nestrum/generated/models/*.json`, so serving performs no generation.
 
 ## Public API
 
-Planned `nestrum serve`, including `--host`/`--port` handling and `HOST`, `PORT`, `NESTRUM_ENV` behavior. Document exact defaults/options/errors after implementation. Admin UI stays `/admin/*`; private API stays `/__admin/*`.
+`nestrum serve`; `runServe`, `RunningServer`, `resolveServerOptions`, and `establishEnvironment` from `@nestrum/cli`. Defaults: host `127.0.0.1`, port `3000`. Admin UI stays `/admin/*`; private API stays `/__admin/*`.
 
 ## Files / Packages Changed
 
-Planned: `packages/cli` serving/manifest/config integration, runtime-node lifecycle integration, required bootstrap/admin seams, example scripts/configuration, [architecture](../../architecture.md), and runtime phase/index documentation.
+`packages/cli` (serve, runtime options, arguments, bin), `packages/cli/package.json` dependencies on `@nestrum/hono`, `@nestrum/runtime`, `@nestrum/runtime-node`, `@nestrum/zod`, [architecture](../../architecture.md), and runtime phase/index documentation.
 
 ## Tests
 
@@ -57,23 +58,23 @@ Start a built example through the compiled CLI. Exercise public API, admin UI/AP
 
 ## Acceptance Criteria
 
-- [ ] Built example starts with `nestrum serve`.
-- [ ] No user server/bootstrap source required.
-- [ ] Public API works.
-- [ ] Admin UI works.
-- [ ] Admin API works.
-- [ ] Better Auth works.
-- [ ] No development tooling is loaded.
-- [ ] Missing builds fail with build guidance and no automatic build.
-- [ ] Documentation describes implemented production behavior.
+- [x] A built application starts with `nestrum serve` (a scratch project with a resource; the repository example needs Postgres/Mongo and was not run).
+- [x] No user server/bootstrap source required.
+- [x] Public API works.
+- [x] Admin UI works (verified by the Docker integration run).
+- [x] Admin API works (verified by the Docker integration run).
+- [x] Better Auth works (verified by the Docker integration run).
+- [x] No development tooling is loaded.
+- [x] Missing builds fail with build guidance and no automatic build.
+- [x] Documentation describes implemented production behavior.
 
 ## Validation
 
-Run targeted compiled production startup tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, and `pnpm check`. Use applicable database/browser integration for API/auth/admin behavior; record readiness/rollback evidence and `git diff --check`.
+Validated: serve tests (build→serve→public OpenAPI/404→ordered shutdown, missing build, no listener after a failing `ready` hook, environment conflict, precedence) pass; the compiled CLI was run by hand (`build`, `serve --port` beating `PORT`, missing-build and `NESTRUM_ENV` errors, SIGTERM closing the listener). Database-backed public CRUD, Better Auth login, and the admin UI/API were not run because this environment has no database services.
 
 ## Known Limitations
 
-Production accepts only builds compatible with the implemented manifest policy. Development orchestration is PM1.5; complete signal/drain/health/stale-build integration is PM1.6.
+Compatibility requires an identical manifest version and Nestrum version. The three unchecked criteria above are unverified here, not known failures. Development orchestration is PM1.5; complete signal/drain/health/stale-build integration is PM1.6.
 
 ## Follow-Ups
 

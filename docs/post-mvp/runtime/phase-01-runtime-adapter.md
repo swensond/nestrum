@@ -2,7 +2,7 @@
 
 ## Status
 
-Not Started
+Complete
 
 ## Goal
 
@@ -25,35 +25,45 @@ Depends on [PM1.0](phase-00-runtime-contract.md). Keep runtime-neutral contracts
 
 ## Implementation
 
-Planned. Start from the illustrative contract:
+Added `packages/runtime` (`@nestrum/runtime`, private, no dependencies) with types only, wired into the workspace Vitest project list, the root type check, and `pnpm -r build`.
 
 ```ts
-interface RuntimeAdapter {
-  serve(
-    application: NestrumApplication,
-    options: ServeOptions,
-  ): Promise<ServerHandle>;
-}
-
-interface ServerHandle {
-  close(): Promise<void>;
+interface ServableApplication {
+  readonly fetch: (request: Request) => Response | Promise<Response>;
 }
 
 interface ServeOptions {
-  host: string;
-  port: number;
+  readonly host: string;
+  readonly port: number; // 0 = ephemeral; the bound port is reported on the handle
+}
+
+interface ServerHandle {
+  readonly host: string;
+  readonly port: number;
+  stopAccepting(): Promise<void>;
+  close(): Promise<void>;
+}
+
+interface RuntimeAdapter {
+  serve(application: ServableApplication, options: ServeOptions): Promise<ServerHandle>;
 }
 ```
 
-Finalize the concrete application type, close semantics, and any necessary split between stopping traffic and final closure before publishing the interface. Add abstractions only when an immediate consumer needs them.
+Decisions:
+
+- **Application input.** `ServableApplication` requires only a web-standard Fetch handler, so `@nestrum/runtime` depends on neither core nor Hono. `HonoRuntime` satisfies it structurally (its `fetch` accepts optional bindings/execution context). The caller starts the application and completes readiness before `serve`; adapters never start, configure, or shut down the application.
+- **Stopping traffic versus closing.** `stopAccepting()` is separate from `close()` so hosts can gate traffic before draining requests and shutting the application down, matching the existing `stopTraffic` hook of `createHonoRuntime`. Both are idempotent and safe to call concurrently; `close()` implies `stopAccepting()`.
+- **Startup failure.** `serve` resolves only once the server accepts traffic. On failure it rejects and leaves no listener or other resource behind.
+- **Closing a handle** does not shut down the application; ordered shutdown belongs to the orchestrator (PM1.6).
+- No `RuntimeContext`, `RuntimeCapabilities`, or `RuntimeEnvironment` abstractions were added.
 
 ## Public API
 
-Planned `@nestrum/runtime` exports for adapter/options/handle contracts. Exact exports and lifecycle guarantees must be documented after implementation.
+`@nestrum/runtime` exports the types `RuntimeAdapter`, `ServableApplication`, `ServeOptions`, and `ServerHandle`. There are no runtime values.
 
 ## Files / Packages Changed
 
-Planned: `packages/runtime`, workspace build/test/typecheck wiring, [architecture](../../architecture.md), [initiative index](README.md), and this phase record.
+`packages/runtime` (new), `vitest.workspace.ts`, `pnpm-lock.yaml`, [architecture](../../architecture.md), [initiative index](README.md), the [roadmap](../../post-mvp.md), and this phase record.
 
 ## Tests
 
@@ -61,14 +71,14 @@ Use a fake adapter in Vitest to prove application input, server startup, and clo
 
 ## Acceptance Criteria
 
-- [ ] Runtime package contains no Node APIs.
-- [ ] Fake runtime adapter runs in Vitest.
-- [ ] Server lifecycle contract is testable.
-- [ ] Documentation describes the implemented contract.
+- [x] Runtime package contains no Node APIs.
+- [x] Fake runtime adapter runs in Vitest.
+- [x] Server lifecycle contract is testable.
+- [x] Documentation describes the implemented contract.
 
 ## Validation
 
-Run targeted adapter tests, `pnpm test`, `pnpm typecheck`, `pnpm build`, and `pnpm check`; check whitespace and portable exports. Record actual results before marking Complete.
+Validated: `vitest run --project @nestrum/runtime` (5 tests pass), `tsc --noEmit -p tsconfig.json` (clean), `pnpm --filter @nestrum/runtime build` (clean, compiled with `types: []`, so no Node types are available), and `biome check` on the new files. The full `vitest run` passes all 343 tests; the three `@nestrum/admin-ui` test files fail to transform in this environment both with and without this change (pre-existing). `pnpm-lock.yaml` was updated by hand (`packages/runtime: {}`) and `pnpm install --frozen-lockfile` accepts it.
 
 ## Known Limitations
 
@@ -80,4 +90,4 @@ Contracts alone do not open an HTTP listener or provide runtime CLI commands. Bu
 
 ## Completion Notes
 
-Pending implementation and validation.
+PM1.1 ships contracts only. No HTTP listener, CLI command, or Node code exists yet; [PM1.2](phase-02-node-runtime.md) is next.
